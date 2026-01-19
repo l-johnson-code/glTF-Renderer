@@ -57,6 +57,18 @@ float GgxNormalPdf(float a, float3 n, float3 h)
     return GgxD(a, n_dot_h) * n_dot_h;
 }
 
+float3 SampleGgxAnisotropicNormal(float2 a, float2 u)
+{
+    float3 h = SampleCosineWeightedHemisphere(u);
+    h.xy *= a;
+    return normalize(h);
+}
+
+float GgxAnisotropicNormalPdf(float2 a, float3 h_local)
+{
+    return GgxAnisotropicD(a, h_local) * h_local.z;
+}
+
 float GgxVisibleNormalPdf(float a, float3 v, float3 h)
 {
     if (v.z <= 0) {

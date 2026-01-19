@@ -419,7 +419,7 @@ float3 SampleSpecular(SurfaceProperties surface_properties, float3 v, float2 u)
     float3x3 world_to_local = float3x3(t, b, n);
     float3x3 local_to_world = transpose(world_to_local);
     float3 v_local = mul(world_to_local, v);
-    float3 h_local = SampleGgxNormal(surface_properties.roughness_squared.y, u);
+    float3 h_local = SampleGgxAnisotropicNormal(surface_properties.roughness_squared.y, u);
     float3 h = mul(local_to_world, h_local);
     float3 l = reflect(-v, h);
 
@@ -438,7 +438,7 @@ float SpecularPdf(SurfaceProperties surface_properties, float3 v, float3 l)
     float3 local_v = mul(world_to_local, v);
     float3 local_h = mul(world_to_local, h);
 
-    float pdf = GgxD(a.y, local_h.z);
+    float pdf = GgxAnisotropicNormalPdf(a, local_h);
     pdf /= 4 * dot(v, h); // Reflection jacobian.
     
     return pdf;
