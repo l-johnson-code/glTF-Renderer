@@ -50,10 +50,9 @@ void Config::ParseCommandLineArguments(const char* const* arguments, int argumen
         } else if (ParseBoolean(argument, "--gpu-based-validation", &Config::enable_gpu_based_validation)) {
         } else if (ParseBoolean(argument, "--fullscreen", &Config::fullscreen)) {
         } else if (ParseString(argument, "--environment-map=", &load_environment)) {
+        } else if (ParseString(argument, "--gltf=", &load_gltf)) {
         } else if (ParseInt(argument, "--width=", &width)) {
         } else if (ParseInt(argument, "--height=", &height)) {
-        } else if (i == (argument_count - 1)) {
-            load_gltf = std::string(argument);
         }
     }
 }
