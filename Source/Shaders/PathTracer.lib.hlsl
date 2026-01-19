@@ -395,7 +395,7 @@ float ClearcoatPdf(SurfaceProperties surface_properties, float3 v, float3 l)
     float a = surface_properties.clearcoat_roughness;
     float3 n = surface_properties.clearcoat_normal;
     float3 h = normalize(v + l);
-    float pdf = GgxD(a, dot(n,h));
+    float pdf = GgxNormalPdf(a, n, h);
     pdf /= 4 * dot(v, h); // Reflection jacobian.
     return pdf;
 }

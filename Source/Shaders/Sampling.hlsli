@@ -51,6 +51,12 @@ float3 SampleGgxNormal(float a, float2 u)
     return h;
 }
 
+float GgxNormalPdf(float a, float3 n, float3 h)
+{
+    float n_dot_h = dot(n, h);
+    return GgxD(a, n_dot_h) * n_dot_h;
+}
+
 float GgxVisibleNormalPdf(float a, float3 v, float3 h)
 {
     if (v.z <= 0) {
