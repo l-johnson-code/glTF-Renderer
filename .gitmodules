@@ -1,0 +1,24 @@
+[submodule "External/imgui"]
+	path = External/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "External/stb"]
+	path = External/stb
+	url = https://github.com/nothings/stb.git
+[submodule "External/tinygltf"]
+	path = External/tinygltf
+	url = https://github.com/syoyo/tinygltf.git
+[submodule "External/DirectX-Headers"]
+	path = External/DirectX-Headers
+	url = https://github.com/microsoft/DirectX-Headers.git
+[submodule "External/tinyexr"]
+	path = External/tinyexr
+	url = https://github.com/syoyo/tinyexr.git
+[submodule "External/SDL"]
+	path = External/SDL
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "External/glm"]
+	path = External/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "External/spdlog"]
+	path = External/spdlog
+	url = https://github.com/gabime/spdlog.git
