@@ -94,7 +94,7 @@ float GgxAnisotropicD(float2 a, float3 h_local)
     float a_2 = a.x * a.y;
     float3 f = float3(a.yx * h_local.xy, a_2 * h_local.z);
     float w_2 = a_2 / dot(f, f);
-    return a_2 * w_2 * w_2 / PI;
+    return Heavyside(h_local.z) * a_2 * w_2 * w_2 / PI;
 }
 
 float GgxAnisotropicSmithG1(float2 a, float3 l_local, float l_dot_h)
@@ -108,16 +108,16 @@ float GgxAnisotropicSmithG1(float2 a, float3 l_local, float l_dot_h)
 float GgxAnisotropicSeparableV(float2 a, float3 v_local, float3 l_local, float h_dot_v, float h_dot_l)
 {
 	float numerator = Heavyside(h_dot_v) * Heavyside(h_dot_l);
-	float v = v_local.z + length(float3(a * v_local.xy, v_local.z));
-	float l = l_local.z + length(float3(a * l_local.xy, l_local.z));
+	float v = abs(v_local.z) + length(float3(a * v_local.xy, v_local.z));
+	float l = abs(l_local.z) + length(float3(a * l_local.xy, l_local.z));
 	return numerator / (v * l);
 }
 
 float GgxAnisotropicCorrelatedV(float2 a, float3 v_local, float3 l_local, float h_dot_v, float h_dot_l)
 {
 	float numerator = 0.5 * Heavyside(h_dot_v) * Heavyside(h_dot_l);
-    float v = l_local.z * length(float3(a * v_local.xy, v_local.z));
-    float l = v_local.z * length(float3(a * l_local.xy, l_local.z));
+    float v = abs(l_local.z) * length(float3(a * v_local.xy, v_local.z));
+    float l = abs(v_local.z) * length(float3(a * l_local.xy, l_local.z));
     return numerator / (v + l);
 }
 
