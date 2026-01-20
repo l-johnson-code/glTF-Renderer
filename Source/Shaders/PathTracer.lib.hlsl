@@ -419,7 +419,7 @@ float3 SampleSpecular(SurfaceProperties surface_properties, float3 v, float2 u)
     float3x3 world_to_local = float3x3(t, b, n);
     float3x3 local_to_world = transpose(world_to_local);
     float3 v_local = mul(world_to_local, v);
-    float3 h_local = SampleGgxAnisotropicNormal(surface_properties.roughness_squared.y, u);
+    float3 h_local = SampleGgxAnisotropicNormal(surface_properties.roughness_squared, u);
     float3 h = mul(local_to_world, h_local);
     float3 l = reflect(-v, h);
 
