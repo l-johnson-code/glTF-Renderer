@@ -236,6 +236,7 @@ class Pathtracer {
         FLAG_MATERIAL_MIS = 1 << 12,
         FLAG_SHOW_NAN = 1 << 13,
         FLAG_SHOW_INF = 1 << 14,
+        FLAG_SHADING_NORMAL_ADAPTATION = 1 << 15,
     };
 
     struct Parameters {

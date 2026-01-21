@@ -85,6 +85,7 @@ enum Flags {
     FLAG_MATERIAL_MIS = 1 << 12,
     FLAG_SHOW_NAN = 1 << 13,
     FLAG_SHOW_INF = 1 << 14,
+    FLAG_SHADING_NORMAL_ADAPTATION = 1 << 15,
 };
 
 enum InstanceMask {
@@ -308,7 +309,21 @@ VertexAttributes GetVertexAttributes(Instance instance, uint primitive_index, fl
     return attributes;
 }
 
-SurfaceProperties GetSurfaceProperties(Material material, VertexAttributes attributes)
+// This prevents black patches on mirror like surfaces.
+// Based on "Local Shading Normal Adaption" section in "The Iray Light Transport Simulation and Rendering System".
+float3 NormalAdaptation(float3 ng, float3 ns, float3 v)
+{
+    // Normal adaptation.
+    float3 r = reflect(-v, ns);
+    float r_dot_ng = dot(r, ng);
+    if (r_dot_ng < 0) {
+        return normalize(v + normalize(r - r_dot_ng * ng));
+    } else {
+        return ns;
+    }
+}
+
+SurfaceProperties GetSurfaceProperties(Material material, VertexAttributes attributes, float3 view)
 {
 	float3x3 tangent_to_world =	TangentToWorldMatrix(attributes.normal, attributes.tangent.xyz, attributes.bitangent);
 
@@ -320,6 +335,10 @@ SurfaceProperties GetSurfaceProperties(Material material, VertexAttributes attri
     surface_properties.alpha = GetAlpha(material, base_color);
 
 	surface_properties.shading_normal = GetShadingNormal(material, attributes.texcoords, attributes.normal, tangent_to_world);
+
+    if (g_scene_constants.flags & FLAG_SHADING_NORMAL_ADAPTATION) {
+        surface_properties.shading_normal = NormalAdaptation(attributes.geometric_normal, surface_properties.shading_normal, view);
+    }
 
     float2 metalness_rougness = GetMetalnessRoughness(material, attributes.texcoords);
 	surface_properties.metalness = metalness_rougness.x;
@@ -337,6 +356,10 @@ SurfaceProperties GetSurfaceProperties(Material material, VertexAttributes attri
 	surface_properties.clearcoat = GetClearcoat(material, attributes.texcoords);
 	surface_properties.clearcoat_roughness = GetClearcoatRoughness(material, attributes.texcoords);
 	surface_properties.clearcoat_normal = GetClearcoatNormal(material, attributes.texcoords, attributes.normal, tangent_to_world);
+
+    if (g_scene_constants.flags & FLAG_SHADING_NORMAL_ADAPTATION) {
+        surface_properties.clearcoat_normal = NormalAdaptation(attributes.geometric_normal, surface_properties.clearcoat_normal, view);
+    }
 
 	float2 anisotropy_direction;
 	float anisotropy_strength = GetAnisotropyStrengthAndDirection(material, attributes.texcoords, anisotropy_direction);
@@ -786,13 +809,15 @@ void ClosestHit(inout Payload payload, in BuiltInTriangleIntersectionAttributes 
     float3 intersection = WorldRayOrigin() + (WorldRayDirection() * RayTCurrent());
     float3 ray_origin = OffsetRay(vertex_attributes.position, vertex_attributes.geometric_normal);
     float3 ray_origin_below = OffsetRay(vertex_attributes.position, -vertex_attributes.geometric_normal);
+    float3 view = -normalize(WorldRayDirection());
 
     // Get surface properties for shading.
-    SurfaceProperties surface_properties = GetSurfaceProperties(material, vertex_attributes);
+    SurfaceProperties surface_properties = GetSurfaceProperties(material, vertex_attributes, view);
     surface_properties.roughness_squared = max(surface_properties.roughness_squared, MINIMUM_ROUGHNESS.xx);
     surface_properties.clearcoat_roughness = max(surface_properties.clearcoat_roughness, MINIMUM_ROUGHNESS);
     if (g_scene_constants.flags & FLAG_MATERIAL_USE_GEOMETRIC_NORMALS) {
         surface_properties.shading_normal = vertex_attributes.geometric_normal;
+        surface_properties.clearcoat_normal = vertex_attributes.geometric_normal;
     }
 
     switch (g_scene_constants.debug_output) {
@@ -846,8 +871,6 @@ void ClosestHit(inout Payload payload, in BuiltInTriangleIntersectionAttributes 
         } break;
         default: break;
     }
-
-    float3 view = -normalize(WorldRayDirection());
 
     if (g_scene_constants.debug_output == DEBUG_OUTPUT_HEMISPHERE_VIEW_SIDE) {
         payload.color = dot(view, surface_properties.shading_normal) > 0 ? float3(0, 1, 0) : float3(1, 0, 0);

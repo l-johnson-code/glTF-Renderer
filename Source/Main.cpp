@@ -324,6 +324,8 @@ void DrawGraphicsTab()
 
 			g_render_settings.pathtracer.reset |= BitflagCheckbox("Show NAN", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHOW_NAN);
 			g_render_settings.pathtracer.reset |= BitflagCheckbox("Show INF", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHOW_INF);
+
+			g_render_settings.pathtracer.reset |= BitflagCheckbox("Shading Normal Adaptation", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHADING_NORMAL_ADAPTATION);
 		}
 	}
 }
@@ -448,12 +450,12 @@ int main(int argc, char* argv[])
 
 	g_render_settings.pathtracer.flags = 
         Pathtracer::FLAG_ACCUMULATE |
-        Pathtracer::FLAG_LUMINANCE_CLAMP |
         Pathtracer::FLAG_POINT_LIGHTS |
         Pathtracer::FLAG_SHADOW_RAYS |
         Pathtracer::FLAG_ENVIRONMENT_MAP |
 		Pathtracer::FLAG_ENVIRONMENT_MIS |
-        Pathtracer::FLAG_MATERIAL_MIS;
+        Pathtracer::FLAG_MATERIAL_MIS |
+		Pathtracer::FLAG_SHADING_NORMAL_ADAPTATION;
 	g_render_settings.pathtracer.min_bounces = 2;
 	g_render_settings.pathtracer.max_bounces = 2;
 	g_render_settings.pathtracer.use_frame_as_seed = true;
