@@ -282,10 +282,12 @@ void DrawGraphicsTab()
 				"Clearcoat",
 				"Clearcoat Roughness",
 				"Clearcoat Normal",
+				"Transmissive",
 				"Bounce Direction",
 				"Bounce BSDF",
     			"Bounce PDF",
     			"Bounce Weight",
+    			"Bounce Is Transmission",
 				"Hemisphere View Side"
 			};
 			g_render_settings.pathtracer.reset |= EnumWidget("Debug Output", &g_render_settings.pathtracer.debug_output, debug_output_strings, Pathtracer::DEBUG_OUTPUT_COUNT);

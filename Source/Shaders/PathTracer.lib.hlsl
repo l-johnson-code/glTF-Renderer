@@ -62,10 +62,12 @@ enum DebugOutput {
     DEBUG_OUTPUT_CLEARCOAT,
     DEBUG_OUTPUT_CLEARCOAT_ROUGHNESS,
     DEBUG_OUTPUT_CLEARCOAT_NORMAL,
+    DEBUG_OUTPUT_TRANSMISSIVE,
     DEBUG_OUTPUT_BOUNCE_DIRECTION,
     DEBUG_OUTPUT_BOUNCE_BSDF,
     DEBUG_OUTPUT_BOUNCE_PDF,
     DEBUG_OUTPUT_BOUNCE_WEIGHT,
+    DEBUG_BOUNCE_IS_TRANSMISSION,
     DEBUG_OUTPUT_HEMISPHERE_VIEW_SIDE,
 };
 
@@ -477,15 +479,46 @@ float DiffusePdf(SurfaceProperties surface_properties, float3 l)
     return CosineWeightedHemispherePdf(surface_properties.shading_normal, l);
 }
 
+float3 SampleTransmission(SurfaceProperties surface_properties, float3 v, float2 u)
+{
+    // Create a basis and transforms.
+    float3 n = surface_properties.shading_normal;
+    float3 t = surface_properties.anisotropy_tangent;
+    float3 b = surface_properties.anisotropy_bitangent;
+    float3x3 world_to_local = float3x3(t, b, n);
+    float3x3 local_to_world = transpose(world_to_local);
+    float a = ModulateRoughness(surface_properties.roughness_squared.y, surface_properties.ior);
+    float3 h_local = SampleGgxNormal(a, u);
+    float3 h = mul(local_to_world, h_local);
+    float3 l = reflect(-v, h);
+    l = l - 2 * dot(n, l) * n;
+
+    return l;
+}
+
+float TransmissionPdf(SurfaceProperties surface_properties, float3 v, float3 l)
+{
+    float a = ModulateRoughness(surface_properties.roughness_squared.y, surface_properties.ior);
+    float3 n = surface_properties.shading_normal;
+    l = l - 2 * dot(n, l) * n;
+    float3 h = normalize(v + l);
+
+    float pdf = GgxNormalPdf(a, n, h);
+    pdf /= 4 * dot(v, h); // Reflection jacobian.
+    
+    return pdf;
+}
+
 enum BsdfLayer {
     BSDF_LAYER_DIFFUSE,
     BSDF_LAYER_SPECULAR,
     BSDF_LAYER_SHEEN,
     BSDF_LAYER_CLEARCOAT,
     BSDF_LAYER_ALPHA,
+    BSDF_LAYER_TRANSMISSION,
 };
 
-BsdfLayer SelectBsdf(SurfaceProperties surface_properties, float3 v, float u, float alpha_prob, float clearcoat_prob, float sheen_prob, float specular_prob)
+BsdfLayer SelectBsdf(SurfaceProperties surface_properties, float3 v, float u, float alpha_prob, float clearcoat_prob, float sheen_prob, float specular_prob, float transmission_prob)
 {
     if (u <= alpha_prob) {
         return BSDF_LAYER_ALPHA;
@@ -502,10 +535,14 @@ BsdfLayer SelectBsdf(SurfaceProperties surface_properties, float3 v, float u, fl
     if (u <= specular_prob) {
         return BSDF_LAYER_SPECULAR;
     }
+    u -= specular_prob;
+    if (u <= transmission_prob) {
+        return BSDF_LAYER_TRANSMISSION;
+    }
     return BSDF_LAYER_DIFFUSE;
 }
 
-void LayerProbabilities(SurfaceProperties surface_properties, float3 v, out float alpha_prob, out float clearcoat_prob, out float sheen_prob, out float specular_prob, out float diffuse_prob)
+void LayerProbabilities(SurfaceProperties surface_properties, float3 v, out float alpha_prob, out float clearcoat_prob, out float sheen_prob, out float specular_prob, out float diffuse_prob, out float transmission_prob)
 {
     float remaining_prob = 1;
     alpha_prob = 1.0 - surface_properties.alpha;
@@ -519,15 +556,19 @@ void LayerProbabilities(SurfaceProperties surface_properties, float3 v, out floa
     specular_prob = 0.5;
     specular_prob *= remaining_prob;
     remaining_prob -= specular_prob;
+    transmission_prob = surface_properties.transmissive;
+    transmission_prob *= remaining_prob;
+    remaining_prob -= transmission_prob;
     diffuse_prob = remaining_prob;
 }
 
-float BsdfPdf(SurfaceProperties surface_properties, float3 v, float3 l, float clearcoat_prob, float sheen_prob, float specular_prob, float diffuse_prob)
+float BsdfPdf(SurfaceProperties surface_properties, float3 v, float3 l, float clearcoat_prob, float sheen_prob, float specular_prob, float diffuse_prob, float transmission_prob)
 {
     float pdf = clearcoat_prob * ClearcoatPdf(surface_properties, v, l);
     pdf += sheen_prob * SheenPdf(surface_properties, v, l);
     pdf += specular_prob * SpecularPdf(surface_properties, v, l);
     pdf += diffuse_prob * DiffusePdf(surface_properties, l);
+    pdf += transmission_prob * TransmissionPdf(surface_properties, v, l);
     return pdf;
 }
 
@@ -545,9 +586,10 @@ float3 EvaluateBsdf(SurfaceProperties surface_properties, float3 geometric_norma
         float sheen_prob = 0;
         float clearcoat_prob = 0;
         float alpha_prob = 0;
+        float transmission_prob = 0;
 
-        LayerProbabilities(surface_properties, v, alpha_prob, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob);
-        pdf = BsdfPdf(surface_properties, v, l, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob);
+        LayerProbabilities(surface_properties, v, alpha_prob, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob, transmission_prob);
+        pdf = BsdfPdf(surface_properties, v, l, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob, transmission_prob);
         return surface_properties.alpha * GltfBsdf(surface_properties, v, l, g_sampler_linear_clamp);
     }
 
@@ -576,10 +618,13 @@ float3 SampleBsdf(SurfaceProperties surface_properties, float3 u, float3 v, out 
         float sheen_prob = 0;
         float clearcoat_prob = 0;
         float alpha_prob = 0;
+        float transmission_prob = 0;
 
         // Select a BSDF to sample.
-        LayerProbabilities(surface_properties, v, alpha_prob, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob);
-        BsdfLayer layer = SelectBsdf(surface_properties, v, u.x, alpha_prob, clearcoat_prob, sheen_prob, specular_prob);
+        is_transmission = false;
+        use_mis = true;
+        LayerProbabilities(surface_properties, v, alpha_prob, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob, transmission_prob);
+        BsdfLayer layer = SelectBsdf(surface_properties, v, u.x, alpha_prob, clearcoat_prob, sheen_prob, specular_prob, transmission_prob);
         switch (layer) {
             case BSDF_LAYER_ALPHA: {
                 l = -v;
@@ -600,10 +645,11 @@ float3 SampleBsdf(SurfaceProperties surface_properties, float3 u, float3 v, out 
             case BSDF_LAYER_CLEARCOAT: {
                 l = SampleClearcoat(surface_properties, v, u.yz);
             } break;
+            case BSDF_LAYER_TRANSMISSION: {
+                l = SampleTransmission(surface_properties, v, u.yz);
+            } break;
         }
-        is_transmission = false;
-        use_mis = true;
-        pdf = BsdfPdf(surface_properties, v, l, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob);
+        pdf = BsdfPdf(surface_properties, v, l, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob, transmission_prob);
         return surface_properties.alpha * GltfBsdf(surface_properties, v, l, g_sampler_linear_clamp);
     }
 
@@ -869,6 +915,10 @@ void ClosestHit(inout Payload payload, in BuiltInTriangleIntersectionAttributes 
             payload.color = (surface_properties.clearcoat_normal + 1) / 2;
             return;
         } break;
+        case DEBUG_OUTPUT_TRANSMISSIVE: {
+            payload.color = surface_properties.transmissive.xxx;
+            return;
+        } break;
         default: break;
     }
 
@@ -921,27 +971,34 @@ void ClosestHit(inout Payload payload, in BuiltInTriangleIntersectionAttributes 
         float3 bsdf = SampleBsdf(surface_properties, u, v, l, bsdf_pdf, is_transmission, use_mis);
         float3 weight = bsdf_pdf != 0 ? bsdf / bsdf_pdf : 0;
         float3 throughput = payload.throughput * weight; 
+        is_transmission = dot(l, vertex_attributes.geometric_normal) < 0.0f;
+
+        switch (g_scene_constants.debug_output) {
+            case DEBUG_OUTPUT_BOUNCE_DIRECTION: {
+                payload.color = 0.5 * (l + 1);
+                return;
+            } break;
+            case DEBUG_OUTPUT_BOUNCE_BSDF: {
+                payload.color = bsdf;
+                return;
+            } break;
+            case DEBUG_OUTPUT_BOUNCE_PDF: {
+                payload.color = bsdf_pdf;
+                return;
+            } break;
+            case DEBUG_OUTPUT_BOUNCE_WEIGHT: {
+                payload.color = weight;
+                return;
+            } break;
+            case DEBUG_BOUNCE_IS_TRANSMISSION: {
+                payload.color = is_transmission ? float3(0, 1, 0) : float3(1, 0, 0);
+                return;
+            } break;
+        }
+
         if (any(throughput > 0)) {
             float u = GenerateNextRandom(payload.random_count).x;
             if (payload.bounce < g_scene_constants.min_bounces || RussianRoulette(g_scene_constants.min_russian_roulette_continue_prob, g_scene_constants.max_russian_roulette_continue_prob, u, throughput, weight)) {
-                switch (g_scene_constants.debug_output) {
-                    case DEBUG_OUTPUT_BOUNCE_DIRECTION: {
-                        payload.color = 0.5 * (l + 1);
-                        return;
-                    } break;
-                    case DEBUG_OUTPUT_BOUNCE_BSDF: {
-                        payload.color = bsdf;
-                        return;
-                    } break;
-                    case DEBUG_OUTPUT_BOUNCE_PDF: {
-                        payload.color = bsdf_pdf;
-                        return;
-                    } break;
-                    case DEBUG_OUTPUT_BOUNCE_WEIGHT: {
-                        payload.color = weight;
-                        return;
-                    } break;
-                }
                 payload.color += weight * TraceBounceRay(
                     is_transmission ? ray_origin_below : ray_origin, 
                     l, 

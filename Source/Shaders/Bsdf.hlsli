@@ -213,6 +213,20 @@ float3 SheenMix(float3 material, float3 layer, float3 sheen_color, float alpha, 
 	return sheen_color * layer + material * sheen_albedo_scaling;
 }
 
+float ModulateRoughness(float a, float ior)
+{
+	// TODO: Use a more accurate roughness mapping.
+	return clamp(lerp(0, a, saturate(2 * (ior - 1))), MINIMUM_ROUGHNESS, 1.0);
+}
+
+float3 ThinSurfaceTransmissionBtdf(float3 color, float a, float ior, float3 n, float3 v, float3 l)
+{
+	a = ModulateRoughness(a, ior);
+	l = l - 2 * dot(n, l) * n;
+	float3 h = normalize(v + l);
+    return color * SpecularBrdf(a, dot(n, l), dot(n, v), dot(n, h), dot(h, l), dot(h, v));
+}
+
 // Volume.
 // Attenuate light according to Beer's law.
 float3 Attenuate(float attenuation_distance, float3 attenuation_color, float distance)
@@ -241,10 +255,14 @@ float3 GltfBsdf(SurfaceProperties surface_properties, float3 v, float3 l, Sample
 	float h_dot_l = dot(h, l);
 	float h_dot_v = dot(h, v);
 
+	float h_dot_abs_l = dot(normalize(float3(l_local.xy, abs(l_local.z)) + v_local), v_local);
+
 	// Base material.
     float3 specular = saturate(l_local.z) * AnisotropicSpecularBrdf(a, v_local, h_local, l_local).xxx;
 	float3 diffuse = saturate(l_local.z) * LambertDiffuse(surface_properties.albedo);
-    float3 dialectric = FresnelMix(surface_properties.specular_color, surface_properties.ior, surface_properties.specular_factor, diffuse, specular, h_dot_v);
+	float3 transmission = saturate(-l_local.z) * ThinSurfaceTransmissionBtdf(surface_properties.albedo, a.y, surface_properties.ior, n, v, l);
+	diffuse = lerp(diffuse, transmission, surface_properties.transmissive);
+    float3 dialectric = FresnelMix(surface_properties.specular_color, surface_properties.ior, surface_properties.specular_factor, diffuse, specular, h_dot_abs_l);
     float3 metal = ConductorFresnel(specular, surface_properties.albedo, h_dot_v);
     float3 material = lerp(dialectric, metal, surface_properties.metalness);
 
