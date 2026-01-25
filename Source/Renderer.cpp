@@ -804,6 +804,8 @@ void Renderer::RasterizeScene(ID3D12GraphicsCommandList* command_list, CpuMapped
 
 	// Render opaque objects.
 	ForwardPass::Config config = {
+		.width = (int)this->display_width,
+		.height = (int)this->display_height,
 		.world_to_clip = world_to_clip,
 		.previous_world_to_clip = this->previous_world_to_clip,
 		.camera_pos = camera_pos,
@@ -813,6 +815,7 @@ void Renderer::RasterizeScene(ID3D12GraphicsCommandList* command_list, CpuMapped
 		.ggx_cube_descriptor = environment_map_loaded ? map.ggx_srv_descriptor : -1,
 		.diffuse_cube_descriptor = environment_map_loaded ? map.diffuse_srv_descriptor : -1,
 		.environment_map_intensity = 1.0,
+		.transmission_descriptor = -1,
 		.render_flags = settings->raster.render_flags,
 	};
 	D3D12_PRIMITIVE_TOPOLOGY primitive_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -852,6 +855,9 @@ void Renderer::RasterizeScene(ID3D12GraphicsCommandList* command_list, CpuMapped
 		);
 		command_list->ResourceBarrier(1, &resource_barrier);
 	}
+
+	config.transmission_descriptor = GpuResources::STATIC_DESCRIPTOR_SRV_TRANSMISSION;
+	forward.SetConfig(command_list, frame_allocator, &config);
 
 	// Render transmissives.
 	forward.BindPipeline(command_list, &this->resources, ForwardPass::PIPELINE_FLAGS_ALPHA_BLEND);

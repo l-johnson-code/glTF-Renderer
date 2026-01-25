@@ -161,6 +161,7 @@ void ForwardPass::SetConfig(ID3D12GraphicsCommandList* command_list, CpuMappedLi
 		float environment_intensity;
 		uint32_t render_flags;
 		int diffuse_cube_descriptor;
+		int transmission_descriptor;
 	} cb_pixel;
 
 	cb_pixel = {
@@ -172,6 +173,7 @@ void ForwardPass::SetConfig(ID3D12GraphicsCommandList* command_list, CpuMappedLi
 		.environment_intensity = config->environment_map_intensity,
 		.render_flags = config->render_flags,
 		.diffuse_cube_descriptor = config->diffuse_cube_descriptor,
+		.transmission_descriptor = config->transmission_descriptor,
 	};
 	
 	command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME, allocator->Copy(&cb_vertex, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));

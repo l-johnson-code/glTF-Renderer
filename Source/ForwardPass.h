@@ -38,6 +38,7 @@ class ForwardPass {
         int ggx_cube_descriptor;
         int diffuse_cube_descriptor;
         float environment_map_intensity;
+        int transmission_descriptor = -1;
         uint32_t render_flags;
     };
 

@@ -47,6 +47,7 @@ struct PerFrame {
 	float environment_map_intensity;
 	uint32_t render_flags;
 	int diffuse_cube_descriptor;
+	int transmission_descriptor;
 };
 
 ConstantBuffer<PerFrame> g_per_frame: register(b0);
@@ -246,6 +247,20 @@ PSOut main(PSIn input)
 
 		TextureCube<float3> diffuse_cube = ResourceDescriptorHeap[g_per_frame.diffuse_cube_descriptor];
 		float3 diffuse_ibl = (1 - dfg) * surface_properties.albedo * g_per_frame.environment_map_intensity * diffuse_cube.SampleLevel(g_sampler_linear_clamp, surface_properties.shading_normal, 0);
+
+		if (g_per_frame.transmission_descriptor != -1) {
+			Texture2D<float3> transmission_texture = ResourceDescriptorHeap[g_per_frame.transmission_descriptor];
+			uint transmission_width = 0;
+			uint transmission_height = 0;
+			uint transmission_mips = 0;
+			transmission_texture.GetDimensions(0, transmission_width, transmission_height, transmission_mips);
+			float transmission_a = ModulateRoughness(surface_properties.roughness_squared.y, surface_properties.ior);
+			float transmission_mip = sqrt(transmission_a) * (float)(transmission_mips - 1);
+			float2 transmission_uv = input.pos.xy / g_per_frame.viewport_xy;
+			float3 transmission_ibl = surface_properties.albedo * transmission_texture.SampleLevel(g_sampler_linear_clamp, transmission_uv, transmission_mip);
+			diffuse_ibl = lerp(diffuse_ibl, transmission_ibl, surface_properties.transmissive);
+		}
+
 		float3 dialectric_ibl = diffuse_ibl + specular_ibl;
 
 		float3 metal_dfg = surface_properties.albedo * scale + f90 * bias;
