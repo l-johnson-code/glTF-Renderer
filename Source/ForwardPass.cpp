@@ -4,6 +4,7 @@
 
 #include <directx/d3d12.h>
 #include <directx/d3dcommon.h>
+#include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_root_signature.h>
@@ -51,6 +52,7 @@ void ForwardPass::Create(ID3D12Device* device)
 	GpuResources::FreeShader(pixel_shader);
 
 	CreateBackgroundRenderer(device);
+	CreateTranmissionMipPipeline(device);
 }
 
 void ForwardPass::CreatePipeline(ID3D12Device* device, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature)
@@ -351,4 +353,90 @@ void ForwardPass::DrawBackground(ID3D12GraphicsCommandList* command_list, CpuMap
 	command_list->SetGraphicsRootConstantBufferView(1, allocator->Copy(&cb_pixel, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
 
     command_list->DrawInstanced(3, 1, 0, 0);
+}
+
+void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, ID3D12Resource* input, ID3D12Resource* output)
+{
+	// Create mip 0.
+	{
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
+		command_list->ResourceBarrier(1, &barrier);
+	}
+	const CD3DX12_TEXTURE_COPY_LOCATION copy_dest(output);
+	const CD3DX12_TEXTURE_COPY_LOCATION copy_source(input);
+	command_list->CopyTextureRegion(&copy_dest, 0, 0, 0, &copy_source, nullptr);
+	{
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(output, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
+		command_list->ResourceBarrier(1, &barrier);
+	}
+
+	// Create descriptors.
+	D3D12_RESOURCE_DESC output_desc = output->GetDesc();
+	int descriptor_start = transient_descriptors->Allocate(output_desc.MipLevels * 2);
+	assert(descriptor_start != -1);
+	for (int i = 0; i < output_desc.MipLevels; i++) {
+		const CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(output_desc.Format, 1, i);
+		const CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(output_desc.Format, i);
+		transient_descriptors->CreateSrv(descriptor_start + 2 * i, output, &srv_desc);
+		transient_descriptors->CreateUav(descriptor_start + 2 * i + 1, output, nullptr, &uav_desc);
+	}
+
+	// Generate the mips.
+	command_list->SetComputeRootSignature(this->transmission_mips_root_signature.Get());
+	command_list->SetPipelineState(this->transmission_mips_pipeline_state.Get());
+
+	struct {
+		int input_descriptor;
+		int output_descriptor;
+	} constant_buffer;
+
+	uint32_t width = output_desc.Width;
+	uint32_t height = output_desc.Height;
+
+	for (int i = 1; i < output_desc.MipLevels; i++) {
+		width = std::max(width / 2u, 1u);
+		height = std::max(width / 2u, 1u);
+
+		constant_buffer = {
+			.input_descriptor = descriptor_start + (i - 1) * 2,
+			.output_descriptor = descriptor_start + i * 2 + 1,
+		};
+		// TODO: Consolidate these barriers into one.
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
+		command_list->ResourceBarrier(1, &barrier);
+
+		command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+		command_list->Dispatch((width + 7) / 8, (height + 7) / 8, 1);
+		CD3DX12_RESOURCE_BARRIER barriers[] = {
+			CD3DX12_RESOURCE_BARRIER::UAV(output),
+			CD3DX12_RESOURCE_BARRIER::Transition(output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i),
+		};
+		command_list->ResourceBarrier(std::size(barriers), barriers);
+	}
+}
+
+void ForwardPass::CreateTranmissionMipPipeline(ID3D12Device* device)
+{
+	HRESULT result = S_OK;
+	CD3DX12_ROOT_PARAMETER root_parameter;
+	root_parameter.InitAsConstantBufferView(0);
+	CD3DX12_STATIC_SAMPLER_DESC sampler_desc(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(1, &root_parameter, 1, &sampler_desc, D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
+	
+	Microsoft::WRL::ComPtr<ID3DBlob> root_signature_blob;
+	Microsoft::WRL::ComPtr<ID3DBlob> root_signature_error_blob;
+	result = D3D12SerializeRootSignature(&root_signature_desc, D3D_ROOT_SIGNATURE_VERSION_1_0, root_signature_blob.GetAddressOf(), root_signature_error_blob.GetAddressOf());
+	assert(result == S_OK);
+	result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(this->transmission_mips_root_signature.ReleaseAndGetAddressOf()));
+	assert(result == S_OK);
+	result = this->transmission_mips_root_signature->SetName(L"Transmission Mip Root Signature");
+	assert(result == S_OK);
+
+	D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {
+		.pRootSignature = transmission_mips_root_signature.Get(),
+		.CS = GpuResources::LoadShader("Shaders/TransmissionDownsample.cs.bin"),
+	};
+	result = device->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&this->transmission_mips_pipeline_state));
+	assert(result == S_OK);
+	GpuResources::FreeShader(pipeline_desc.CS);
 }

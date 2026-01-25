@@ -49,6 +49,7 @@ class ForwardPass {
     void BindPipeline(ID3D12GraphicsCommandList* command_list, GpuResources* resources, uint32_t pipeline_flags);
     void Draw(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, Mesh* model, int material_id, glm::mat4x4 model_to_world, glm::mat4x4 model_to_world_normals, glm::mat4x4 previous_model_to_world, DynamicMesh* dynamic_mesh = nullptr);
     void DrawBackground(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, glm::mat4x4 clip_to_world, float environment_intensity, int environment_descriptor);
+    void GenerateTransmissionMips(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, ID3D12Resource* input, ID3D12Resource* output);
 
     private:
 
@@ -71,6 +72,10 @@ class ForwardPass {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> background_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> background_pipeline_state;
 
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> transmission_mips_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> transmission_mips_pipeline_state;
+
     void CreatePipeline(ID3D12Device* device, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature);
     void CreateBackgroundRenderer(ID3D12Device* device);
+    void CreateTranmissionMipPipeline(ID3D12Device* device);
 };

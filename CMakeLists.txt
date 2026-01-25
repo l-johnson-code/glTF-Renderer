@@ -112,6 +112,7 @@ set(SHADER_SOURCE_FILES
     "Source/Shaders/PathTracer.lib.hlsl"
     "Source/Shaders/Skin.cs.hlsl"
     "Source/Shaders/ToneMapper.ps.hlsl"
+    "Source/Shaders/TransmissionDownsample.cs.hlsl"
 )
     
 set(SHADER_HEADER_FILES

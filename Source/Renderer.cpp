@@ -392,6 +392,20 @@ void Renderer::CreateRenderTargets()
 			resources.rtv_allocator.CreateRtv(GpuResources::RTV_MOTION_VECTORS, this->motion_vectors.Get(), nullptr);
 			resources.cbv_uav_srv_allocator.CreateSrv(GpuResources::STATIC_DESCRIPTOR_SRV_MOTION_VECTORS, this->motion_vectors.Get(), nullptr);
 		}
+
+		// Transmission.
+		{
+			CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, display_width, display_height, 1);
+			resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+						
+			result = device->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(this->transmission.ReleaseAndGetAddressOf()));
+			assert(result == S_OK);
+			result = this->transmission->SetName(L"Transmission");
+			assert(result == S_OK);
+
+			resources.cbv_uav_srv_allocator.CreateSrv(GpuResources::STATIC_DESCRIPTOR_SRV_TRANSMISSION, this->transmission.Get(), nullptr);
+		}
+		
 	}
 
 	// Display.
@@ -818,6 +832,25 @@ void Renderer::RasterizeScene(ID3D12GraphicsCommandList* command_list, CpuMapped
 		// Set pipeline state back to rendering meshes.
 		forward.SetRootSignature(command_list);
 		forward.SetConfig(command_list, frame_allocator, &config);
+	}
+
+	// Create transmission mip chain.
+	{
+		CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			display.Get(), 
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_COPY_SOURCE
+		);
+		command_list->ResourceBarrier(1, &resource_barrier);
+	}
+	forward.GenerateTransmissionMips(command_list, frame_allocator, descriptor_allocator, this->display.Get(), this->transmission.Get());
+	{
+		CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+			display.Get(), 
+			D3D12_RESOURCE_STATE_COPY_SOURCE,
+			D3D12_RESOURCE_STATE_RENDER_TARGET
+		);
+		command_list->ResourceBarrier(1, &resource_barrier);
 	}
 
 	// Render transmissives.

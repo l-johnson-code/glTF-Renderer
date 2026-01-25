@@ -230,6 +230,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> depth;
 	Microsoft::WRL::ComPtr<ID3D12Resource> motion_vectors;
 	Microsoft::WRL::ComPtr<ID3D12Resource> display;
+	Microsoft::WRL::ComPtr<ID3D12Resource> transmission;
 	
 	std::vector<RenderObject> opaque_render_objects;
 	std::vector<RenderObject> alpha_mask_render_objects;
