@@ -251,6 +251,10 @@ void DrawGraphicsTab()
 		};
 		g_render_settings.pathtracer.reset |= EnumWidget("Renderer Type", (int*)&g_render_settings.renderer_type, renderer_type_strings, std::size(renderer_type_strings));
 
+		if (g_render_settings.renderer_type == Renderer::RENDERER_TYPE_RASTERIZER) {
+			ImGui::SliderInt("Transmission Downsample Sample Pattern", &g_render_settings.raster.transmission_downsample_sample_pattern, 0, ForwardPass::TRANSMISSION_DOWNSAMPLE_SAMPLE_PATTERN_COUNT - 1);
+		}
+
 		if (g_render_settings.renderer_type == Renderer::RENDERER_TYPE_PATHTRACER) {
 			g_render_settings.pathtracer.reset |= ImGui::Button("Reset History");
 

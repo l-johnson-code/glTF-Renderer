@@ -848,7 +848,7 @@ void Renderer::RasterizeScene(ID3D12GraphicsCommandList* command_list, CpuMapped
 		);
 		command_list->ResourceBarrier(1, &resource_barrier);
 	}
-	forward.GenerateTransmissionMips(command_list, frame_allocator, descriptor_allocator, this->display.Get(), this->transmission.Get());
+	forward.GenerateTransmissionMips(command_list, frame_allocator, descriptor_allocator, this->display.Get(), this->transmission.Get(), settings->raster.transmission_downsample_sample_pattern);
 	{
 		CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
 			display.Get(), 

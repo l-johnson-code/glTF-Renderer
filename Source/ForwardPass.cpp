@@ -357,7 +357,7 @@ void ForwardPass::DrawBackground(ID3D12GraphicsCommandList* command_list, CpuMap
     command_list->DrawInstanced(3, 1, 0, 0);
 }
 
-void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, ID3D12Resource* input, ID3D12Resource* output)
+void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, ID3D12Resource* input, ID3D12Resource* output, int sample_pattern)
 {
 	// Create mip 0.
 	{
@@ -390,7 +390,9 @@ void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_li
 	struct {
 		int input_descriptor;
 		int output_descriptor;
+		int sample_pattern;
 	} constant_buffer;
+	constant_buffer.sample_pattern = sample_pattern;
 
 	uint32_t width = output_desc.Width;
 	uint32_t height = output_desc.Height;
@@ -399,10 +401,9 @@ void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_li
 		width = std::max(width / 2u, 1u);
 		height = std::max(height / 2u, 1u);
 
-		constant_buffer = {
-			.input_descriptor = descriptor_start + (i - 1) * 2,
-			.output_descriptor = descriptor_start + i * 2 + 1,
-		};
+		constant_buffer.input_descriptor = descriptor_start + (i - 1) * 2;
+		constant_buffer.output_descriptor = descriptor_start + i * 2 + 1;
+
 		// TODO: Consolidate these barriers into one.
 		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
 		command_list->ResourceBarrier(1, &barrier);

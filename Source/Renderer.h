@@ -28,6 +28,7 @@ public:
 	};
 
 	struct RasterSettings {
+		int transmission_downsample_sample_pattern = 1;
 		uint32_t render_flags;
 	};
 
