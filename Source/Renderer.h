@@ -290,7 +290,7 @@ private:
 	// Forward renderer.
 	void SetViewportAndScissorRects(ID3D12GraphicsCommandList* command_list, int width, int height);
 	void GatherRenderObjects(Gltf* gltf, int scene);
-	void SortRenderObjects(Gltf* gltf);
+	void SortRenderObjects(glm::vec3 camera_pos);
 	void DrawRenderObjects(Gltf* gltf, CpuMappedLinearBuffer* frame_allocator, const std::vector<RenderObject>& render_objects);
 	void RasterizeScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, Gltf* gltf, int scene, Camera* camera, const RenderSettings* setting);
 

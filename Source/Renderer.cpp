@@ -342,11 +342,11 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	EndFrame();
 }
 
-void Renderer::SortRenderObjects(Gltf* gltf)
+void Renderer::SortRenderObjects(glm::vec3 camera_pos)
 {
-	auto comparison = [](const RenderObject& a, const RenderObject& b) -> bool {
-		glm::vec3 pos_a = a.transform[3];
-		glm::vec3 pos_b = b.transform[3];
+	auto comparison = [&](const RenderObject& a, const RenderObject& b) -> bool {
+		glm::vec3 pos_a = glm::vec3(a.transform[3]) - camera_pos;
+		glm::vec3 pos_b = glm::vec3(b.transform[3]) - camera_pos;
 		return (glm::dot(pos_a, pos_a)) > (glm::dot(pos_b, pos_b));
 	};
 	std::sort(alpha_render_objects.begin(), alpha_render_objects.end(), comparison);
@@ -770,6 +770,8 @@ void Renderer::RasterizeScene(ID3D12GraphicsCommandList* command_list, CpuMapped
 	glm::mat4x4 view_to_world = glm::affineInverse(world_to_view);
 	glm::mat4x4 clip_to_world = glm::inverse(world_to_clip);
 	glm::vec3 camera_pos = view_to_world[3];
+
+	SortRenderObjects(camera_pos);
 
 	// Prepare render targets.
 	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = resources.rtv_allocator.GetCpuHandle(GpuResources::RTV_DISPLAY); 
