@@ -397,7 +397,7 @@ void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_li
 
 	for (int i = 1; i < output_desc.MipLevels; i++) {
 		width = std::max(width / 2u, 1u);
-		height = std::max(width / 2u, 1u);
+		height = std::max(height / 2u, 1u);
 
 		constant_buffer = {
 			.input_descriptor = descriptor_start + (i - 1) * 2,
