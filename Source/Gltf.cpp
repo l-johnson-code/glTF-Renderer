@@ -380,7 +380,7 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, ID3D12Device* device, UploadBuff
 
 		// Emissive.
 		tinygltf::TextureInfo* emissive_texture_info = &tiny_gltf_material->emissiveTexture;
-		material.emissive = GetTexture(gltf, emissive_texture_info, false, device, upload_buffer);
+		material.emissive = GetTexture(gltf, emissive_texture_info, true, device, upload_buffer);
 		material.emissive_factor = glm::vec3(tiny_gltf_material->emissiveFactor[0], tiny_gltf_material->emissiveFactor[1], tiny_gltf_material->emissiveFactor[2]);
 
 		// Alpha.
@@ -463,7 +463,7 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, ID3D12Device* device, UploadBuff
 			if (it != tiny_gltf_material->extensions.end()) {
 				tinygltf::tools::GetValue(it->second, "sheenColorFactor", &material.sheen_color_factor);
 				tinygltf::tools::GetValue(it->second, "sheenRoughnessFactor", &material.sheen_roughness_factor);
-				material.sheen_color_texture = GetTexture(gltf, &it->second.Get("sheenColorTexture"), nullptr, false, device, upload_buffer);
+				material.sheen_color_texture = GetTexture(gltf, &it->second.Get("sheenColorTexture"), nullptr, true, device, upload_buffer);
 				material.sheen_roughness_texture = GetTexture(gltf, &it->second.Get("sheenRoughnessTexture"), nullptr, false, device, upload_buffer);
 			}
 		}
@@ -475,7 +475,7 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, ID3D12Device* device, UploadBuff
 				tinygltf::tools::GetValue(it->second, "specularFactor", &material.specular_factor);
 				tinygltf::tools::GetValue(it->second, "specularColorFactor", &material.specular_color_factor);
 				material.specular_texture = GetTexture(gltf, &it->second.Get("specularTexture"), nullptr, false, device, upload_buffer);
-				material.specular_color_texture = GetTexture(gltf, &it->second.Get("specularColorTexture"), nullptr, false, device, upload_buffer);
+				material.specular_color_texture = GetTexture(gltf, &it->second.Get("specularColorTexture"), nullptr, true, device, upload_buffer);
 			}
 		}
 
