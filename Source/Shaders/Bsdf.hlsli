@@ -281,3 +281,46 @@ float3 GltfBsdf(SurfaceProperties surface_properties, float3 v, float3 l, Sample
 	return coated_material;
 }
 
+float3 GltfBsdf(SurfaceProperties surface_properties, float3 v, float3 l, bool is_transmission, SamplerState lookup_table_sampler) 
+{
+	const float outside_ior = 1.0; // The index of refraction of air.
+	float2 a = surface_properties.roughness_squared;
+    float3 n = surface_properties.shading_normal;
+    float3 h = normalize(v + l);
+    float3x3 world_to_tangent = float3x3( 
+		surface_properties.anisotropy_tangent, 
+		surface_properties.anisotropy_bitangent,
+        surface_properties.shading_normal
+	);
+	float3 v_local = mul(world_to_tangent, v);
+	float3 h_local = mul(world_to_tangent, h);
+	float3 l_local = mul(world_to_tangent, l);
+	float h_dot_l = dot(h, l);
+	float h_dot_v = dot(h, v);
+
+	float h_dot_abs_l = dot(normalize(float3(l_local.xy, abs(l_local.z)) + v_local), v_local);
+
+	// Base material.
+    float3 specular = !is_transmission ? saturate(l_local.z) * AnisotropicSpecularBrdf(a, v_local, h_local, l_local).xxx : 0.xxx;
+	float3 diffuse = !is_transmission ? saturate(l_local.z) * LambertDiffuse(surface_properties.albedo) : 0.xxx;
+	float3 transmission = is_transmission ? saturate(-l_local.z) * ThinSurfaceTransmissionBtdf(surface_properties.albedo, a.y, surface_properties.ior, n, v, l) : 0.xxx;
+	diffuse = lerp(diffuse, transmission, surface_properties.transmissive);
+    float3 dialectric = FresnelMix(surface_properties.specular_color, surface_properties.ior, surface_properties.specular_factor, diffuse, specular, h_dot_abs_l);
+    float3 metal = !is_transmission ? ConductorFresnel(specular, surface_properties.albedo, h_dot_v) : 0.xxx;
+    float3 material = lerp(dialectric, metal, surface_properties.metalness);
+
+	// Sheen.
+	surface_properties.sheen_roughness_squared = clamp(surface_properties.sheen_roughness_squared, 0.000001, 1);
+	float3 sheen_brdf = !is_transmission ? saturate(l_local.z) * SheenBrdf(surface_properties.sheen_roughness_squared, l_local.z, v_local.z, h_local.z) : 0.xxx;
+	material = SheenMix(material, sheen_brdf, surface_properties.sheen_color, surface_properties.sheen_roughness_squared, l_local.z, v_local.z, lookup_table_sampler);
+
+	// Clearcoat.
+	float clearcoat_n_dot_v = dot(n, v);
+	float clearcoat_n_dot_h = dot(n, h);
+	float clearcoat_n_dot_l = dot(n, l);
+	float clearcoat_brdf = !is_transmission ? saturate(clearcoat_n_dot_l) * ClearcoatBrdf(surface_properties.clearcoat_roughness, clearcoat_n_dot_l, clearcoat_n_dot_v, clearcoat_n_dot_h, h_dot_l, h_dot_v) : 0;
+	float3 coated_material = FresnelCoat(1.5, surface_properties.clearcoat, material, clearcoat_brdf, clearcoat_n_dot_v);
+    
+	return coated_material;
+}
+

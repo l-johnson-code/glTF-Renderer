@@ -562,13 +562,15 @@ void LayerProbabilities(SurfaceProperties surface_properties, float3 v, out floa
     diffuse_prob = remaining_prob;
 }
 
-float BsdfPdf(SurfaceProperties surface_properties, float3 v, float3 l, float clearcoat_prob, float sheen_prob, float specular_prob, float diffuse_prob, float transmission_prob)
+float BsdfPdf(SurfaceProperties surface_properties, float3 v, float3 l, bool is_transmission, float clearcoat_prob, float sheen_prob, float specular_prob, float diffuse_prob, float transmission_prob)
 {
+    if (is_transmission) {
+        return transmission_prob * TransmissionPdf(surface_properties, v, l);
+    }
     float pdf = clearcoat_prob * ClearcoatPdf(surface_properties, v, l);
     pdf += sheen_prob * SheenPdf(surface_properties, v, l);
     pdf += specular_prob * SpecularPdf(surface_properties, v, l);
     pdf += diffuse_prob * DiffusePdf(surface_properties, l);
-    pdf += transmission_prob * TransmissionPdf(surface_properties, v, l);
     return pdf;
 }
 
@@ -587,10 +589,11 @@ float3 EvaluateBsdf(SurfaceProperties surface_properties, float3 geometric_norma
         float clearcoat_prob = 0;
         float alpha_prob = 0;
         float transmission_prob = 0;
+        bool is_transmission = (dot(geometric_normal, l) * dot(geometric_normal, v)) < 0;
 
         LayerProbabilities(surface_properties, v, alpha_prob, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob, transmission_prob);
-        pdf = BsdfPdf(surface_properties, v, l, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob, transmission_prob);
-        return surface_properties.alpha * GltfBsdf(surface_properties, v, l, g_sampler_linear_clamp);
+        pdf = BsdfPdf(surface_properties, v, l, is_transmission, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob, transmission_prob);
+        return surface_properties.alpha * GltfBsdf(surface_properties, v, l, is_transmission, g_sampler_linear_clamp);
     }
 
     float n_dot_l = saturate(dot(surface_properties.shading_normal, l));
@@ -647,10 +650,11 @@ float3 SampleBsdf(SurfaceProperties surface_properties, float3 u, float3 v, out 
             } break;
             case BSDF_LAYER_TRANSMISSION: {
                 l = SampleTransmission(surface_properties, v, u.yz);
+                is_transmission = true;
             } break;
         }
-        pdf = BsdfPdf(surface_properties, v, l, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob, transmission_prob);
-        return surface_properties.alpha * GltfBsdf(surface_properties, v, l, g_sampler_linear_clamp);
+        pdf = BsdfPdf(surface_properties, v, l, is_transmission, clearcoat_prob, sheen_prob, specular_prob, diffuse_prob, transmission_prob);
+        return surface_properties.alpha * GltfBsdf(surface_properties, v, l, is_transmission, g_sampler_linear_clamp);
     }
 
     // Use cosine weighted hemisphere sampling.
@@ -971,7 +975,6 @@ void ClosestHit(inout Payload payload, in BuiltInTriangleIntersectionAttributes 
         float3 bsdf = SampleBsdf(surface_properties, u, v, l, bsdf_pdf, is_transmission, use_mis);
         float3 weight = bsdf_pdf != 0 ? bsdf / bsdf_pdf : 0;
         float3 throughput = payload.throughput * weight; 
-        is_transmission = dot(l, vertex_attributes.geometric_normal) < 0.0f;
 
         switch (g_scene_constants.debug_output) {
             case DEBUG_OUTPUT_BOUNCE_DIRECTION: {
