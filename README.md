@@ -20,6 +20,7 @@ glTF Renderer is a DirectX 12 based renderer for glTF files. It implements both 
 - KHR_materials_ior
 - KHR_materials_sheen *
 - KHR_materials_specular
+- KHR_materials_transmission
 - KHR_texture_transform
 
 \* Image based lighting is not currently supported for sheen in the raster path.
