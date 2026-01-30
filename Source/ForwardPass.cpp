@@ -6,7 +6,6 @@
 #include <directx/d3dcommon.h>
 #include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_core.h>
-#include <directx/d3dx12_core.h>
 #include <directx/d3dx12_root_signature.h>
 #include <directx/dxgiformat.h>
 #include <glm/gtc/matrix_inverse.hpp>
