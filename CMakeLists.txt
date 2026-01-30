@@ -76,6 +76,7 @@ target_sources(glTF PRIVATE
 target_sources(glTF PRIVATE
     "Source/Animation.cpp"
     "Source/AnimationPlayer.cpp"
+    "Source/Bloom.cpp"
     "Source/BufferAllocator.cpp"
     "Source/Config.cpp"
     "Source/DescriptorAllocator.cpp"
@@ -98,6 +99,8 @@ target_sources(glTF PRIVATE
 
 # Shaders
 set(SHADER_SOURCE_FILES
+    "Source/Shaders/BloomDownsample.cs.hlsl"
+    "Source/Shaders/BloomUpsample.cs.hlsl"
     "Source/Shaders/Background.vs.hlsl"
     "Source/Shaders/Background.ps.hlsl"
     "Source/Shaders/ConvertEquirectangularToCubemap.cs.hlsl"

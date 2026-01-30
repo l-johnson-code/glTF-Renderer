@@ -164,6 +164,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 
 	CreateRenderTargets();
 	gpu_skinner.Create(this->device.Get());
+	bloom.Create(this->device.Get(), this->display_width, this->display_height, 6);
 	tone_mapper.Create(this->device.Get(), &this->resources);
 	environment_map.Init(this->device.Get(), &this->resources.cbv_uav_srv_dynamic_allocator);
 	resources.LoadLookupTables(&this->upload_buffer);
@@ -277,6 +278,7 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 	// Set display settings.
 	if (recreate_render_targets) {
 		CreateRenderTargets();
+		bloom.Resize(this->display_width, this->display_height, 6);
 	}
 }
 
@@ -322,10 +324,15 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 		RasterizeScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, gltf, scene, camera, settings);
+		bloom.Execute(graphics_command_list.Get(), frame_allocator, descriptor_allocator, this->display.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->raster.bloom_radius, settings->raster.bloom_strength);
+		{
+			CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(this->display.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			graphics_command_list->ResourceBarrier(1, &barrier);
+		}
 	} else {
 		PathtraceScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, gltf, scene, camera, settings);
 	}
-	
+
 	CD3DX12_RECT scissor_rect(0, 0, this->display_width, this->display_height);
 	graphics_command_list->RSSetScissorRects(1, &scissor_rect);
 	CD3DX12_VIEWPORT viewport(0.0, 0.0, this->display_width, this->display_height);

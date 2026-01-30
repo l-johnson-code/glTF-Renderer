@@ -253,6 +253,8 @@ void DrawGraphicsTab()
 
 		if (g_render_settings.renderer_type == Renderer::RENDERER_TYPE_RASTERIZER) {
 			ImGui::SliderInt("Transmission Downsample Sample Pattern", &g_render_settings.raster.transmission_downsample_sample_pattern, 0, ForwardPass::TRANSMISSION_DOWNSAMPLE_SAMPLE_PATTERN_COUNT - 1);
+			ImGui::InputFloat("Bloom Strength", &g_render_settings.raster.bloom_strength);
+			ImGui::SliderInt("Bloom Radius", &g_render_settings.raster.bloom_radius, 0, 6);
 		}
 
 		if (g_render_settings.renderer_type == Renderer::RENDERER_TYPE_PATHTRACER) {

@@ -6,6 +6,7 @@
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
+#include "Bloom.h"
 #include "Camera.h"
 #include "EnvironmentMap.h"
 #include "ForwardPass.h"
@@ -29,6 +30,8 @@ public:
 
 	struct RasterSettings {
 		int transmission_downsample_sample_pattern = 1;
+		float bloom_strength = 0.01f;
+		int bloom_radius = 4;
 		uint32_t render_flags;
 	};
 
@@ -270,6 +273,7 @@ private:
 
 	// Pipelines.
 	ForwardPass forward;
+	Bloom bloom;
 	ToneMapper tone_mapper;
 	EnvironmentMap::Map map;
 	bool environment_map_loaded = false;
