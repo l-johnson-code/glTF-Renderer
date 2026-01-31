@@ -9,12 +9,11 @@
 #include <imgui/backends/imgui_impl_dx12.h>
 #include <spdlog/spdlog.h>
 
+#include "BufferAllocator.h"
 #include "Config.h"
 #include "DescriptorAllocator.h"
-#include "ForwardPass.h"
 #include "GpuResources.h"
 #include "GpuSkin.h"
-#include "BufferAllocator.h"
 
 bool Renderer::Init(HWND window, RenderSettings* settings)
 {
@@ -148,7 +147,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	this->frame_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
 	// Create the swapchain.
-	swapchain.Create(this->device.Get(), this->graphics_command_queue.Get(), &this->resources, window, display_width, display_height);
+	swapchain.Create(this->device.Get(), this->graphics_command_queue.Get(), &this->resources.rtv_allocator, window, display_width, display_height);
 	
 	upload_buffer.Create(this->device.Get(), ::Config::UPLOAD_BUFFER_CAPACITY, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, ::Config::FRAME_COUNT);
 
@@ -164,13 +163,12 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 
 	CreateRenderTargets();
 	gpu_skinner.Create(this->device.Get());
-	bloom.Create(this->device.Get(), this->display_width, this->display_height, 6);
 	tone_mapper.Create(this->device.Get(), &this->resources);
 	environment_map.Init(this->device.Get(), &this->resources.cbv_uav_srv_dynamic_allocator);
 	resources.LoadLookupTables(&this->upload_buffer);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
-		forward.Create(this->device.Get());
+		rasterizer.Init(this->device.Get(), &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, this->display_width, this->display_height);
 	} else {
 		pathtracer.Create(this->device.Get(), &this->upload_buffer);
 	}
@@ -231,24 +229,6 @@ void Renderer::WaitForNextFrame()
 	}
 }
 
-void Renderer::CreateRendererTypeSpecificResources(RendererType renderer_type)
-{
-	if (renderer_type == RENDERER_TYPE_RASTERIZER) {
-		forward.Create(this->device.Get());
-	} else {
-		pathtracer.Create(this->device.Get(), &this->upload_buffer);
-	}
-}
-
-void Renderer::DestroyRendererTypeSpecificResources(RendererType renderer_type)
-{
-	if (renderer_type == RENDERER_TYPE_RASTERIZER) {
-		forward.Destroy();
-	} else {
-		pathtracer.Destroy();
-	}
-}
-
 void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings)
 {
 	bool recreate_render_targets = false;
@@ -256,11 +236,19 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 	// Change renderer.
 	if (new_settings->renderer_type != this->settings.renderer_type) {
 		WaitForOutstandingWork();
-		this->upload_buffer.Begin();
-		DestroyRendererTypeSpecificResources(this->settings.renderer_type);
-		CreateRendererTypeSpecificResources(new_settings->renderer_type);
-		uint64_t submission = this->upload_buffer.Submit();
-		this->upload_buffer.WaitForSubmissionToComplete(submission);
+		if (this->settings.renderer_type == RENDERER_TYPE_RASTERIZER) {
+			rasterizer.Shutdown();
+		} else {
+			pathtracer.Destroy();
+		}
+		if (new_settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
+			rasterizer.Init(this->device.Get(), &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, new_settings->width, new_settings->height);
+		} else {
+			this->upload_buffer.Begin();
+			pathtracer.Create(this->device.Get(), &this->upload_buffer);
+			uint64_t submission = this->upload_buffer.Submit();
+			this->upload_buffer.WaitForSubmissionToComplete(submission);
+		}
 		recreate_render_targets = true;
 	}
 
@@ -269,7 +257,7 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 		WaitForOutstandingWork();
 		this->display_width = new_settings->width;
 		this->display_height = new_settings->height;
-		this->swapchain.Resize(this->device.Get(), &this->resources, this->display_width, this->display_height);
+		this->swapchain.Resize(this->device.Get(), this->display_width, this->display_height);
 		recreate_render_targets = true;
 	}
 		
@@ -278,7 +266,11 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 	// Set display settings.
 	if (recreate_render_targets) {
 		CreateRenderTargets();
-		bloom.Resize(this->display_width, this->display_height, 6);
+		if (new_settings->renderer_type == this->settings.renderer_type) {
+			if (this->settings.renderer_type == RENDERER_TYPE_RASTERIZER) {
+				rasterizer.Resize(this->display_width, this->display_height);
+			}
+		}
 	}
 }
 
@@ -323,12 +315,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	PerformSkinning(gltf, scene, frame_allocator);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
-		RasterizeScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, gltf, scene, camera, settings);
-		bloom.Execute(graphics_command_list.Get(), frame_allocator, descriptor_allocator, this->display.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->raster.bloom_radius, settings->raster.bloom_strength);
-		{
-			CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(this->display.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			graphics_command_list->ResourceBarrier(1, &barrier);
-		}
+		rasterizer.DrawScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, gltf, scene, camera, gpu_materials, gpu_lights, lights.size(), environment_map_loaded ? &map : nullptr, &settings->raster, resources.rtv_allocator.GetCpuHandle(display_rtv), display.Get());
 	} else {
 		PathtraceScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, gltf, scene, camera, settings);
 	}
@@ -339,25 +326,14 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	graphics_command_list->RSSetViewports(1, &viewport);
 	SetViewportAndScissorRects(this->graphics_command_list.Get(), this->display_width, this->display_height);
 	swapchain.TransitionBackbufferForRendering(this->graphics_command_list.Get());
-	D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv = resources.rtv_allocator.GetCpuHandle(GpuResources::RTV_SWAPCHAIN_0 + swapchain.GetCurrentBackbufferIndex());
+	D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv = swapchain.GetCurrentBackbufferRtv();
 	this->graphics_command_list->OMSetRenderTargets(1, &backbuffer_rtv, false, nullptr);
 
 	// Tone mapping.
-	this->tone_mapper.Run(this->graphics_command_list.Get(), frame_allocator, this->resources.cbv_uav_srv_allocator.GetGpuHandle(GpuResources::STATIC_DESCRIPTOR_UAV_DISPLAY), &this->settings.tone_mapper_config);
+	this->tone_mapper.Run(this->graphics_command_list.Get(), frame_allocator, this->resources.cbv_uav_srv_dynamic_allocator.GetGpuHandle(this->display_uav), &this->settings.tone_mapper_config);
 	DrawImGui();
 
 	EndFrame();
-}
-
-void Renderer::SortRenderObjects(glm::vec3 camera_pos)
-{
-	auto comparison = [&](const RenderObject& a, const RenderObject& b) -> bool {
-		glm::vec3 pos_a = glm::vec3(a.transform[3]) - camera_pos;
-		glm::vec3 pos_b = glm::vec3(b.transform[3]) - camera_pos;
-		return (glm::dot(pos_a, pos_a)) > (glm::dot(pos_b, pos_b));
-	};
-	std::sort(alpha_render_objects.begin(), alpha_render_objects.end(), comparison);
-	std::sort(transparent_render_objects.begin(), transparent_render_objects.end(), comparison);
 }
 
 void Renderer::CreateRenderTargets()
@@ -365,55 +341,6 @@ void Renderer::CreateRenderTargets()
     CD3DX12_HEAP_PROPERTIES render_target_heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 
 	HRESULT result;
-	if (this->settings.renderer_type == RENDERER_TYPE_RASTERIZER) {
-		// Depth buffer.
-		{
-			CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, display_width, display_height, 1, 1);
-			resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-			
-			CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, DEPTH_CLEAR_VALUE, 0);
-			result = device->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, IID_PPV_ARGS(this->depth.ReleaseAndGetAddressOf()));
-			assert(result == S_OK);
-			result = depth->SetName(L"Depth Texture");
-			assert(result == S_OK);
-
-			resources.dsv_allocator.CreateDsv(GpuResources::DSV_DEPTH, this->depth.Get(), nullptr);
-
-			CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT);
-			resources.cbv_uav_srv_allocator.CreateSrv(GpuResources::STATIC_DESCRIPTOR_SRV_DEPTH, this->depth.Get(), &srv_desc);
-		}
-
-		// Motion vectors.
-		{
-			CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16_FLOAT, display_width, display_height, 1, 1);
-			resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-
-			float clear_color[4] = {0.0, 0.0, 0.0, 0.0};
-			CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_R16G16_FLOAT, clear_color);
-
-			result = device->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, IID_PPV_ARGS(this->motion_vectors.ReleaseAndGetAddressOf()));
-			assert(result == S_OK);
-			result = this->motion_vectors->SetName(L"Motion Vectors");
-			assert(result == S_OK);
-
-			resources.rtv_allocator.CreateRtv(GpuResources::RTV_MOTION_VECTORS, this->motion_vectors.Get(), nullptr);
-			resources.cbv_uav_srv_allocator.CreateSrv(GpuResources::STATIC_DESCRIPTOR_SRV_MOTION_VECTORS, this->motion_vectors.Get(), nullptr);
-		}
-
-		// Transmission.
-		{
-			CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, display_width, display_height, 1);
-			resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-						
-			result = device->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(this->transmission.ReleaseAndGetAddressOf()));
-			assert(result == S_OK);
-			result = this->transmission->SetName(L"Transmission");
-			assert(result == S_OK);
-
-			resources.cbv_uav_srv_allocator.CreateSrv(GpuResources::STATIC_DESCRIPTOR_SRV_TRANSMISSION, this->transmission.Get(), nullptr);
-		}
-		
-	}
 
 	// Display.
 	{
@@ -429,8 +356,8 @@ void Renderer::CreateRenderTargets()
 		result = this->display->SetName(L"Display");
 		assert(result == S_OK);
 
-		resources.rtv_allocator.CreateRtv(GpuResources::RTV_DISPLAY, this->display.Get(), nullptr);
-		resources.cbv_uav_srv_allocator.CreateUav(GpuResources::STATIC_DESCRIPTOR_UAV_DISPLAY, this->display.Get(), nullptr, nullptr);
+		this->display_rtv = resources.rtv_allocator.AllocateAndCreateRtv(this->display.Get(), nullptr);
+		this->display_uav = resources.cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(this->display.Get(), nullptr, nullptr);
 	}
 }
 
@@ -493,64 +420,6 @@ void Renderer::PerformSkinning(Gltf* gltf, int scene, CpuMappedLinearBuffer* fra
 			}
 		}
 	});
-}
-
-void Renderer::GatherRenderObjects(Gltf* gltf, int scene)
-{
-	opaque_render_objects.clear();
-	alpha_mask_render_objects.clear();
-	alpha_render_objects.clear();
-	transparent_render_objects.clear();
-
-	gltf->TraverseScene(scene, [&](Gltf* gltf, int node_id) {
-		const Gltf::Node& node = gltf->nodes[node_id];
-		if (node.mesh_id != -1) {
-			const Gltf::Mesh& mesh = gltf->meshes[node.mesh_id];
-			for (int i = 0; i < mesh.primitives.size(); i++) {
-
-				// Gather the data needed to render an object.
-				int material_id = mesh.primitives[i].material_id;
-				RenderObject render_object = {
-					.transform = node.global_transform,
-					.normal_transform = glm::inverseTranspose(glm::mat3x3(node.global_transform)),
-					.previous_transform = node.previous_global_transform,
-					.mesh_id = node.mesh_id,
-					.dynamic_mesh_id = node.dynamic_mesh,
-					.primitive_id = i,
-					.material_id = material_id,
-				};
-
-				// Bin the render object depending on material properties.
-				const Gltf::Material& material = gltf->materials[material_id];
-				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_BLEND) {
-					alpha_render_objects.push_back(render_object);
-				} else if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
-					alpha_mask_render_objects.push_back(render_object);
-				} else if (material.transmission_factor > 0.0f) {
-					transparent_render_objects.push_back(render_object);
-				} else {
-					opaque_render_objects.push_back(render_object);
-				}
-			}
-		}
-	});
-}
-
-void Renderer::DrawRenderObjects(Gltf* gltf, CpuMappedLinearBuffer* frame_allocator, const std::vector<RenderObject>& render_objects)
-{
-	for (auto& render_object: render_objects) {
-		DynamicMesh* dynamic_mesh = render_object.dynamic_mesh_id != -1 ? &gltf->dynamic_primitives[render_object.dynamic_mesh_id].dynamic_meshes[render_object.primitive_id] : nullptr;
-		forward.Draw(
-			this->graphics_command_list.Get(),
-			frame_allocator,
-			&gltf->meshes[render_object.mesh_id].primitives[render_object.primitive_id].mesh,
-			render_object.material_id,
-			render_object.transform,
-			render_object.normal_transform,
-			render_object.previous_transform,
-			dynamic_mesh
-		);
-	}
 }
 
 void Renderer::GatherLights(Gltf* gltf, int scene, CpuMappedLinearBuffer* allocator)
@@ -767,137 +636,6 @@ void Renderer::BuildTlas(Gltf* gltf, int scene_id, RaytracingAccelerationStructu
 	this->gpu_mesh_instances = allocator->Copy(mesh_instances.data(), sizeof(GpuMeshInstance) * mesh_instances.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 }
 
-void Renderer::RasterizeScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, Gltf* gltf, int scene, Camera* camera, const RenderSettings* settings)
-{
-	GatherRenderObjects(gltf, scene);
-
-	// Get transform matrices.
-	glm::mat4x4 world_to_view = camera->GetWorldToView();
-	glm::mat4x4 world_to_clip = camera->GetViewToClip() * world_to_view;
-	glm::mat4x4 view_to_world = glm::affineInverse(world_to_view);
-	glm::mat4x4 clip_to_world = glm::inverse(world_to_clip);
-	glm::vec3 camera_pos = view_to_world[3];
-
-	SortRenderObjects(camera_pos);
-
-	// Prepare render targets.
-	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = resources.rtv_allocator.GetCpuHandle(GpuResources::RTV_DISPLAY); 
-	D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors_rtv = resources.rtv_allocator.GetCpuHandle(GpuResources::RTV_MOTION_VECTORS); 
-	D3D12_CPU_DESCRIPTOR_HANDLE null_rtv = {}; 
-
-	CD3DX12_RESOURCE_BARRIER barriers[] = {
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			display.Get(), 
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
-			D3D12_RESOURCE_STATE_RENDER_TARGET
-		),
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			motion_vectors.Get(), 
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
-			D3D12_RESOURCE_STATE_RENDER_TARGET
-		),
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			depth.Get(), 
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
-			D3D12_RESOURCE_STATE_DEPTH_WRITE
-		),
-	};
-	command_list->ResourceBarrier(std::size(barriers), barriers);
-	
-	float clear_color[4] = {0., 0., 0., 0.};
-	command_list->ClearRenderTargetView(render_rtv, clear_color, 0, nullptr);
-	command_list->ClearRenderTargetView(motion_vectors_rtv, clear_color, 0, nullptr);
-	command_list->ClearDepthStencilView(resources.dsv_allocator.GetCpuHandle(GpuResources::DSV_DEPTH), D3D12_CLEAR_FLAG_DEPTH, DEPTH_CLEAR_VALUE, 0, 0, nullptr);
-	
-	SetViewportAndScissorRects(command_list, this->display_width, this->display_height);
-
-	// Render opaque objects.
-	ForwardPass::Config config = {
-		.width = (int)this->display_width,
-		.height = (int)this->display_height,
-		.world_to_clip = world_to_clip,
-		.previous_world_to_clip = this->previous_world_to_clip,
-		.camera_pos = camera_pos,
-		.num_of_lights = (int)this->lights.size(),
-		.lights = this->gpu_lights,
-		.materials = this->gpu_materials,
-		.ggx_cube_descriptor = environment_map_loaded ? map.ggx_srv_descriptor : -1,
-		.diffuse_cube_descriptor = environment_map_loaded ? map.diffuse_srv_descriptor : -1,
-		.environment_map_intensity = 1.0,
-		.transmission_descriptor = -1,
-		.render_flags = settings->raster.render_flags,
-	};
-	D3D12_PRIMITIVE_TOPOLOGY primitive_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	this->graphics_command_list->IASetPrimitiveTopology(primitive_topology);
-	forward.SetRootSignature(command_list);
-	forward.SetConfig(command_list, frame_allocator, &config);
-	forward.BindRenderTargets(command_list, &this->resources, render_rtv, motion_vectors_rtv);
-	forward.BindPipeline(command_list, &this->resources, ForwardPass::PIPELINE_FLAGS_NONE);
-	DrawRenderObjects(gltf, frame_allocator, opaque_render_objects);
-
-	// TODO: Create a separate pipeline for alpha mask instead of sharing the opaque pass. This could potentially improve performance of the opaque rendering.
-	DrawRenderObjects(gltf, frame_allocator, alpha_mask_render_objects);
-
-	if (environment_map_loaded) {
-		forward.DrawBackground(command_list, frame_allocator, clip_to_world, 1.0, map.cube_srv_descriptor);
-		
-		// Set pipeline state back to rendering meshes.
-		forward.SetRootSignature(command_list);
-		forward.SetConfig(command_list, frame_allocator, &config);
-	}
-
-	// Create transmission mip chain.
-	{
-		CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			display.Get(), 
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
-			D3D12_RESOURCE_STATE_COPY_SOURCE
-		);
-		command_list->ResourceBarrier(1, &resource_barrier);
-	}
-	forward.GenerateTransmissionMips(command_list, frame_allocator, descriptor_allocator, this->display.Get(), this->transmission.Get(), settings->raster.transmission_downsample_sample_pattern);
-	{
-		CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			display.Get(), 
-			D3D12_RESOURCE_STATE_COPY_SOURCE,
-			D3D12_RESOURCE_STATE_RENDER_TARGET
-		);
-		command_list->ResourceBarrier(1, &resource_barrier);
-	}
-
-	config.transmission_descriptor = GpuResources::STATIC_DESCRIPTOR_SRV_TRANSMISSION;
-	forward.SetConfig(command_list, frame_allocator, &config);
-
-	// Render transmissives.
-	forward.BindPipeline(command_list, &this->resources, ForwardPass::PIPELINE_FLAGS_ALPHA_BLEND);
-	DrawRenderObjects(gltf, frame_allocator, transparent_render_objects);
-
-	// Render alpha blended geometry.
-	DrawRenderObjects(gltf, frame_allocator, alpha_render_objects);
-
-	// Transition render targets to read state for post processing.
-	CD3DX12_RESOURCE_BARRIER resource_barriers[] = {
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			display.Get(), 
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-		),
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			motion_vectors.Get(), 
-			D3D12_RESOURCE_STATE_RENDER_TARGET, 
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-		),
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			depth.Get(), 
-			D3D12_RESOURCE_STATE_DEPTH_WRITE,
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-		)
-	};
-	command_list->ResourceBarrier(std::size(resource_barriers), resource_barriers);
-
-	this->previous_world_to_clip = world_to_clip;
-}
-
 void Renderer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, Gltf* gltf, int scene, Camera* camera, RenderSettings* settings)
 {
 	glm::mat4x4 world_to_view = camera->GetWorldToView();
@@ -935,7 +673,7 @@ void Renderer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappe
 			.max_bounces = settings->pathtracer.max_bounces,
 			.debug_output = settings->pathtracer.debug_output,
 			.flags = settings->pathtracer.flags,
-			.output_descriptor = GpuResources::STATIC_DESCRIPTOR_UAV_DISPLAY,
+			.output_descriptor = this->display_uav,
 			.environment_color = settings->pathtracer.environment_color,
 			.environment_intensity = settings->pathtracer.environment_intensity,
 			.seed = settings->pathtracer.use_frame_as_seed ? (uint32_t)this->frame : settings->pathtracer.seed,

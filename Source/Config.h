@@ -10,6 +10,8 @@ class Config {
 	// Compile time configuration.
 	static constexpr int DYNAMIC_DESCRIPTORS = 65536;
 	static constexpr int PER_FRAME_DESCRIPTORS = 1024;
+	static constexpr int MAX_RENDER_TARGET_VIEWS = 1024;
+	static constexpr int MAX_DEPTH_STENCIL_VIEWS = 1024;
 	static constexpr int MAX_SAMPLERS = 2048; // Maximum size for a shader visible sampler descriptor heap.
 	static constexpr int FRAME_HEAP_CAPACITY = Mebibytes(512);
 	static constexpr int FRAME_COUNT = 2;

@@ -5,9 +5,11 @@
 #include <dxgi1_5.h>
 #include <directx/d3dx12_barriers.h>
 
-void Swapchain::Create(ID3D12Device* device, ID3D12CommandQueue* command_queue, GpuResources* resources, HWND window, uint32_t width, uint32_t height) 
+void Swapchain::Create(ID3D12Device* device, ID3D12CommandQueue* command_queue, DescriptorPool* rtv_allocator, HWND window, uint32_t width, uint32_t height) 
 {
     HRESULT result = S_OK;
+
+	this->rtv_allocator = rtv_allocator;
 
 	// Create or resize swapchain.
 	Microsoft::WRL::ComPtr<IDXGIFactory> factory_0;
@@ -65,10 +67,10 @@ void Swapchain::Create(ID3D12Device* device, ID3D12CommandQueue* command_queue, 
 	// Get the current backbuffer index from the swapchain.
 	current_backbuffer = swap_chain->GetCurrentBackBufferIndex();
 
-	CreateRenderTargetViews(device, resources);
+	CreateRenderTargetViews(device);
 }
 
-void Swapchain::Resize(ID3D12Device* device, GpuResources* resources, uint32_t width, uint32_t height)
+void Swapchain::Resize(ID3D12Device* device, uint32_t width, uint32_t height)
 {
 	HRESULT result = S_OK;
 
@@ -86,10 +88,10 @@ void Swapchain::Resize(ID3D12Device* device, GpuResources* resources, uint32_t w
 	// Get the current backbuffer index from the swapchain.
 	current_backbuffer = swap_chain->GetCurrentBackBufferIndex();
 
-	CreateRenderTargetViews(device, resources);
+	CreateRenderTargetViews(device);
 }
 
-void Swapchain::CreateRenderTargetViews(ID3D12Device* device, GpuResources* resources)
+void Swapchain::CreateRenderTargetViews(ID3D12Device* device)
 {
 	HRESULT result = S_OK;
 	for (int i = 0; i < Config::FRAME_COUNT; i++) {
@@ -106,8 +108,15 @@ void Swapchain::CreateRenderTargetViews(ID3D12Device* device, GpuResources* reso
 		}
 	};
 	for (int i = 0; i < Config::FRAME_COUNT; i++) {
-		resources->rtv_allocator.CreateRtv((GpuResources::RenderTargetView)(GpuResources::RTV_SWAPCHAIN_0 + i), render_targets[i].Get(), &view_desc);
+		render_target_views[i] = rtv_allocator->AllocateAndCreateRtv(render_targets[i].Get(), &view_desc);
+		assert(render_target_views[i] != -1);
 	}
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE Swapchain::GetCurrentBackbufferRtv()
+{
+	int index = GetCurrentBackbufferIndex();
+	return rtv_allocator->GetCpuHandle(render_target_views[index]);
 }
 
 ID3D12Resource* Swapchain::GetRenderTarget(int backbuffer_index)

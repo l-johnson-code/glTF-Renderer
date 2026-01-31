@@ -90,6 +90,7 @@ target_sources(glTF PRIVATE
     "Source/Mesh.cpp"
     "Source/Pathtracer.cpp"
     "Source/RaytracingAccelerationStructure.cpp"
+    "Source/Rasterizer.cpp"
     "Source/Renderer.cpp"
     "Source/Swapchain.cpp"
     "Source/Timer.cpp"

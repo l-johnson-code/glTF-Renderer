@@ -6,15 +6,14 @@
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
-#include "Bloom.h"
 #include "Camera.h"
 #include "EnvironmentMap.h"
-#include "ForwardPass.h"
 #include "Gltf.h"
 #include "GpuResources.h"
 #include "GpuSkin.h"
 #include "MultiBuffer.h"
 #include "Pathtracer.h"
+#include "Rasterizer.h"
 #include "RayTracingAccelerationStructure.h"
 #include "Swapchain.h"
 #include "ToneMapper.h"
@@ -26,13 +25,6 @@ public:
 	enum RendererType {
 		RENDERER_TYPE_RASTERIZER,
 		RENDERER_TYPE_PATHTRACER,
-	};
-
-	struct RasterSettings {
-		int transmission_downsample_sample_pattern = 1;
-		float bloom_strength = 0.01f;
-		int bloom_radius = 4;
-		uint32_t render_flags;
 	};
 
 	struct PathtracerSettings {
@@ -59,7 +51,7 @@ public:
 		int vsync_interval = 1;
 		int anisotropic_filtering = 0;
 		ToneMapper::Config tone_mapper_config;
-		RasterSettings raster;
+		Rasterizer::Settings raster;
 		PathtracerSettings pathtracer;
 	};
 
@@ -75,16 +67,6 @@ public:
 	void WaitForOutstandingWork();
 
 private:
-
-	struct RenderObject {
-		glm::mat4x4 transform;
-		glm::mat4x4 normal_transform;
-		glm::mat4x4 previous_transform;
-		int mesh_id;
-		int dynamic_mesh_id;
-		int primitive_id;
-		int material_id;
-	};
 
 	struct GpuLight {
 		enum Type {
@@ -230,17 +212,10 @@ private:
 	glm::mat4x4 previous_world_to_clip;
 
 	// Render targets and resolution dependent resources.
-	static constexpr float DEPTH_CLEAR_VALUE = 0.0f;
-	Microsoft::WRL::ComPtr<ID3D12Resource> depth;
-	Microsoft::WRL::ComPtr<ID3D12Resource> motion_vectors;
 	Microsoft::WRL::ComPtr<ID3D12Resource> display;
-	Microsoft::WRL::ComPtr<ID3D12Resource> transmission;
+	int display_rtv = -1;
+	int display_uav = -1;
 	
-	std::vector<RenderObject> opaque_render_objects;
-	std::vector<RenderObject> alpha_mask_render_objects;
-	std::vector<RenderObject> alpha_render_objects;
-	std::vector<RenderObject> transparent_render_objects;
-
 	const int MAX_LIGHTS = 10;
 	std::vector<GpuLight> lights;
 	std::vector<GpuMeshInstance> mesh_instances;
@@ -250,13 +225,13 @@ private:
 	D3D12_GPU_VIRTUAL_ADDRESS gpu_mesh_instances;
 
 	uint64_t frame = 0;
-	bool debug_lighting = true;
 
 	MultiBuffer<std::vector<Microsoft::WRL::ComPtr<IUnknown>>, Config::FRAME_COUNT> deferred_release;
 
 	Swapchain swapchain;
 	MultiBuffer<CpuMappedLinearBuffer, Config::FRAME_COUNT> frame_allocators;
 	GpuSkin gpu_skinner;
+	Rasterizer rasterizer;
 	Pathtracer pathtracer;
 
 	// Raytracing.
@@ -272,8 +247,6 @@ private:
 	HANDLE frame_event = nullptr;
 
 	// Pipelines.
-	ForwardPass forward;
-	Bloom bloom;
 	ToneMapper tone_mapper;
 	EnvironmentMap::Map map;
 	bool environment_map_loaded = false;
@@ -292,12 +265,7 @@ private:
 	void InitializeImGui();
 	void DrawImGui();
 
-	// Forward renderer.
 	void SetViewportAndScissorRects(ID3D12GraphicsCommandList* command_list, int width, int height);
-	void GatherRenderObjects(Gltf* gltf, int scene);
-	void SortRenderObjects(glm::vec3 camera_pos);
-	void DrawRenderObjects(Gltf* gltf, CpuMappedLinearBuffer* frame_allocator, const std::vector<RenderObject>& render_objects);
-	void RasterizeScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, Gltf* gltf, int scene, Camera* camera, const RenderSettings* setting);
 
 	// Gather scene data to upload to GPU.
 	void GatherLights(Gltf* gltf, int scene, CpuMappedLinearBuffer* allocator);

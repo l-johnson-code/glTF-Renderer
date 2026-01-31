@@ -260,6 +260,24 @@ int DescriptorPool::AllocateAndCreateUav(ID3D12Resource* resource, ID3D12Resourc
     return descriptor;
 }
 
+int DescriptorPool::AllocateAndCreateRtv(ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* rtv_desc)
+{
+    int descriptor = Allocate();
+    if (descriptor != -1) {
+        CreateRtv(descriptor, resource, rtv_desc);
+    }
+    return descriptor;
+}
+
+int DescriptorPool::AllocateAndCreateDsv(ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC* dsv_desc)
+{
+    int descriptor = Allocate();
+    if (descriptor != -1) {
+        CreateDsv(descriptor, resource, dsv_desc);
+    }
+    return descriptor;
+}
+
 void DescriptorPool::Free(int index)
 {
     if (index != -1) {

@@ -61,6 +61,8 @@ class DescriptorPool : public DescriptorRange {
     int AllocateAndCreateCbv(const D3D12_CONSTANT_BUFFER_VIEW_DESC* cbv_desc);
     int AllocateAndCreateSrv(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* srv_desc);
     int AllocateAndCreateUav(ID3D12Resource* resource, ID3D12Resource* counter_resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* uav_desc);
+    int AllocateAndCreateRtv(ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* rtv_desc);
+    int AllocateAndCreateDsv(ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC* dsv_desc);
     void Free(int index);
     void Reset();
     int Size() const;

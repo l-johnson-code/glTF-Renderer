@@ -3,7 +3,6 @@
 #include <directx/d3d12.h>
 #include <wrl/client.h>
 
-#include "GpuResources.h"
 #include "BufferAllocator.h"
 #include "Mesh.h"
 
@@ -48,8 +47,8 @@ class ForwardPass {
     void Destroy();
     void SetRootSignature(ID3D12GraphicsCommandList* command_list);
     void SetConfig(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, const Config* config);
-    void BindRenderTargets(ID3D12GraphicsCommandList* command_list, GpuResources* resources, D3D12_CPU_DESCRIPTOR_HANDLE render, D3D12_CPU_DESCRIPTOR_HANDLE velocity);
-    void BindPipeline(ID3D12GraphicsCommandList* command_list, GpuResources* resources, uint32_t pipeline_flags);
+    void BindRenderTargets(ID3D12GraphicsCommandList* command_list, D3D12_CPU_DESCRIPTOR_HANDLE render, D3D12_CPU_DESCRIPTOR_HANDLE velocity, D3D12_CPU_DESCRIPTOR_HANDLE depth);
+    void BindPipeline(ID3D12GraphicsCommandList* command_list, uint32_t pipeline_flags);
     void Draw(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, Mesh* model, int material_id, glm::mat4x4 model_to_world, glm::mat4x4 model_to_world_normals, glm::mat4x4 previous_model_to_world, DynamicMesh* dynamic_mesh = nullptr);
     void DrawBackground(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, glm::mat4x4 clip_to_world, float environment_intensity, int environment_descriptor);
     void GenerateTransmissionMips(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, ID3D12Resource* input, ID3D12Resource* output, int sample_pattern);

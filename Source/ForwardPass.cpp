@@ -181,17 +181,16 @@ void ForwardPass::SetConfig(ID3D12GraphicsCommandList* command_list, CpuMappedLi
 	command_list->SetGraphicsRootShaderResourceView(ROOT_PARAMETER_SRV_MATERIALS, config->materials);
 }
 
-void ForwardPass::BindRenderTargets(ID3D12GraphicsCommandList* command_list, GpuResources* resources, D3D12_CPU_DESCRIPTOR_HANDLE render, D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors)
+void ForwardPass::BindRenderTargets(ID3D12GraphicsCommandList* command_list, D3D12_CPU_DESCRIPTOR_HANDLE render, D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors, D3D12_CPU_DESCRIPTOR_HANDLE depth)
 {
     D3D12_CPU_DESCRIPTOR_HANDLE rtv_handles[] = {
         render,
 		motion_vectors,
     };
-	D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = resources->dsv_allocator.GetCpuHandle(GpuResources::DSV_DEPTH);
-	command_list->OMSetRenderTargets(2, rtv_handles, false, &dsv_handle);
+	command_list->OMSetRenderTargets(2, rtv_handles, false, &depth);
 }
 
-void ForwardPass::BindPipeline(ID3D12GraphicsCommandList* command_list, GpuResources* resources, uint32_t flags)
+void ForwardPass::BindPipeline(ID3D12GraphicsCommandList* command_list, uint32_t flags)
 {
 	assert(flags < std::size(pipeline_states));
 	flags &= PIPELINE_FLAGS_BITMASK;

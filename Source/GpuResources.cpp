@@ -72,21 +72,16 @@ void GpuResources::Create(ID3D12Device* device)
 	// Render target view descriptors.
 	desc_heap = {
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-		.NumDescriptors = RTV_COUNT,
+		.NumDescriptors = Config::MAX_RENDER_TARGET_VIEWS,
 	};
 	rtv_allocator.Create(this->device.Get(), &desc_heap);
 
 	// Depth stencil descriptors.
 	desc_heap = {
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-		.NumDescriptors = DSV_COUNT
+		.NumDescriptors = Config::MAX_DEPTH_STENCIL_VIEWS
 	};
 	dsv_allocator.Create(this->device.Get(), &desc_heap);
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE GpuResources::GetBackbuffer(int backbuffer_index)
-{
-	return rtv_allocator.GetCpuHandle(RTV_SWAPCHAIN_0 + backbuffer_index);
 }
 
 void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
@@ -150,16 +145,6 @@ void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 		FreeEXRImage(&exr_image);
 		FreeEXRHeader(&exr_header);
 	}
-}
-
-// TODO: Put this somewhere.
-static int GetNextPowerOfTwo(int value)
-{
-	int power = 1;
-	while (power < value) {
-		power *= 2;
-	}
-	return power;
 }
 
 D3D12_SHADER_BYTECODE GpuResources::LoadShader(const char* filepath)
