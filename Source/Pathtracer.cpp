@@ -3,12 +3,13 @@
 #include <algorithm>
 #include <cassert>
 
+#include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_root_signature.h>
 
 #include "GpuResources.h"
 
-void Pathtracer::Create(ID3D12Device5* device, UploadBuffer* upload_buffer)
+void Pathtracer::Init(ID3D12Device5* device, UploadBuffer* upload_buffer)
 {
     HRESULT result = S_OK;
 
@@ -125,99 +126,242 @@ void Pathtracer::Create(ID3D12Device5* device, UploadBuffer* upload_buffer)
     collection_builder.hit_group_table.SetShader(HIT_GROUP_SHADOW, shadow_hit_group_identifier);
     this->shader_tables = collection_builder.GetShaderTableCollection(this->shader_tables_resource->GetGPUVirtualAddress());
 
+    acceleration_structure.Init(device, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
+
     // Cleanup.
     GpuResources::FreeShader(dxil_library_desc.DXILLibrary);
 }
 
-void Pathtracer::Run(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* allocator, const Parameters* parameters)
-{
-    if (parameters->reset_history) {
-        this->accumulated_frames = 0;
-    }
-
-    struct {
-        glm::mat4x4 clip_to_world;
-        glm::vec3 camera_pos;
-        int num_of_lights;
-        int width;
-        int height;
-        uint32_t seed;
-        int accumulated_frames;
-        glm::vec3 environment_color;
-        float environment_intensity;
-        int debug_output;
-        uint32_t flags;
-        float max_ray_length;
-        int min_bounces;
-        int max_bounces;
-        int output_descriptor;
-        int environment_map_descriptor_id;
-        int environment_importance_map_descriptor_id;
-        float luminance_clamp;
-        float min_russian_roulette_continue_prob;
-        float max_russian_roulette_continue_prob;
-    } constants;
-
-    constants = {
-        .clip_to_world = parameters->clip_to_world,
-        .camera_pos = parameters->camera_pos,
-        .num_of_lights = parameters->num_of_lights,
-        .width = parameters->width,
-        .height = parameters->height,
-        .seed = parameters->seed,
-        .accumulated_frames = this->accumulated_frames,
-        .environment_color = parameters->environment_color,
-        .environment_intensity = parameters->environment_intensity,
-        .debug_output = parameters->debug_output,
-        .flags = parameters->flags,
-        .max_ray_length = 1000,
-        .min_bounces = std::clamp(parameters->min_bounces, 0, MAX_BOUNCES),
-        .max_bounces = std::clamp(parameters->max_bounces, 0, MAX_BOUNCES),
-        .output_descriptor = parameters->output_descriptor,
-        .environment_map_descriptor_id = parameters->environment_cube_map,
-        .environment_importance_map_descriptor_id = parameters->environment_importance_map,
-        .luminance_clamp = parameters->luminance_clamp,
-        .min_russian_roulette_continue_prob = parameters->min_russian_roulette_continue_prob,
-        .max_russian_roulette_continue_prob = parameters->max_russian_roulette_continue_prob,
-    };
-
-    D3D12_GPU_VIRTUAL_ADDRESS constant_buffer = allocator->Copy(&constants, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-
-    command_list->SetComputeRootSignature(this->root_signature.Get());
-    command_list->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
-    command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_ACCELERATION_STRUCTURE, parameters->acceleration_structure);
-    command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, parameters->instances);
-    command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, parameters->materials);
-    command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, parameters->lights);
-
-    command_list->SetPipelineState1(this->state_object.Get());
-
-    D3D12_DISPATCH_RAYS_DESC desc = {
-        .RayGenerationShaderRecord = this->shader_tables.ray_generation_shader_record,
-        .MissShaderTable = this->shader_tables.miss_shader_table,
-        .HitGroupTable = this->shader_tables.hit_group_table,
-        .CallableShaderTable = this->shader_tables.callable_shader_table,
-        .Width = (uint32_t)parameters->width,
-        .Height = (uint32_t)parameters->height,
-        .Depth = 1,
-    };
-    command_list->DispatchRays(&desc);
-
-    if (parameters->flags & FLAG_ACCUMULATE) {
-        this->accumulated_frames++;
-    } else {
-        this->accumulated_frames = 0;
-    }
-}
-
-int Pathtracer::AccumulatedFrames()
-{
-    return accumulated_frames;
-}
-
-void Pathtracer::Destroy()
+void Pathtracer::Shutdown()
 {
     root_signature.Reset();
     state_object.Reset();
     shader_tables_resource.Reset();
+}
+
+void Pathtracer::BuildAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list)
+{
+    for (int i = 0; i < gltf->nodes.size(); i++) {
+		Gltf::Node& node = gltf->nodes[i];
+		int mesh_id = node.mesh_id;
+        if (mesh_id != -1) {
+            Gltf::Mesh& mesh = gltf->meshes[mesh_id];
+			for (int j = 0; j < mesh.primitives.size(); j++) {
+				Gltf::Primitive& primitive = mesh.primitives[j];
+				int dynamic_meshes_id = node.dynamic_mesh;
+				if (dynamic_meshes_id != -1) {
+					// Dynamic.
+					DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes[j];
+					gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases.resize(gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes.size());
+					RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases[j];
+					if (!dynamic_blas.resource.Get()) {
+						acceleration_structure->BuildDynamicBlas(command_list, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
+					}
+				} else {
+					// Static.
+					if (!primitive.blas.resource.Get()) {
+						acceleration_structure->BuildStaticBlas(command_list, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
+					}
+				}
+			}
+        }
+    }
+    acceleration_structure->EndBlasBuilds(command_list);
+}
+
+void Pathtracer::UpdateAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list)
+{
+    for (int i = 0; i < gltf->nodes.size(); i++) {
+		Gltf::Node& node = gltf->nodes[i];
+		int mesh_id = node.mesh_id;
+		int skin_id = node.dynamic_mesh;
+        if (mesh_id != -1 && skin_id != -1) {
+			std::vector<Gltf::Primitive>& primitives = gltf->meshes[mesh_id].primitives; 
+			Gltf::DynamicPrimitives& dynamic_primitives = gltf->dynamic_primitives[skin_id];
+			for (int j = 0; j < dynamic_primitives.dynamic_blases.size(); j++) {
+				acceleration_structure->UpdateDynamicBlas(command_list, &dynamic_primitives.dynamic_blases[j], dynamic_primitives.dynamic_meshes[j].GetCurrentPositionBuffer()->view.BufferLocation, primitives[j].mesh.num_of_vertices, primitives[j].mesh.index.view, primitives[j].mesh.num_of_indices);
+			}
+        }
+    }
+    acceleration_structure->EndBlasBuilds(command_list);
+}
+
+void Pathtracer::BuildTlas(Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* allocator)
+{
+	mesh_instances.clear();
+    acceleration_structure->BeginTlasBuild();
+
+	// TODO: Define this somewhere else?
+	enum InstanceMask {
+		MASK_NONE = 1 << 0,
+		MASK_ALPHA_BLEND = 1 << 1,
+	};
+	gltf->TraverseScene(scene_id, [&](Gltf* gltf, int node_id) {
+		const Gltf::Node& node = gltf->nodes[node_id];
+		int mesh_id = node.mesh_id;
+		if (mesh_id != -1) {
+			std::vector<Gltf::Primitive>& primitives = gltf->meshes[mesh_id].primitives; 
+			for (int i = 0; i < primitives.size(); i++) {
+				const Mesh& mesh = primitives[i].mesh;
+				const Gltf::Material& material = gltf->materials[primitives[i].material_id];
+				GpuMeshInstance gpu_mesh_instance = {
+					.transform = node.global_transform,
+					.normal_transform = glm::inverseTranspose(node.global_transform),
+					.index_descriptor = mesh.index.descriptor,
+					.position_descriptor = mesh.position.descriptor,
+					.normal_descriptor = mesh.normal.descriptor,
+					.tangent_descriptor = mesh.tangent.descriptor,
+					.texcoord_descriptors = {
+						mesh.texcoords[0].descriptor,
+						mesh.texcoords[1].descriptor,
+					},
+					.color_descriptor = mesh.color.descriptor,
+					.material_id = primitives[i].material_id,
+				};
+				unsigned int flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+				if (material.flags & Gltf::Material::FLAG_DOUBLE_SIDED) {
+					flags |=  D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
+				}
+				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
+					flags |=  D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+				}
+				unsigned int instance_mask = 0;
+				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_BLEND) {
+					instance_mask = MASK_ALPHA_BLEND;
+				} else {
+					instance_mask = MASK_NONE;
+				}
+				bool tlas_added = false;
+				if (gltf->nodes[node_id].dynamic_mesh != -1) {
+					if (gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases.size() > i) {
+						// Dynamic.
+						DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_meshes[i];
+						RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases[i];
+						tlas_added = acceleration_structure->AddTlasInstance(&dynamic_blas, node.global_transform, instance_mask, flags);
+						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_POSITION) {
+							gpu_mesh_instance.position_descriptor = dynamic_mesh.GetCurrentPositionBuffer()->descriptor;
+						}
+						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_NORMAL) {
+							gpu_mesh_instance.normal_descriptor = dynamic_mesh.normal.descriptor;
+						}
+						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_TANGENT) {
+							gpu_mesh_instance.tangent_descriptor = dynamic_mesh.tangent.descriptor;
+						}
+					}
+				} else {
+					// Static.
+					RaytracingAccelerationStructure::Blas& blas = primitives[i].blas;
+					tlas_added = acceleration_structure->AddTlasInstance(&blas, node.global_transform, instance_mask, flags);
+				}
+				if (tlas_added) {
+					mesh_instances.push_back(gpu_mesh_instance);
+				}
+			}
+		}
+	});
+
+    acceleration_structure->BuildTlas(command_list);
+	this->gpu_mesh_instances = allocator->Copy(mesh_instances.data(), sizeof(GpuMeshInstance) * mesh_instances.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+}
+
+void Pathtracer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params)
+{
+	glm::mat4x4 world_to_view = execute_params->camera->GetWorldToView();
+	glm::mat4x4 world_to_clip = execute_params->camera->GetViewToClip() * world_to_view;
+	glm::mat4x4 view_to_world = glm::affineInverse(world_to_view);
+	glm::mat4x4 clip_to_world = glm::inverse(world_to_clip);
+	glm::vec3 camera_pos = view_to_world[3];
+
+    bool reset = (world_to_clip != previous_world_to_clip) || (settings->reset);
+    // Reset accumulation if the camera position has changed.
+    if (reset) {
+        this->accumulated_frames = 0;
+    }
+
+	if (accumulated_frames < settings->max_accumulated_frames) {
+        
+        // Update the acceleration structure.
+		BuildAllBlas(execute_params->gltf, &this->acceleration_structure, command_list);
+		UpdateAllBlas(execute_params->gltf, &this->acceleration_structure, command_list);
+		BuildTlas(execute_params->gltf, execute_params->scene, &this->acceleration_structure, command_list, frame_allocator);
+        
+        struct {
+            glm::mat4x4 clip_to_world;
+            glm::vec3 camera_pos;
+            int num_of_lights;
+            uint32_t width;
+            uint32_t height;
+            uint32_t seed;
+            int accumulated_frames;
+            glm::vec3 environment_color;
+            float environment_intensity;
+            int debug_output;
+            uint32_t flags;
+            float max_ray_length;
+            int min_bounces;
+            int max_bounces;
+            int output_descriptor;
+            int environment_map_descriptor_id;
+            int environment_importance_map_descriptor_id;
+            float luminance_clamp;
+            float min_russian_roulette_continue_prob;
+            float max_russian_roulette_continue_prob;
+        } constants;
+
+        constants = {
+            .clip_to_world = clip_to_world,
+            .camera_pos = camera_pos,
+            .num_of_lights = execute_params->light_count,
+            .width = execute_params->width,
+            .height = execute_params->height,
+            .seed = settings->use_frame_as_seed ? (uint32_t)execute_params->frame : settings->seed,
+            .accumulated_frames = this->accumulated_frames,
+            .environment_color = settings->environment_color,
+            .environment_intensity = settings->environment_intensity,
+            .debug_output = settings->debug_output,
+            .flags = settings->flags,
+            .max_ray_length = 1000,
+            .min_bounces = std::clamp(settings->min_bounces, 0, MAX_BOUNCES),
+            .max_bounces = std::clamp(settings->max_bounces, 0, MAX_BOUNCES),
+            .output_descriptor = execute_params->output_descriptor,
+            .environment_map_descriptor_id = execute_params->environment_map ? execute_params->environment_map->cube_srv_descriptor : -1,
+            .environment_importance_map_descriptor_id = execute_params->environment_map ? execute_params->environment_map->importance_srv_descriptor : -1,
+            .luminance_clamp = settings->luminance_clamp,
+            .min_russian_roulette_continue_prob = settings->min_russian_roulette_continue_prob,
+            .max_russian_roulette_continue_prob = settings->max_russian_roulette_continue_prob,
+        };
+
+        D3D12_GPU_VIRTUAL_ADDRESS constant_buffer = frame_allocator->Copy(&constants, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+        command_list->SetComputeRootSignature(this->root_signature.Get());
+        command_list->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
+        command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_ACCELERATION_STRUCTURE, this->acceleration_structure.GetAccelerationStructure());
+        command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, this->gpu_mesh_instances);
+        command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, execute_params->gpu_materials);
+        command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, execute_params->gpu_lights);
+
+        command_list->SetPipelineState1(this->state_object.Get());
+
+        D3D12_DISPATCH_RAYS_DESC desc = {
+            .RayGenerationShaderRecord = this->shader_tables.ray_generation_shader_record,
+            .MissShaderTable = this->shader_tables.miss_shader_table,
+            .HitGroupTable = this->shader_tables.hit_group_table,
+            .CallableShaderTable = this->shader_tables.callable_shader_table,
+            .Width = execute_params->width,
+            .Height = execute_params->height,
+            .Depth = 1,
+        };
+        command_list->DispatchRays(&desc);
+
+        if (settings->flags & FLAG_ACCUMULATE) {
+            this->accumulated_frames++;
+        } else {
+            this->accumulated_frames = 0;
+        }
+		
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(execute_params->output_resource);
+		command_list->ResourceBarrier(1, &barrier);
+	}
+	
+	previous_world_to_clip = world_to_clip;
 }

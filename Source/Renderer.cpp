@@ -155,8 +155,6 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 		frame_allocators[i].Create(this->device.Get(), ::Config::FRAME_HEAP_CAPACITY, true, L"Transient Resources");
 	}
 
-	acceleration_structure.Init(this->device.Get(), Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
-
 	InitializeImGui();
 
 	upload_buffer.Begin();
@@ -170,7 +168,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 		rasterizer.Init(this->device.Get(), &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, this->display_width, this->display_height);
 	} else {
-		pathtracer.Create(this->device.Get(), &this->upload_buffer);
+		pathtracer.Init(this->device.Get(), &this->upload_buffer);
 	}
 
 	uint64_t submission_id = upload_buffer.Submit();
@@ -239,13 +237,13 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 		if (this->settings.renderer_type == RENDERER_TYPE_RASTERIZER) {
 			rasterizer.Shutdown();
 		} else {
-			pathtracer.Destroy();
+			pathtracer.Shutdown();
 		}
 		if (new_settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 			rasterizer.Init(this->device.Get(), &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, new_settings->width, new_settings->height);
 		} else {
 			this->upload_buffer.Begin();
-			pathtracer.Create(this->device.Get(), &this->upload_buffer);
+			pathtracer.Init(this->device.Get(), &this->upload_buffer);
 			uint64_t submission = this->upload_buffer.Submit();
 			this->upload_buffer.WaitForSubmissionToComplete(submission);
 		}
@@ -317,7 +315,21 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 		rasterizer.DrawScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, gltf, scene, camera, gpu_materials, gpu_lights, lights.size(), environment_map_loaded ? &map : nullptr, &settings->raster, resources.rtv_allocator.GetCpuHandle(display_rtv), display.Get());
 	} else {
-		PathtraceScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, gltf, scene, camera, settings);
+		Pathtracer::ExecuteParams params = {
+			.gltf = gltf,
+        	.scene = scene,
+        	.camera = camera,
+        	.width = this->display_width,
+        	.height = this->display_height,
+        	.frame = this->frame,
+        	.gpu_materials = this->gpu_materials,
+        	.gpu_lights = this->gpu_lights,
+        	.light_count = (int)this->lights.size(),
+        	.environment_map = environment_map_loaded ? &map : nullptr,
+        	.output_descriptor = this->display_uav,
+        	.output_resource = this->display.Get(),
+		};
+		pathtracer.PathtraceScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, &settings->pathtracer, &params);
 	}
 
 	CD3DX12_RECT scissor_rect(0, 0, this->display_width, this->display_height);
@@ -326,6 +338,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	graphics_command_list->RSSetViewports(1, &viewport);
 	SetViewportAndScissorRects(this->graphics_command_list.Get(), this->display_width, this->display_height);
 	swapchain.TransitionBackbufferForRendering(this->graphics_command_list.Get());
+	this->graphics_command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	D3D12_CPU_DESCRIPTOR_HANDLE backbuffer_rtv = swapchain.GetCurrentBackbufferRtv();
 	this->graphics_command_list->OMSetRenderTargets(1, &backbuffer_rtv, false, nullptr);
 
@@ -509,185 +522,4 @@ void Renderer::SetViewportAndScissorRects(ID3D12GraphicsCommandList* command_lis
 	command_list->RSSetViewports(1, &viewport);
 	CD3DX12_RECT scissor_rect(0, 0, width, height);
 	command_list->RSSetScissorRects(1, &scissor_rect);
-}
-
-void Renderer::BuildAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list)
-{
-    for (int i = 0; i < gltf->nodes.size(); i++) {
-		Gltf::Node& node = gltf->nodes[i];
-		int mesh_id = node.mesh_id;
-        if (mesh_id != -1) {
-            Gltf::Mesh& mesh = gltf->meshes[mesh_id];
-			for (int j = 0; j < mesh.primitives.size(); j++) {
-				Gltf::Primitive& primitive = mesh.primitives[j];
-				int dynamic_meshes_id = node.dynamic_mesh;
-				if (dynamic_meshes_id != -1) {
-					// Dynamic.
-					DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes[j];
-					gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases.resize(gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes.size());
-					RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases[j];
-					if (!dynamic_blas.resource.Get()) {
-						acceleration_structure->BuildDynamicBlas(command_list, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
-					}
-				} else {
-					// Static.
-					if (!primitive.blas.resource.Get()) {
-						acceleration_structure->BuildStaticBlas(command_list, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
-					}
-				}
-			}
-        }
-    }
-    acceleration_structure->EndBlasBuilds(command_list);
-}
-
-void Renderer::UpdateAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list)
-{
-    for (int i = 0; i < gltf->nodes.size(); i++) {
-		Gltf::Node& node = gltf->nodes[i];
-		int mesh_id = node.mesh_id;
-		int skin_id = node.dynamic_mesh;
-        if (mesh_id != -1 && skin_id != -1) {
-			std::vector<Gltf::Primitive>& primitives = gltf->meshes[mesh_id].primitives; 
-			Gltf::DynamicPrimitives& dynamic_primitives = gltf->dynamic_primitives[skin_id];
-			for (int j = 0; j < dynamic_primitives.dynamic_blases.size(); j++) {
-				acceleration_structure->UpdateDynamicBlas(command_list, &dynamic_primitives.dynamic_blases[j], dynamic_primitives.dynamic_meshes[j].GetCurrentPositionBuffer()->view.BufferLocation, primitives[j].mesh.num_of_vertices, primitives[j].mesh.index.view, primitives[j].mesh.num_of_indices);
-			}
-        }
-    }
-    acceleration_structure->EndBlasBuilds(command_list);
-}
-
-void Renderer::BuildTlas(Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* allocator)
-{
-	mesh_instances.clear();
-    acceleration_structure->BeginTlasBuild();
-
-	// TODO: Define this somewhere else?
-	enum InstanceMask {
-		MASK_NONE = 1 << 0,
-		MASK_ALPHA_BLEND = 1 << 1,
-	};
-	gltf->TraverseScene(scene_id, [&](Gltf* gltf, int node_id) {
-		const Gltf::Node& node = gltf->nodes[node_id];
-		int mesh_id = node.mesh_id;
-		if (mesh_id != -1) {
-			std::vector<Gltf::Primitive>& primitives = gltf->meshes[mesh_id].primitives; 
-			for (int i = 0; i < primitives.size(); i++) {
-				const Mesh& mesh = primitives[i].mesh;
-				const Gltf::Material& material = gltf->materials[primitives[i].material_id];
-				GpuMeshInstance gpu_mesh_instance = {
-					.transform = node.global_transform,
-					.normal_transform = glm::inverseTranspose(node.global_transform),
-					.index_descriptor = mesh.index.descriptor,
-					.position_descriptor = mesh.position.descriptor,
-					.normal_descriptor = mesh.normal.descriptor,
-					.tangent_descriptor = mesh.tangent.descriptor,
-					.texcoord_descriptors = {
-						mesh.texcoords[0].descriptor,
-						mesh.texcoords[1].descriptor,
-					},
-					.color_descriptor = mesh.color.descriptor,
-					.material_id = primitives[i].material_id,
-				};
-				unsigned int flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-				if (material.flags & Gltf::Material::FLAG_DOUBLE_SIDED) {
-					flags |=  D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
-				}
-				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
-					flags |=  D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
-				}
-				unsigned int instance_mask = 0;
-				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_BLEND) {
-					instance_mask = MASK_ALPHA_BLEND;
-				} else {
-					instance_mask = MASK_NONE;
-				}
-				bool tlas_added = false;
-				if (gltf->nodes[node_id].dynamic_mesh != -1) {
-					if (gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases.size() > i) {
-						// Dynamic.
-						DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_meshes[i];
-						RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases[i];
-						tlas_added = acceleration_structure->AddTlasInstance(&dynamic_blas, node.global_transform, instance_mask, flags);
-						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_POSITION) {
-							gpu_mesh_instance.position_descriptor = dynamic_mesh.GetCurrentPositionBuffer()->descriptor;
-						}
-						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_NORMAL) {
-							gpu_mesh_instance.normal_descriptor = dynamic_mesh.normal.descriptor;
-						}
-						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_TANGENT) {
-							gpu_mesh_instance.tangent_descriptor = dynamic_mesh.tangent.descriptor;
-						}
-					}
-				} else {
-					// Static.
-					RaytracingAccelerationStructure::Blas& blas = primitives[i].blas;
-					tlas_added = acceleration_structure->AddTlasInstance(&blas, node.global_transform, instance_mask, flags);
-				}
-				if (tlas_added) {
-					mesh_instances.push_back(gpu_mesh_instance);
-				}
-			}
-		}
-	});
-
-    acceleration_structure->BuildTlas(command_list);
-	this->gpu_mesh_instances = allocator->Copy(mesh_instances.data(), sizeof(GpuMeshInstance) * mesh_instances.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-}
-
-void Renderer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, Gltf* gltf, int scene, Camera* camera, RenderSettings* settings)
-{
-	glm::mat4x4 world_to_view = camera->GetWorldToView();
-	glm::mat4x4 world_to_clip = camera->GetViewToClip() * world_to_view;
-	glm::mat4x4 view_to_world = glm::affineInverse(world_to_view);
-	glm::mat4x4 clip_to_world = glm::inverse(world_to_clip);
-	glm::vec3 camera_pos = view_to_world[3];
-
-	// Reset accumulation if the camera position has changed.
-	if (world_to_clip != previous_world_to_clip) {
-		settings->pathtracer.reset = true;
-	}
-
-	if (pathtracer.AccumulatedFrames() < settings->pathtracer.max_accumulated_frames || settings->pathtracer.reset) {
-		command_list->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST); // TODO: Why is this here? Is it neccessary?
-		
-		// Update the acceleration structure.
-		BuildAllBlas(gltf, &this->acceleration_structure, command_list);
-		UpdateAllBlas(gltf, &this->acceleration_structure, command_list);
-		BuildTlas(gltf, scene, &this->acceleration_structure, command_list, frame_allocator);
-
-		// Pathtrace the scene.
-		Pathtracer::Parameters parameters = {
-			.width = (int)this->display_width,
-			.height = (int)this->display_height,
-			.acceleration_structure = acceleration_structure.GetAccelerationStructure(),
-			.instances = this->gpu_mesh_instances,
-			.materials = this->gpu_materials,
-			.num_of_lights = (int)this->lights.size(),
-			.lights = this->gpu_lights,
-			.camera_pos = camera_pos,
-			.clip_to_world = clip_to_world,
-			.reset_history = settings->pathtracer.reset,
-			.min_bounces = settings->pathtracer.min_bounces,
-			.max_bounces = settings->pathtracer.max_bounces,
-			.debug_output = settings->pathtracer.debug_output,
-			.flags = settings->pathtracer.flags,
-			.output_descriptor = this->display_uav,
-			.environment_color = settings->pathtracer.environment_color,
-			.environment_intensity = settings->pathtracer.environment_intensity,
-			.seed = settings->pathtracer.use_frame_as_seed ? (uint32_t)this->frame : settings->pathtracer.seed,
-			.environment_cube_map = map.cube_srv_descriptor,
-			.environment_importance_map = map.importance_srv_descriptor,
-			.luminance_clamp = settings->pathtracer.luminance_clamp,
-			.min_russian_roulette_continue_prob = settings->pathtracer.min_russian_roulette_continue_prob,
-			.max_russian_roulette_continue_prob = settings->pathtracer.max_russian_roulette_continue_prob,
-		};
-		pathtracer.Run(command_list, frame_allocator, &parameters);
-		
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->display.Get());
-		command_list->ResourceBarrier(1, &barrier);
-	}
-	
-	previous_world_to_clip = world_to_clip;
 }

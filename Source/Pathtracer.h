@@ -7,184 +7,10 @@
 #include <wrl.h>
 
 #include "BufferAllocator.h"
-#include "Memory.h"
+#include "EnvironmentMap.h"
+#include "Gltf.h"
+#include "ShaderTableBuilder.h"
 #include "UploadBuffer.h"
-
-struct ShaderTableCollection {
-    D3D12_GPU_VIRTUAL_ADDRESS_RANGE ray_generation_shader_record;
-    D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE miss_shader_table;
-    D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE hit_group_table;
-    D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE callable_shader_table;
-};
-
-static constexpr int SHADER_IDENTIFIER_SIZE = 32;
-
-class ShaderRecordBuilder {
-    public:
-
-    static int CalculateRequiredSize()
-    {
-        return Align(SHADER_IDENTIFIER_SIZE, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-    }
-
-    void Create(void* data)
-    {
-        this->data = data;
-    }
-
-    void SetShader(void* shader_identifier) {
-        assert(data);
-        assert(shader_identifier);
-        if (shader_identifier) {
-            memcpy(data, shader_identifier, SHADER_IDENTIFIER_SIZE);
-        } else {
-            memset(data, 0, SHADER_IDENTIFIER_SIZE);
-        }
-    }
-
-    int Size()
-    {
-        return Align(SHADER_IDENTIFIER_SIZE, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-    }
-
-    private:
-    void* data;
-};
-
-class ShaderTableBuilder
-{
-    public:
-
-    static int CalculateRequiredSize(int record_count)
-    {
-        return record_count * CalculateStride();
-    }
-
-    void Create(void* data, int record_count)
-    {
-        this->data = data;
-        this->record_count = record_count;
-        this->stride = CalculateStride();
-    }
-
-    void SetShader(int record_index, void* shader_identifier)
-    {
-        assert(data);
-        assert(shader_identifier);
-        assert((record_index >= 0) && (record_index < record_count));
-        if (shader_identifier) {
-            memcpy((std::byte*)data + Stride() * record_index, shader_identifier, SHADER_IDENTIFIER_SIZE);
-        } else {
-            memset((std::byte*)data + Stride() * record_index, 0, SHADER_IDENTIFIER_SIZE);
-        }
-    }
-
-    int Size()
-    {
-        return this->record_count * this->stride;
-    }
-
-    int RecordCount()
-    {
-        return this->record_count;
-    }
-
-    int Stride()
-    {
-        return this->stride;
-    }
-
-    private:
-    void* data = nullptr;
-    int record_count = 0;
-    int stride = 0;
-
-    static int CalculateStride()
-    {
-        return Align(SHADER_IDENTIFIER_SIZE, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-    }
-};
-
-class ShaderTableCollectionBuilder {
-    public:
-    
-    ShaderRecordBuilder ray_generation_record;
-    ShaderTableBuilder miss_table;
-    ShaderTableBuilder hit_group_table;
-    ShaderTableBuilder callable_table;
-    
-    static int CalculateRequiredSize(int miss_count, int hit_group_count, int callable_count) {
-        Allocation allocations[4] = {
-            {ShaderRecordBuilder::CalculateRequiredSize(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT},
-            {ShaderTableBuilder::CalculateRequiredSize(miss_count), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT},
-            {ShaderTableBuilder::CalculateRequiredSize(hit_group_count), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT},
-            {ShaderTableBuilder::CalculateRequiredSize(callable_count), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT},
-        };
-        return CalculateGroupedAllocationSize(allocations, 4);
-    }
-
-    void Create(void* data, int miss_count, int hit_group_count, int callable_count)
-    {
-        std::byte* base = (std::byte*)data;
-
-        Allocation allocations[4] = {
-            {ShaderRecordBuilder::CalculateRequiredSize(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT},
-            {ShaderTableBuilder::CalculateRequiredSize(miss_count), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT},
-            {ShaderTableBuilder::CalculateRequiredSize(hit_group_count), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT},
-            {ShaderTableBuilder::CalculateRequiredSize(callable_count), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT},
-        };
-
-        int offsets[4];
-        CalculateGroupedAllocationSizeAndOffsets(allocations, 4, offsets);
-        this->miss_table_offset = offsets[1];
-        this->hit_group_table_offset = offsets[2];
-        this->callable_table_offset = offsets[3];
-
-        this->ray_generation_record.Create(base + offsets[0]);
-        this->miss_table.Create(base + offsets[1], miss_count);
-        this->hit_group_table.Create(base + offsets[2], hit_group_count);
-        this->callable_table.Create(base + offsets[3], callable_count);
-    }
-
-    ShaderTableCollection GetShaderTableCollection(D3D12_GPU_VIRTUAL_ADDRESS base_address)
-    {
-        ShaderTableCollection shader_table_collection = {};
-
-        shader_table_collection.ray_generation_shader_record.StartAddress = base_address;
-        shader_table_collection.ray_generation_shader_record.SizeInBytes = this->ray_generation_record.Size();
-
-        if (miss_table.Size()) {
-            shader_table_collection.miss_shader_table.StartAddress = base_address + miss_table_offset;
-            shader_table_collection.miss_shader_table.StrideInBytes = miss_table.Stride();
-            shader_table_collection.miss_shader_table.SizeInBytes = miss_table.Size();
-        } else {
-            shader_table_collection.miss_shader_table = {0, 0, 0};
-        }
-
-        if (hit_group_table.Size()) {
-            shader_table_collection.hit_group_table.StartAddress = base_address + hit_group_table_offset;
-            shader_table_collection.hit_group_table.StrideInBytes = hit_group_table.Stride();
-            shader_table_collection.hit_group_table.SizeInBytes = hit_group_table.Size();
-        } else {
-            shader_table_collection.hit_group_table = {0, 0, 0};
-        }
-
-        if (callable_table.Size()) {
-            shader_table_collection.callable_shader_table.StartAddress = base_address + callable_table_offset;
-            shader_table_collection.callable_shader_table.StrideInBytes = callable_table.Stride();
-            shader_table_collection.callable_shader_table.SizeInBytes = callable_table.Size();
-        } else {
-            shader_table_collection.callable_shader_table = {0, 0, 0};
-        }
-
-        return shader_table_collection;
-    }
-
-    private:
-    int miss_table_offset = 0;
-    int hit_group_table_offset = 0;
-    int callable_table_offset = 0;
-};
 
 class Pathtracer {
 
@@ -241,38 +67,43 @@ class Pathtracer {
         FLAG_SHADING_NORMAL_ADAPTATION = 1 << 15,
     };
 
-    struct Parameters {
-        int width;
-        int height;
-        D3D12_GPU_VIRTUAL_ADDRESS acceleration_structure;
-        D3D12_GPU_VIRTUAL_ADDRESS instances;
-        D3D12_GPU_VIRTUAL_ADDRESS materials;
-        int num_of_lights;
-        D3D12_GPU_VIRTUAL_ADDRESS lights;
-        glm::vec3 camera_pos;
-        glm::mat4x4 clip_to_world;
-        bool reset_history;
-        int min_bounces;
-        int max_bounces;
-        int debug_output;
-        uint32_t flags;
-        int output_descriptor;
-        glm::vec3 environment_color;
-        float environment_intensity;
-        uint32_t seed;
-        int environment_cube_map;
-        int environment_importance_map;
-        float luminance_clamp;
-        float min_russian_roulette_continue_prob;
-        float max_russian_roulette_continue_prob;
+    struct Settings {
+		int min_bounces = 2;
+		int max_bounces = 2;
+		bool reset = false;
+		int debug_output = Pathtracer::DEBUG_OUTPUT_NONE;
+		uint32_t flags = Pathtracer::FLAG_ACCUMULATE | Pathtracer::FLAG_POINT_LIGHTS | Pathtracer::FLAG_ENVIRONMENT_MAP;
+		glm::vec3 environment_color;
+		float environment_intensity = 1;
+		bool use_frame_as_seed = true;
+		uint32_t seed = 0;
+		float luminance_clamp = 1000.0;
+		float min_russian_roulette_continue_prob = 0.1;
+		float max_russian_roulette_continue_prob = 0.9;
+		int max_accumulated_frames = 65536;
+		float max_ray_length = 1000.0;
+	};
+
+    struct ExecuteParams {
+        Gltf* gltf = nullptr;
+        int scene = 0;
+        Camera* camera = nullptr;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        uint64_t frame = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS gpu_materials = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS gpu_lights = 0;
+        int light_count = 0;;
+        EnvironmentMap::Map* environment_map = nullptr;
+        int output_descriptor = -1;
+        ID3D12Resource* output_resource = nullptr;
     };
 
     static constexpr int MAX_BOUNCES = 5;
     
-    void Create(ID3D12Device5* device, UploadBuffer* upload_buffer);
-    void Run(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* allocator, const Parameters* parameters);
-    int AccumulatedFrames();
-    void Destroy();
+    void Init(ID3D12Device5* device, UploadBuffer* upload_buffer);
+	void PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params);
+    void Shutdown();
     
     private:
     
@@ -296,12 +127,33 @@ class Pathtracer {
         MISS_SHADER_SHADOW,
         MISS_SHADER_COUNT,
     };
+
+    struct GpuMeshInstance {
+		glm::mat4x4 transform;
+		glm::mat4x4 normal_transform;
+		int index_descriptor = -1;
+		int position_descriptor = -1;
+		int normal_descriptor = -1;
+		int tangent_descriptor = -1;
+		int texcoord_descriptors[2] = {-1, -1};
+		int color_descriptor = -1;
+		int material_id = 0;
+	};
     
     ShaderTableCollection shader_tables;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12StateObject> state_object;
     Microsoft::WRL::ComPtr<ID3D12Resource> shader_tables_resource;
+
+	RaytracingAccelerationStructure acceleration_structure;
+
+    std::vector<GpuMeshInstance> mesh_instances;
+    D3D12_GPU_VIRTUAL_ADDRESS gpu_mesh_instances;
     
+    glm::mat4x4 previous_world_to_clip;
     int accumulated_frames = 0;
 
+    void BuildAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list);
+	void UpdateAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list);
+	void BuildTlas(Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* allocator);
 };

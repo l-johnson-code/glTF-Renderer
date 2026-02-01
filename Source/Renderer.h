@@ -27,23 +27,6 @@ public:
 		RENDERER_TYPE_PATHTRACER,
 	};
 
-	struct PathtracerSettings {
-		int min_bounces = 2;
-		int max_bounces = 2;
-		bool reset = false;
-		int debug_output = Pathtracer::DEBUG_OUTPUT_NONE;
-		uint32_t flags = Pathtracer::FLAG_ACCUMULATE | Pathtracer::FLAG_POINT_LIGHTS | Pathtracer::FLAG_ENVIRONMENT_MAP;
-		glm::vec3 environment_color;
-		float environment_intensity = 1;
-		bool use_frame_as_seed = true;
-		uint32_t seed = 0;
-		float luminance_clamp = 1000.0;
-		float min_russian_roulette_continue_prob = 0.1;
-		float max_russian_roulette_continue_prob = 0.9;
-		int max_accumulated_frames = 65536;
-		float max_ray_length = 1000.0;
-	};
-
 	struct RenderSettings {
 		RendererType renderer_type;
 		int width = 800;
@@ -52,7 +35,7 @@ public:
 		int anisotropic_filtering = 0;
 		ToneMapper::Config tone_mapper_config;
 		Rasterizer::Settings raster;
-		PathtracerSettings pathtracer;
+		Pathtracer::Settings pathtracer;
 	};
 
 	Microsoft::WRL::ComPtr<ID3D12Device5> device;
@@ -83,18 +66,6 @@ private:
 		float inner_angle;
 		float outer_angle;
 		std::byte pad[8];
-	};
-
-	struct GpuMeshInstance {
-		glm::mat4x4 transform;
-		glm::mat4x4 normal_transform;
-		int index_descriptor = -1;
-		int position_descriptor = -1;
-		int normal_descriptor = -1;
-		int tangent_descriptor = -1;
-		int texcoord_descriptors[2] = {-1, -1};
-		int color_descriptor = -1;
-		int material_id = 0;
 	};
 
 	struct TextureSample {
@@ -209,8 +180,6 @@ private:
 
 	RenderSettings settings;
 
-	glm::mat4x4 previous_world_to_clip;
-
 	// Render targets and resolution dependent resources.
 	Microsoft::WRL::ComPtr<ID3D12Resource> display;
 	int display_rtv = -1;
@@ -218,11 +187,9 @@ private:
 	
 	const int MAX_LIGHTS = 10;
 	std::vector<GpuLight> lights;
-	std::vector<GpuMeshInstance> mesh_instances;
 	std::vector<D3D12_RAYTRACING_INSTANCE_DESC> raytracing_instances;
 	D3D12_GPU_VIRTUAL_ADDRESS gpu_lights;
 	D3D12_GPU_VIRTUAL_ADDRESS gpu_materials;
-	D3D12_GPU_VIRTUAL_ADDRESS gpu_mesh_instances;
 
 	uint64_t frame = 0;
 
@@ -233,10 +200,6 @@ private:
 	GpuSkin gpu_skinner;
 	Rasterizer rasterizer;
 	Pathtracer pathtracer;
-
-	// Raytracing.
-	RaytracingAccelerationStructure acceleration_structure;
-	bool is_raytracing_acceleration_structure_built = false;
 
 	// Command submission.
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> graphics_command_queue;
@@ -272,10 +235,4 @@ private:
 	void GatherMaterials(Gltf* gltf, CpuMappedLinearBuffer* allocator);
 
 	void ApplySettingsChanges(const RenderSettings* new_settings);
-
-	// Pathtracing.
-	void BuildAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list);
-	void UpdateAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list);
-	void BuildTlas(Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* allocator);
-	void PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, Gltf* gltf, int scene, Camera* camera, RenderSettings* settings);
 };

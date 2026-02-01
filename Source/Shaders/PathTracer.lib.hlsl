@@ -10,7 +10,7 @@ struct SceneConstants {
     float4x4 clip_to_world;
     float3 camera_pos;
     int num_of_lights;
-    int2 resolution;
+    uint2 resolution;
     uint32_t seed;
     int accumulated_frames;
     float3 environment_color;
@@ -128,9 +128,9 @@ StructuredBuffer<Light> g_lights: register(t3);
 SamplerState g_sampler_linear_clamp: register(s0);
 SamplerState g_sampler_linear_wrap: register(s1);
 
-void GenerateCameraRay(int2 pixel, int2 resolution, float4x4 clip_to_world, float2 jitter, out float3 origin, out float3 direction)
+void GenerateCameraRay(uint2 pixel, uint2 resolution, float4x4 clip_to_world, float2 jitter, out float3 origin, out float3 direction)
 {
-    float2 clip_space = ((pixel + 0.5 + jitter) / resolution) * 2 - 1;
+    float2 clip_space = (((float2)pixel + 0.5 + jitter) / (float2)resolution) * 2 - 1;
     clip_space.y = -clip_space.y;
     float4 clip_start = float4(clip_space, 1, 1);
     float4 clip_end = float4(clip_space, 0, 1);
@@ -759,7 +759,7 @@ void RayGeneration()
     Payload payload = {1.xxx, 0, 0.xxx, 0, 0, 0};
     float2 jitter = GenerateNextRandom(payload.random_count).xy - 0.5;
 
-    int2 pixel = DispatchRaysIndex().xy;
+    uint2 pixel = DispatchRaysIndex().xy;
     float3 ray_origin;
     float3 ray_direction;
     GenerateCameraRay(pixel, g_scene_constants.resolution, g_scene_constants.clip_to_world, jitter, ray_origin, ray_direction);
