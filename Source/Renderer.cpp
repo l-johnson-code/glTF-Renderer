@@ -321,7 +321,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.gpu_lights = this->gpu_lights,
         	.light_count = (int)this->lights.size(),
         	.environment_map = environment_map_loaded ? &map : nullptr,
-        	.output_rtv= resources.rtv_allocator.GetCpuHandle(this->display_rtv),
+        	.output_rtv= this->display_rtv,
         	.output_resource = this->display.Get(),
 		};
 		rasterizer.DrawScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, &settings->raster, &params);
@@ -380,7 +380,7 @@ void Renderer::CreateRenderTargets()
 		result = this->display->SetName(L"Display");
 		assert(result == S_OK);
 
-		this->display_rtv = resources.rtv_allocator.AllocateAndCreateRtv(this->display.Get(), nullptr);
+		this->display_rtv = resources.rtv_allocator.AllocateAndCreate(this->display.Get(), nullptr);
 		this->display_uav = resources.cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(this->display.Get(), nullptr, nullptr);
 	}
 }

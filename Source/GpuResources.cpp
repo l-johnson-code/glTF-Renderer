@@ -69,19 +69,9 @@ void GpuResources::Create(ID3D12Device* device)
 	int gltf_samplers_start = sampler_allocator.Allocate(gltf_sampler_count);
 	gltf_sampler_allocator.Create(&sampler_allocator, gltf_samplers_start, gltf_sampler_count); // Dynamic samplers.
 
-	// Render target view descriptors.
-	desc_heap = {
-		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-		.NumDescriptors = Config::MAX_RENDER_TARGET_VIEWS,
-	};
-	rtv_allocator.Create(this->device.Get(), &desc_heap);
-
-	// Depth stencil descriptors.
-	desc_heap = {
-		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-		.NumDescriptors = Config::MAX_DEPTH_STENCIL_VIEWS
-	};
-	dsv_allocator.Create(this->device.Get(), &desc_heap);
+	// Render target and depth stencil views.
+	rtv_allocator.Create(this->device.Get(), Config::MAX_RENDER_TARGET_VIEWS);
+	dsv_allocator.Create(this->device.Get(), Config::MAX_DEPTH_STENCIL_VIEWS);
 }
 
 void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)

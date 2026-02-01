@@ -260,24 +260,6 @@ int DescriptorPool::AllocateAndCreateUav(ID3D12Resource* resource, ID3D12Resourc
     return descriptor;
 }
 
-int DescriptorPool::AllocateAndCreateRtv(ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* rtv_desc)
-{
-    int descriptor = Allocate();
-    if (descriptor != -1) {
-        CreateRtv(descriptor, resource, rtv_desc);
-    }
-    return descriptor;
-}
-
-int DescriptorPool::AllocateAndCreateDsv(ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC* dsv_desc)
-{
-    int descriptor = Allocate();
-    if (descriptor != -1) {
-        CreateDsv(descriptor, resource, dsv_desc);
-    }
-    return descriptor;
-}
-
 void DescriptorPool::Free(int index)
 {
     if (index != -1) {
@@ -304,4 +286,130 @@ void DescriptorPool::Reset()
 int DescriptorPool::Size() const
 {
     return this->size;
+}
+
+HRESULT CpuDescriptorPool::Create(ID3D12Device* device, int capacity, D3D12_DESCRIPTOR_HEAP_TYPE type)
+{
+    HRESULT result = S_OK;
+
+    this->device = device;
+
+    D3D12_DESCRIPTOR_HEAP_DESC desc = {
+        .Type = type,
+        .NumDescriptors = (uint32_t)capacity,
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+        .NodeMask = 1,
+    };
+	
+    result = device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&this->descriptor_heap));
+	if (result != S_OK) {
+        Destroy();
+        return result;
+    }
+
+    this->device = device;
+    this->descriptor_start = 0;
+    this->capacity = capacity;
+    this->stride = this->device->GetDescriptorHandleIncrementSize(type);
+    this->cpu_start = this->descriptor_heap->GetCPUDescriptorHandleForHeapStart();
+
+    Reset();
+
+    return S_OK;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptorPool::Allocate()
+{
+    if (this->free_descriptors.empty()) {
+        return {0};
+    }
+    this->size++;
+    int descriptor = free_descriptors.back();
+    this->free_descriptors.pop_back();
+    #ifdef DEBUG
+    assert(this->used_descriptors[descriptor] == false);
+    this->used_descriptors[descriptor] = true;
+    #endif
+    D3D12_CPU_DESCRIPTOR_HANDLE handle = {};
+    handle.ptr = this->cpu_start.ptr + descriptor * this->stride;
+    return handle;
+}
+
+void CpuDescriptorPool::Free(D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle)
+{
+    if (descriptor_handle.ptr != 0) {
+        int index = (descriptor_handle.ptr - cpu_start.ptr) / stride;
+        assert((index >= this->descriptor_start) && (index < (this->descriptor_start + this->capacity)));
+        assert(this->size != 0);
+        this->size--;
+        this->free_descriptors.push_back(index);
+        #ifdef DEBUG
+        assert(this->used_descriptors[index] == true); // Double free.
+        this->used_descriptors[index] = false;
+        #endif
+    }
+}
+
+void CpuDescriptorPool::Reset()
+{
+    this->size = 0;
+    this->free_descriptors.clear();
+    for (int i = this->descriptor_start + this->capacity; (i--) > this->descriptor_start;) {
+        this->free_descriptors.push_back(i);
+    }
+    #ifdef DEBUG
+    used_descriptors = std::vector<bool>(this->capacity, false);
+    #endif
+}
+
+int CpuDescriptorPool::Size() const
+{
+    return this->size;
+}
+
+int CpuDescriptorPool::Capacity() const
+{
+    return this->capacity;
+}
+
+void CpuDescriptorPool::Destroy()
+{
+    this->device.Reset();
+    this->descriptor_heap.Reset();
+    this->descriptor_start = 0;
+    this->capacity = 0;
+    this->stride = 0;
+    this->cpu_start = {0};
+    this->free_descriptors = std::vector<int>();
+    #ifdef DEBUG
+    this->used_descriptors = std::vector<bool>();
+    #endif
+}
+
+HRESULT RtvPool::Create(ID3D12Device* device, int capacity)
+{
+    return CpuDescriptorPool::Create(device, capacity, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE RtvPool::AllocateAndCreate(ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* rtv_desc)
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE result = Allocate();
+    if (result.ptr != 0) {
+        this->device->CreateRenderTargetView(resource, rtv_desc, result);
+    }
+    return result;
+}
+
+HRESULT DsvPool::Create(ID3D12Device* device, int capacity)
+{
+    return CpuDescriptorPool::Create(device, capacity, D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DsvPool::AllocateAndCreate(ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC* dsv_desc)
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE result = Allocate();
+    if (result.ptr != 0) {
+        this->device->CreateDepthStencilView(resource, dsv_desc, result);
+    }
+    return result;
 }

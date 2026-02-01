@@ -28,7 +28,7 @@ class Rasterizer {
         ID3D12Resource* output_resource = nullptr;
     };
 
-    void Init(ID3D12Device* device, DescriptorPool* rtv_allocator, DescriptorPool* dsv_allocator, DescriptorPool* cbv_uav_srv_allocator, uint32_t width, uint32_t height);
+    void Init(ID3D12Device* device, RtvPool* rtv_allocator, DsvPool* dsv_allocator, DescriptorPool* cbv_uav_srv_allocator, uint32_t width, uint32_t height);
     void Resize(uint32_t width, uint32_t height);
 	void DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
@@ -46,8 +46,8 @@ class Rasterizer {
 	};
 
 	Microsoft::WRL::ComPtr<ID3D12Device> device;
-    DescriptorPool* rtv_allocator;
-    DescriptorPool* dsv_allocator;
+    RtvPool* rtv_allocator;
+    DsvPool* dsv_allocator;
     DescriptorPool* cbv_uav_srv_allocator;
 
     uint32_t width;
@@ -56,10 +56,10 @@ class Rasterizer {
 
     // Render targets and resolution dependent resources.
 	static constexpr float DEPTH_CLEAR_VALUE = 0.0f;
-    int depth_dsv = -1;
+    D3D12_CPU_DESCRIPTOR_HANDLE depth_dsv = {0};
     int depth_srv = -1;
 	Microsoft::WRL::ComPtr<ID3D12Resource> depth;
-    int motion_vectors_rtv = -1;
+    D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors_rtv = {0};
     int motion_vectors_srv = -1;
 	Microsoft::WRL::ComPtr<ID3D12Resource> motion_vectors;
     int transmission_srv = -1;

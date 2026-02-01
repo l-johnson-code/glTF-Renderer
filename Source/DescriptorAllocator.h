@@ -61,8 +61,6 @@ class DescriptorPool : public DescriptorRange {
     int AllocateAndCreateCbv(const D3D12_CONSTANT_BUFFER_VIEW_DESC* cbv_desc);
     int AllocateAndCreateSrv(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* srv_desc);
     int AllocateAndCreateUav(ID3D12Resource* resource, ID3D12Resource* counter_resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* uav_desc);
-    int AllocateAndCreateRtv(ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* rtv_desc);
-    int AllocateAndCreateDsv(ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC* dsv_desc);
     void Free(int index);
     void Reset();
     int Size() const;
@@ -75,4 +73,48 @@ class DescriptorPool : public DescriptorRange {
     #ifdef DEBUG
     std::vector<bool> used_descriptors;
     #endif
+};
+
+class CpuDescriptorPool {
+    public:
+
+    void Free(D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle);
+    void Reset();
+    int Size() const;
+    int Capacity() const;
+
+    protected:
+    
+    Microsoft::WRL::ComPtr<ID3D12Device> device;
+
+    HRESULT Create(ID3D12Device* device, int capacity, D3D12_DESCRIPTOR_HEAP_TYPE type);
+    D3D12_CPU_DESCRIPTOR_HANDLE Allocate();
+    void Destroy();
+    
+	private:
+    
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptor_heap;
+    int size = 0;
+    int descriptor_start = 0;
+    int capacity = 0;
+    uint32_t stride = 0;
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu_start = {0};
+	std::vector<int> free_descriptors;
+    #ifdef DEBUG
+    std::vector<bool> used_descriptors;
+    #endif
+};
+
+class RtvPool: public CpuDescriptorPool {
+    public:
+    
+    HRESULT Create(ID3D12Device* device, int capacity);
+    D3D12_CPU_DESCRIPTOR_HANDLE AllocateAndCreate(ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* rtv_desc);
+};
+
+class DsvPool: public CpuDescriptorPool {
+    public:
+    
+    HRESULT Create(ID3D12Device* device, int capacity);
+    D3D12_CPU_DESCRIPTOR_HANDLE AllocateAndCreate(ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC* dsv_desc);
 };

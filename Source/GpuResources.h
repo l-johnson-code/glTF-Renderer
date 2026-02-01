@@ -25,8 +25,8 @@ class GpuResources {
 	DescriptorStack gltf_sampler_allocator;
 
 	// Render target and depth stencil views.
-	DescriptorPool dsv_allocator;
-	DescriptorPool rtv_allocator;
+	DsvPool dsv_allocator;
+	RtvPool rtv_allocator;
 
 	// Per frame descriptor allocators.
 	MultiBuffer<DescriptorStack, Config::FRAME_COUNT> cbv_uav_srv_frame_allocators;

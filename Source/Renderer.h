@@ -182,7 +182,7 @@ private:
 
 	// Render targets and resolution dependent resources.
 	Microsoft::WRL::ComPtr<ID3D12Resource> display;
-	int display_rtv = -1;
+	D3D12_CPU_DESCRIPTOR_HANDLE display_rtv = {0};
 	int display_uav = -1;
 	
 	const int MAX_LIGHTS = 10;

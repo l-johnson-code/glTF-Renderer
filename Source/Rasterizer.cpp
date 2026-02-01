@@ -5,7 +5,7 @@
 #include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_core.h>
 
-void Rasterizer::Init(ID3D12Device* device, DescriptorPool* rtv_allocator, DescriptorPool* dsv_allocator, DescriptorPool* cbv_uav_srv_allocator, uint32_t width, uint32_t height)
+void Rasterizer::Init(ID3D12Device* device, RtvPool* rtv_allocator, DsvPool* dsv_allocator, DescriptorPool* cbv_uav_srv_allocator, uint32_t width, uint32_t height)
 {
     this->device = device;
     this->rtv_allocator = rtv_allocator;
@@ -35,8 +35,8 @@ void Rasterizer::Resize(uint32_t width, uint32_t height)
         result = depth->SetName(L"Depth Texture");
         assert(result == S_OK);
 
-        this->depth_dsv = dsv_allocator->AllocateAndCreateDsv(this->depth.Get(), nullptr);
-        assert(this->depth_dsv != -1);
+        this->depth_dsv = dsv_allocator->AllocateAndCreate(this->depth.Get(), nullptr);
+        assert(this->depth_dsv.ptr != 0);
 
         CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT);
         this->depth_srv = cbv_uav_srv_allocator->AllocateAndCreateSrv(this->depth.Get(), &srv_desc);
@@ -56,8 +56,8 @@ void Rasterizer::Resize(uint32_t width, uint32_t height)
         result = this->motion_vectors->SetName(L"Motion Vectors");
         assert(result == S_OK);
 
-        this->motion_vectors_rtv = rtv_allocator->AllocateAndCreateRtv(this->motion_vectors.Get(), nullptr);
-        assert(this->motion_vectors_rtv != -1);
+        this->motion_vectors_rtv = rtv_allocator->AllocateAndCreate(this->motion_vectors.Get(), nullptr);
+        assert(this->motion_vectors_rtv.ptr != 0);
         this->motion_vectors_srv = cbv_uav_srv_allocator->AllocateAndCreateSrv(this->motion_vectors.Get(), nullptr);
         assert(this->motion_vectors_srv != -1);
     }
@@ -169,8 +169,6 @@ void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLin
 
 	// Prepare render targets.
 	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = execute_params->output_rtv; 
-	D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors_rtv = rtv_allocator->GetCpuHandle(this->motion_vectors_rtv);
-	D3D12_CPU_DESCRIPTOR_HANDLE depth_dsv = dsv_allocator->GetCpuHandle(this->depth_dsv);
 
 	CD3DX12_RESOURCE_BARRIER barriers[] = {
 		CD3DX12_RESOURCE_BARRIER::Transition(
@@ -296,11 +294,11 @@ void Rasterizer::Shutdown()
     device.Reset();
     if (dsv_allocator) {
         dsv_allocator->Free(depth_dsv);
-        depth_dsv = -1;
+        depth_dsv = {0};
     }
     if (rtv_allocator) {
         rtv_allocator->Free(motion_vectors_rtv);
-        motion_vectors_rtv = -1;
+        motion_vectors_rtv = {0};
     }
     if (cbv_uav_srv_allocator) {
         cbv_uav_srv_allocator->Free(depth_srv);
