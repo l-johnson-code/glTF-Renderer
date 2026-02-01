@@ -154,27 +154,27 @@ void Rasterizer::SetViewportAndScissorRects(ID3D12GraphicsCommandList* command_l
 	command_list->RSSetScissorRects(1, &scissor_rect);
 }
 
-void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, Gltf* gltf, int scene, Camera* camera, D3D12_GPU_VIRTUAL_ADDRESS gpu_materials, D3D12_GPU_VIRTUAL_ADDRESS gpu_lights, int light_count, EnvironmentMap::Map* environment_map, const Settings* settings, D3D12_CPU_DESCRIPTOR_HANDLE output_rtv, ID3D12Resource* output_resource)
+void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params)
 {
     // Get transform matrices.
-	glm::mat4x4 world_to_view = camera->GetWorldToView();
-	glm::mat4x4 world_to_clip = camera->GetViewToClip() * world_to_view;
+	glm::mat4x4 world_to_view = execute_params->camera->GetWorldToView();
+	glm::mat4x4 world_to_clip = execute_params->camera->GetViewToClip() * world_to_view;
 	glm::mat4x4 view_to_world = glm::affineInverse(world_to_view);
 	glm::mat4x4 clip_to_world = glm::inverse(world_to_clip);
 	glm::vec3 camera_pos = view_to_world[3];
     
     // Gather everything to draw.
-	GatherRenderObjects(gltf, scene);
+	GatherRenderObjects(execute_params->gltf, execute_params->scene);
 	SortRenderObjects(camera_pos);
 
 	// Prepare render targets.
-	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = output_rtv; 
+	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = execute_params->output_rtv; 
 	D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors_rtv = rtv_allocator->GetCpuHandle(this->motion_vectors_rtv);
 	D3D12_CPU_DESCRIPTOR_HANDLE depth_dsv = dsv_allocator->GetCpuHandle(this->depth_dsv);
 
 	CD3DX12_RESOURCE_BARRIER barriers[] = {
 		CD3DX12_RESOURCE_BARRIER::Transition(
-			output_resource, 
+			execute_params->output_resource, 
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
 			D3D12_RESOURCE_STATE_RENDER_TARGET
 		),
@@ -205,11 +205,11 @@ void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLin
 		.world_to_clip = world_to_clip,
 		.previous_world_to_clip = this->previous_world_to_clip,
 		.camera_pos = camera_pos,
-		.num_of_lights = light_count,
-		.lights = gpu_lights,
-		.materials = gpu_materials,
-		.ggx_cube_descriptor = environment_map ? environment_map->ggx_srv_descriptor : -1,
-		.diffuse_cube_descriptor = environment_map ? environment_map->diffuse_srv_descriptor : -1,
+		.num_of_lights = execute_params->light_count,
+		.lights = execute_params->gpu_lights,
+		.materials = execute_params->gpu_materials,
+		.ggx_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->ggx_srv_descriptor : -1,
+		.diffuse_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->diffuse_srv_descriptor : -1,
 		.environment_map_intensity = 1.0,
 		.transmission_descriptor = -1,
 		.render_flags = settings->render_flags,
@@ -220,13 +220,13 @@ void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLin
 	forward.SetConfig(command_list, frame_allocator, &config);
 	forward.BindRenderTargets(command_list, render_rtv, motion_vectors_rtv, depth_dsv);
 	forward.BindPipeline(command_list, ForwardPass::PIPELINE_FLAGS_NONE);
-	DrawRenderObjects(command_list, frame_allocator, gltf, opaque_render_objects);
+	DrawRenderObjects(command_list, frame_allocator, execute_params->gltf, opaque_render_objects);
 
 	// TODO: Create a separate pipeline for alpha mask instead of sharing the opaque pass. This could potentially improve performance of the opaque rendering.
-	DrawRenderObjects(command_list, frame_allocator, gltf, alpha_mask_render_objects);
+	DrawRenderObjects(command_list, frame_allocator, execute_params->gltf, alpha_mask_render_objects);
 
-	if (environment_map) {
-		forward.DrawBackground(command_list, frame_allocator, clip_to_world, 1.0, environment_map->cube_srv_descriptor);
+	if (execute_params->environment_map) {
+		forward.DrawBackground(command_list, frame_allocator, clip_to_world, 1.0, execute_params->environment_map->cube_srv_descriptor);
 		
 		// Set pipeline state back to rendering meshes.
 		forward.SetRootSignature(command_list);
@@ -236,16 +236,16 @@ void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLin
 	// Create transmission mip chain.
 	{
 		CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			output_resource, 
+			execute_params->output_resource, 
 			D3D12_RESOURCE_STATE_RENDER_TARGET,
 			D3D12_RESOURCE_STATE_COPY_SOURCE
 		);
 		command_list->ResourceBarrier(1, &resource_barrier);
 	}
-	forward.GenerateTransmissionMips(command_list, frame_allocator, descriptor_allocator, output_resource, this->transmission.Get(), settings->transmission_downsample_sample_pattern);
+	forward.GenerateTransmissionMips(command_list, frame_allocator, descriptor_allocator, execute_params->output_resource, this->transmission.Get(), settings->transmission_downsample_sample_pattern);
 	{
 		CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			output_resource, 
+			execute_params->output_resource, 
 			D3D12_RESOURCE_STATE_COPY_SOURCE,
 			D3D12_RESOURCE_STATE_RENDER_TARGET
 		);
@@ -257,15 +257,15 @@ void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLin
 
 	// Render transmissives.
 	forward.BindPipeline(command_list, ForwardPass::PIPELINE_FLAGS_ALPHA_BLEND);
-	DrawRenderObjects(command_list, frame_allocator, gltf, transparent_render_objects);
+	DrawRenderObjects(command_list, frame_allocator, execute_params->gltf, transparent_render_objects);
 
 	// Render alpha blended geometry.
-	DrawRenderObjects(command_list, frame_allocator, gltf, alpha_render_objects);
+	DrawRenderObjects(command_list, frame_allocator, execute_params->gltf, alpha_render_objects);
 
 	// Transition render targets to read state for post processing.
 	CD3DX12_RESOURCE_BARRIER resource_barriers[] = {
 		CD3DX12_RESOURCE_BARRIER::Transition(
-			output_resource, 
+			execute_params->output_resource, 
 			D3D12_RESOURCE_STATE_RENDER_TARGET,
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 		),
@@ -282,9 +282,9 @@ void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLin
 	};
 	command_list->ResourceBarrier(std::size(resource_barriers), resource_barriers);
 
-    bloom.Execute(command_list, frame_allocator, descriptor_allocator, output_resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
+    bloom.Execute(command_list, frame_allocator, descriptor_allocator, execute_params->output_resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
     {
-        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(output_resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(execute_params->output_resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         command_list->ResourceBarrier(1, &barrier);
     }
 

@@ -313,7 +313,18 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	PerformSkinning(gltf, scene, frame_allocator);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
-		rasterizer.DrawScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, gltf, scene, camera, gpu_materials, gpu_lights, lights.size(), environment_map_loaded ? &map : nullptr, &settings->raster, resources.rtv_allocator.GetCpuHandle(display_rtv), display.Get());
+		Rasterizer::ExecuteParams params = {
+			.gltf = gltf,
+        	.scene = scene,
+        	.camera = camera,
+        	.gpu_materials = this->gpu_materials,
+        	.gpu_lights = this->gpu_lights,
+        	.light_count = (int)this->lights.size(),
+        	.environment_map = environment_map_loaded ? &map : nullptr,
+        	.output_rtv= resources.rtv_allocator.GetCpuHandle(this->display_rtv),
+        	.output_resource = this->display.Get(),
+		};
+		rasterizer.DrawScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, &settings->raster, &params);
 	} else {
 		Pathtracer::ExecuteParams params = {
 			.gltf = gltf,

@@ -16,9 +16,21 @@ class Rasterizer {
 		uint32_t render_flags;
 	};
 
+    struct ExecuteParams {
+        Gltf* gltf = nullptr;
+        int scene = 0;
+        Camera* camera = nullptr;
+        D3D12_GPU_VIRTUAL_ADDRESS gpu_materials = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS gpu_lights = 0;
+        int light_count = 0;
+        EnvironmentMap::Map* environment_map = nullptr;
+        D3D12_CPU_DESCRIPTOR_HANDLE output_rtv = {};
+        ID3D12Resource* output_resource = nullptr;
+    };
+
     void Init(ID3D12Device* device, DescriptorPool* rtv_allocator, DescriptorPool* dsv_allocator, DescriptorPool* cbv_uav_srv_allocator, uint32_t width, uint32_t height);
     void Resize(uint32_t width, uint32_t height);
-	void DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, Gltf* gltf, int scene, Camera* camera, D3D12_GPU_VIRTUAL_ADDRESS gpu_materials, D3D12_GPU_VIRTUAL_ADDRESS gpu_lights, int light_count, EnvironmentMap::Map* environment_map, const Settings* settings, D3D12_CPU_DESCRIPTOR_HANDLE output_rtv, ID3D12Resource* output_resource);
+	void DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
 
     private:
