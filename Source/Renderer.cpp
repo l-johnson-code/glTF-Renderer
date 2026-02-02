@@ -195,13 +195,13 @@ void Renderer::InitializeImGui()
     imgui.UserData = &resources.cbv_uav_srv_dynamic_allocator;
     imgui.SrvDescriptorHeap = resources.cbv_uav_srv_dynamic_allocator.DescriptorHeap();
     imgui.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle) {
-		DescriptorPool* descriptor_pool = (DescriptorPool*)info->UserData;
+		CbvSrvUavPool* descriptor_pool = (CbvSrvUavPool*)info->UserData;
 		int descriptor = descriptor_pool->Allocate();
 		*out_cpu_desc_handle = descriptor_pool->GetCpuHandle(descriptor);
 		*out_gpu_desc_handle = descriptor_pool->GetGpuHandle(descriptor);
 	};
     imgui.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_desc_handle) {
-		DescriptorPool* descriptor_pool = (DescriptorPool*)info->UserData;
+		CbvSrvUavPool* descriptor_pool = (CbvSrvUavPool*)info->UserData;
 		int descriptor = descriptor_pool->GetIndex(cpu_desc_handle);
 		descriptor_pool->Free(descriptor);
 	};
@@ -288,7 +288,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 
 	CpuMappedLinearBuffer* frame_allocator = &this->frame_allocators.Current();
 	frame_allocator->Reset();
-	DescriptorStack* descriptor_allocator = &this->resources.cbv_uav_srv_frame_allocators.Current();
+	CbvSrvUavStack* descriptor_allocator = &this->resources.cbv_uav_srv_frame_allocators.Current();
 	descriptor_allocator->Reset();
 
 	// Set descriptor heaps.
@@ -380,7 +380,7 @@ void Renderer::CreateRenderTargets()
 		result = this->display->SetName(L"Display");
 		assert(result == S_OK);
 
-		this->display_rtv = resources.rtv_allocator.AllocateAndCreate(this->display.Get(), nullptr);
+		this->display_rtv = resources.rtv_allocator.AllocateAndCreateRtv(this->display.Get(), nullptr);
 		this->display_uav = resources.cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(this->display.Get(), nullptr, nullptr);
 	}
 }

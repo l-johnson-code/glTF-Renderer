@@ -264,7 +264,7 @@ void Pathtracer::BuildTlas(Gltf* gltf, int scene_id, RaytracingAccelerationStruc
 	this->gpu_mesh_instances = allocator->Copy(mesh_instances.data(), sizeof(GpuMeshInstance) * mesh_instances.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 }
 
-void Pathtracer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params)
+void Pathtracer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, CbvSrvUavStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params)
 {
 	glm::mat4x4 world_to_view = execute_params->camera->GetWorldToView();
 	glm::mat4x4 world_to_clip = execute_params->camera->GetViewToClip() * world_to_view;

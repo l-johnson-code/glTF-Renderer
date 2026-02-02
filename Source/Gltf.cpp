@@ -755,7 +755,7 @@ void Gltf::LoadLights(tinygltf::Model* gltf)
 	}
 }
 
-void Gltf::Init(DescriptorPool* srv_uav_cbv_descriptors, DescriptorStack* sampler_descriptors)
+void Gltf::Init(CbvSrvUavPool* srv_uav_cbv_descriptors, SamplerStack* sampler_descriptors)
 {
 	this->srv_uav_cbv_descriptors = srv_uav_cbv_descriptors;
 	this->sampler_descriptors = sampler_descriptors;

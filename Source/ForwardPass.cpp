@@ -355,7 +355,7 @@ void ForwardPass::DrawBackground(ID3D12GraphicsCommandList* command_list, CpuMap
     command_list->DrawInstanced(3, 1, 0, 0);
 }
 
-void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, ID3D12Resource* input, ID3D12Resource* output, int sample_pattern)
+void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* input, ID3D12Resource* output, int sample_pattern)
 {
 	// Create mip 0.
 	{

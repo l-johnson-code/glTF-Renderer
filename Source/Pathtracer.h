@@ -102,7 +102,7 @@ class Pathtracer {
     static constexpr int MAX_BOUNCES = 5;
     
     void Init(ID3D12Device5* device, UploadBuffer* upload_buffer);
-	void PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, DescriptorStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params);
+	void PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, CbvSrvUavStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
     
     private:

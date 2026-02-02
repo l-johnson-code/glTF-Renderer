@@ -11,7 +11,7 @@ class Bloom {
 
     void Create(ID3D12Device* device, uint32_t width, uint32_t height, int max_iterations);
     void Resize(uint32_t width, uint32_t height, int max_iterations);
-    void Execute(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, ID3D12Resource* input, D3D12_RESOURCE_STATES input_resource_states, int iterations, float strength);
+    void Execute(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* input, D3D12_RESOURCE_STATES input_resource_states, int iterations, float strength);
 
     private:
 

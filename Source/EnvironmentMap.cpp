@@ -21,7 +21,7 @@ float EnvironmentMap::MipToRoughness(int mip_level, int mip_count)
     return result;
 }
 
-void EnvironmentMap::Init(ID3D12Device* device, DescriptorPool* descriptor_allocator)
+void EnvironmentMap::Init(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator)
 {
     HRESULT result;
 
@@ -86,7 +86,7 @@ void EnvironmentMap::LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const 
     }
 }
 
-void EnvironmentMap::CreateEnvironmentMap(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, ID3D12Resource* equirectangular_image, Map* map)
+void EnvironmentMap::CreateEnvironmentMap(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* equirectangular_image, Map* map)
 {
     HRESULT result = S_OK;
     D3D12_RESOURCE_DESC equirectangular_desc = equirectangular_image->GetDesc();
@@ -305,7 +305,7 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
 	}
 }
 
-void EnvironmentMap::GenerateCubemap(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, ID3D12Resource* equirectangular_image, ID3D12Resource* cubemap)
+void EnvironmentMap::GenerateCubemap(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* equirectangular_image, ID3D12Resource* cubemap)
 {
     // Create descriptors.
     int input_descriptor = transient_descriptors->Allocate(1);
@@ -362,7 +362,7 @@ void EnvironmentMap::GenerateCubemap(ID3D12GraphicsCommandList* command_list, Cp
 	command_list->ResourceBarrier(1, &barrier);
 }
 
-void EnvironmentMap::FilterCube(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, int cubemap_srv_descriptor, Bsdf bsdf, float mip_bias, int num_of_samples, ID3D12Resource* filtered_cube_map)
+void EnvironmentMap::FilterCube(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, int cubemap_srv_descriptor, Bsdf bsdf, float mip_bias, int num_of_samples, ID3D12Resource* filtered_cube_map)
 {
     D3D12_RESOURCE_DESC ggx_cube_desc = filtered_cube_map->GetDesc();
     int mip_count = ggx_cube_desc.MipLevels;
@@ -406,17 +406,17 @@ void EnvironmentMap::FilterCube(ID3D12GraphicsCommandList* command_list, CpuMapp
     command_list->ResourceBarrier(1, &barrier);
 }
 
-void EnvironmentMap::GenerateGgxCube(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, int cubemap_srv_descriptor, ID3D12Resource* ggx_cube_map)
+void EnvironmentMap::GenerateGgxCube(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, int cubemap_srv_descriptor, ID3D12Resource* ggx_cube_map)
 {
     FilterCube(command_list, allocator, transient_descriptors, cubemap_srv_descriptor, BSDF_GGX, 2, 256, ggx_cube_map);
 }
 
-void EnvironmentMap::GenerateDiffuseCube(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, int cubemap_srv_descriptor, ID3D12Resource* diffuse_cube_map)
+void EnvironmentMap::GenerateDiffuseCube(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, int cubemap_srv_descriptor, ID3D12Resource* diffuse_cube_map)
 {
     FilterCube(command_list, allocator, transient_descriptors, cubemap_srv_descriptor, BSDF_DIFFUSE, 3, 512, diffuse_cube_map);
 }
 
-void EnvironmentMap::GenerateImportanceMap(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, DescriptorStack* transient_descriptors, int cubemap_srv_descriptor, ID3D12Resource* importance_map)
+void EnvironmentMap::GenerateImportanceMap(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, int cubemap_srv_descriptor, ID3D12Resource* importance_map)
 {
     D3D12_RESOURCE_DESC importance_map_desc = importance_map->GetDesc();
 

@@ -195,7 +195,7 @@ class Gltf {
     std::vector<Light> lights;
     std::vector<Texture> textures;
     
-    void Init(DescriptorPool* srv_uav_cbv_descriptors, DescriptorStack* sampler_descriptors);
+    void Init(CbvSrvUavPool* srv_uav_cbv_descriptors, SamplerStack* sampler_descriptors);
     bool LoadFromGltf(const char* filepath, ID3D12Device* device, UploadBuffer* upload_buffer);
     void Unload();
     void ApplyRestTransforms();
@@ -206,8 +206,8 @@ class Gltf {
     
     private:
 
-    DescriptorPool* srv_uav_cbv_descriptors;
-    DescriptorStack* sampler_descriptors;
+    CbvSrvUavPool* srv_uav_cbv_descriptors;
+    SamplerStack* sampler_descriptors;
 
     void LoadMeshes(tinygltf::Model* gltf, ID3D12Device* device, UploadBuffer* upload_buffer);
     void LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, ID3D12Device* device, UploadBuffer* upload_buffer, Mesh* mesh);

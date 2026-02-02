@@ -3,7 +3,7 @@
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
 
-void VertexBuffer::Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name)
+void VertexBuffer::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name)
 {
 	UINT vertex_size = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 	
@@ -27,7 +27,7 @@ void VertexBuffer::Create(ID3D12Device* device, DescriptorPool* descriptor_alloc
 	this->descriptor = descriptor_allocator->AllocateAndCreateSrv(resource.Get(), &srv_desc);
 }
 
-void VertexBuffer::Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size, const wchar_t* name)
+void VertexBuffer::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size, const wchar_t* name)
 {	
 	// Create the resource for all our vertex data.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
@@ -49,7 +49,7 @@ void VertexBuffer::Create(ID3D12Device* device, DescriptorPool* descriptor_alloc
 	this->descriptor = descriptor_allocator->AllocateAndCreateSrv(resource.Get(), &srv_desc);
 }
 
-void VertexBuffer::Destroy(DescriptorPool* descriptor_allocator)
+void VertexBuffer::Destroy(CbvSrvUavPool* descriptor_allocator)
 {
 	view = {};
 	descriptor_allocator->Free(descriptor);
@@ -62,7 +62,7 @@ void* VertexBuffer::QueueUpdate(UploadBuffer* upload_buffer)
 	return upload_buffer->QueueBufferUpload(resource->GetDesc().Width, resource.Get(), 0);
 }
 
-void IndexBuffer::Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format, const wchar_t* name)
+void IndexBuffer::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format, const wchar_t* name)
 {
 	UINT index_size = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 	
@@ -86,7 +86,7 @@ void IndexBuffer::Create(ID3D12Device* device, DescriptorPool* descriptor_alloca
 	this->descriptor = descriptor_allocator->AllocateAndCreateSrv(resource.Get(), &srv_desc);
 }
 
-void IndexBuffer::Destroy(DescriptorPool* descriptor_allocator)
+void IndexBuffer::Destroy(CbvSrvUavPool* descriptor_allocator)
 {
 	view = {};
 	descriptor_allocator->Free(descriptor);
@@ -99,7 +99,7 @@ void* IndexBuffer::QueueUpdate(UploadBuffer* upload_buffer)
 	return upload_buffer->QueueBufferUpload(resource->GetDesc().Width, resource.Get(), 0);
 }
 
-void DynamicVertexBuffer::Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name)
+void DynamicVertexBuffer::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name)
 {
 	UINT vertex_size = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 	
@@ -123,7 +123,7 @@ void DynamicVertexBuffer::Create(ID3D12Device* device, DescriptorPool* descripto
 	this->descriptor = descriptor_allocator->AllocateAndCreateSrv(resource.Get(), &srv_desc);
 }
 
-void DynamicVertexBuffer::Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size, const wchar_t* name)
+void DynamicVertexBuffer::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size, const wchar_t* name)
 {	
 	// Create the resource for all our vertex data.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
@@ -145,7 +145,7 @@ void DynamicVertexBuffer::Create(ID3D12Device* device, DescriptorPool* descripto
 	this->descriptor = descriptor_allocator->AllocateAndCreateSrv(resource.Get(), &srv_desc);
 }
 
-void DynamicVertexBuffer::Destroy(DescriptorPool* descriptor_allocator)
+void DynamicVertexBuffer::Destroy(CbvSrvUavPool* descriptor_allocator)
 {
 	view = {};
 	descriptor_allocator->Free(descriptor);
@@ -153,7 +153,7 @@ void DynamicVertexBuffer::Destroy(DescriptorPool* descriptor_allocator)
 	resource.Reset();
 }
 
-void Mesh::Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, const Desc* desc)
+void Mesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc)
 {
 	this->topology = desc->topology;
 	this->flags = desc->flags;
@@ -184,7 +184,7 @@ void Mesh::Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, co
 	}
 }
 
-void Mesh::Destroy(DescriptorPool* descriptor_allocator)
+void Mesh::Destroy(CbvSrvUavPool* descriptor_allocator)
 {
 	index.Destroy(descriptor_allocator);
 	position.Destroy(descriptor_allocator);
@@ -196,7 +196,7 @@ void Mesh::Destroy(DescriptorPool* descriptor_allocator)
 	joint_weight.Destroy(descriptor_allocator);
 }
 
-void DynamicMesh::Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, const Desc* desc)
+void DynamicMesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -214,7 +214,7 @@ void DynamicMesh::Create(ID3D12Device* device, DescriptorPool* descriptor_alloca
 	}
 }
 
-void DynamicMesh::Destroy(DescriptorPool* descriptor_allocator)
+void DynamicMesh::Destroy(CbvSrvUavPool* descriptor_allocator)
 {
 	position[0].Destroy(descriptor_allocator);
 	position[1].Destroy(descriptor_allocator);
@@ -237,7 +237,7 @@ DynamicVertexBuffer* DynamicMesh::GetPreviousPositionBuffer()
 	return &position[(current_position_buffer - 1) % 1];
 }
 
-void MorphTarget::Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, const Desc* desc)
+void MorphTarget::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -253,7 +253,7 @@ void MorphTarget::Create(ID3D12Device* device, DescriptorPool* descriptor_alloca
 	}
 }
 
-void MorphTarget::Destroy(DescriptorPool* descriptor_allocator)
+void MorphTarget::Destroy(CbvSrvUavPool* descriptor_allocator)
 {
 	position.Destroy(descriptor_allocator);
 	normal.Destroy(descriptor_allocator);

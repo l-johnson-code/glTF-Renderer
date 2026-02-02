@@ -79,7 +79,6 @@ target_sources(glTF PRIVATE
     "Source/Bloom.cpp"
     "Source/BufferAllocator.cpp"
     "Source/Config.cpp"
-    "Source/DescriptorAllocator.cpp"
     "Source/EnvironmentMap.cpp"
     "Source/File.cpp"
     "Source/ForwardPass.cpp"

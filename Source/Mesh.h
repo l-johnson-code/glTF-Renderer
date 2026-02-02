@@ -12,9 +12,9 @@ struct VertexBuffer {
 	D3D12_VERTEX_BUFFER_VIEW view = {};
 	int descriptor = -1;
 
-	void Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name);
-	void Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t vertex_count, uint32_t element_size, const wchar_t* name);
-    void Destroy(DescriptorPool* descriptor_allocator);
+	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name);
+	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t element_size, const wchar_t* name);
+    void Destroy(CbvSrvUavPool* descriptor_allocator);
     void* QueueUpdate(UploadBuffer* upload_buffer);
 };
 
@@ -23,8 +23,8 @@ struct IndexBuffer {
 	D3D12_INDEX_BUFFER_VIEW view = {};
 	int descriptor = -1;
 
-	void Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format, const wchar_t* name);
-    void Destroy(DescriptorPool* descriptor_allocator);
+	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format, const wchar_t* name);
+    void Destroy(CbvSrvUavPool* descriptor_allocator);
     void* QueueUpdate(UploadBuffer* upload_buffer);
 };
 
@@ -33,9 +33,9 @@ struct DynamicVertexBuffer {
 	D3D12_VERTEX_BUFFER_VIEW view = {};
 	int descriptor = -1;
 
-	void Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name);
-	void Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, uint32_t vertex_count, uint32_t element_size, const wchar_t* name);
-    void Destroy(DescriptorPool* descriptor_allocator);
+	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name);
+	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t element_size, const wchar_t* name);
+    void Destroy(CbvSrvUavPool* descriptor_allocator);
 };
 
 struct Mesh {
@@ -78,8 +78,8 @@ struct Mesh {
     VertexBuffer color;
     VertexBuffer joint_weight;
 
-    void Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, const Desc* description);
-    void Destroy(DescriptorPool* descriptor_allocator);
+    void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description);
+    void Destroy(CbvSrvUavPool* descriptor_allocator);
 };
 
 struct DynamicMesh {
@@ -103,8 +103,8 @@ struct DynamicMesh {
     DynamicVertexBuffer normal;
     DynamicVertexBuffer tangent;
 
-    void Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, const Desc* description);
-    void Destroy(DescriptorPool* descriptor_allocator);
+    void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description);
+    void Destroy(CbvSrvUavPool* descriptor_allocator);
     void Flip();
     DynamicVertexBuffer* GetCurrentPositionBuffer();
     DynamicVertexBuffer* GetPreviousPositionBuffer();
@@ -130,6 +130,6 @@ struct MorphTarget {
     VertexBuffer normal;
     VertexBuffer tangent;
 
-    void Create(ID3D12Device* device, DescriptorPool* descriptor_allocator, const Desc* attributes);
-    void Destroy(DescriptorPool* descriptor_allocator);
+    void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* attributes);
+    void Destroy(CbvSrvUavPool* descriptor_allocator);
 };

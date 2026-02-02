@@ -21,12 +21,7 @@ void GpuResources::Create(ID3D12Device* device)
 
 	// Create the CBV SRV UAV descriptor heap.
 	const int total_descriptors = STATIC_DESCRIPTOR_COUNT + Config::DYNAMIC_DESCRIPTORS + Config::FRAME_COUNT * Config::PER_FRAME_DESCRIPTORS;
-	D3D12_DESCRIPTOR_HEAP_DESC desc_heap = {
-		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-		.NumDescriptors = total_descriptors,
-		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-	};
-	cbv_uav_srv_allocator.Create(this->device.Get(), &desc_heap);
+	cbv_uav_srv_allocator.Create(this->device.Get(), total_descriptors, true);
 
 	// Allocate static descriptors.
 	cbv_uav_srv_allocator.Allocate(STATIC_DESCRIPTOR_COUNT);
@@ -42,12 +37,7 @@ void GpuResources::Create(ID3D12Device* device)
 	}
 
 	// Create the sampler descriptor heap.
-	desc_heap = {
-		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-		.NumDescriptors = Config::MAX_SAMPLERS,
-		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-	};
-	sampler_allocator.Create(this->device.Get(), &desc_heap);
+	sampler_allocator.Create(this->device.Get(), Config::MAX_SAMPLERS, true);
 	// Create a default sampler at index 0 so that 0 can be used as a valid default value when indexing the sampler heap.
 	int default_sampler_index = sampler_allocator.Allocate(1);
 	assert(default_sampler_index == 0);
