@@ -149,7 +149,7 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 
 	// Begin uploading data.
 	if (desc.flags & ::Mesh::FLAG_INDEX) {
-		std::byte* dest = (std::byte*)primitive->mesh.index.QueueUpdate(upload_buffer);
+		std::byte* dest = (std::byte*)primitive->mesh.QueueIndexUpdate(upload_buffer);
 		tinygltf::Accessor* index_accessor = &gltf->accessors[gltf_primitive->indices];
 		int component_type = index_accessor->componentType;
 		if (component_type == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
@@ -161,42 +161,42 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 	}
 
 	tinygltf::Accessor* position_accessor = &gltf->accessors[gltf_primitive->attributes["POSITION"]];
-	glm::vec3* dest = (glm::vec3*)primitive->mesh.position.QueueUpdate(upload_buffer);
+	glm::vec3* dest = (glm::vec3*)primitive->mesh.QueuePositionUpdate(upload_buffer);
 	tinygltf::tools::Copy(dest, gltf, position_accessor);
 
 	if (desc.flags & ::Mesh::FLAG_NORMAL) {
 		tinygltf::Accessor* normal_accessor = &gltf->accessors[gltf_primitive->attributes["NORMAL"]];
-		glm::vec3* dest = (glm::vec3*)primitive->mesh.normal.QueueUpdate(upload_buffer);
+		glm::vec3* dest = (glm::vec3*)primitive->mesh.QueueNormalUpdate(upload_buffer);
 		tinygltf::tools::Copy(dest, gltf, normal_accessor);
 	}
 
 	if (desc.flags & ::Mesh::FLAG_TANGENT) {
 		tinygltf::Accessor* tangent_accessor = &gltf->accessors[gltf_primitive->attributes["TANGENT"]];
-		glm::vec4* dest = (glm::vec4*)primitive->mesh.tangent.QueueUpdate(upload_buffer);
+		glm::vec4* dest = (glm::vec4*)primitive->mesh.QueueTangentUpdate(upload_buffer);
 		tinygltf::tools::Copy(dest, gltf, tangent_accessor);
 	}
 
 	if (desc.flags & ::Mesh::FLAG_TEXCOORD_0) {
 		tinygltf::Accessor* texcoord_0_accessor = &gltf->accessors[gltf_primitive->attributes["TEXCOORD_0"]];
-		glm::vec2* dest = (glm::vec2*)primitive->mesh.texcoords[0].QueueUpdate(upload_buffer);
+		glm::vec2* dest = (glm::vec2*)primitive->mesh.QueueTexcoord0Update(upload_buffer);
 		tinygltf::tools::Copy(dest, gltf, texcoord_0_accessor);
 	}
 
 	if (desc.flags & ::Mesh::FLAG_TEXCOORD_1) {
 		tinygltf::Accessor* texcoord_1_accessor = &gltf->accessors[gltf_primitive->attributes["TEXCOORD_1"]];
-		glm::vec2* dest = (glm::vec2*)primitive->mesh.texcoords[1].QueueUpdate(upload_buffer);
+		glm::vec2* dest = (glm::vec2*)primitive->mesh.QueueTexcoord1Update(upload_buffer);
 		tinygltf::tools::Copy(dest, gltf, texcoord_1_accessor);
 	}
 
 	if (desc.flags & ::Mesh::FLAG_COLOR) {
 		tinygltf::Accessor* color_accessor = &gltf->accessors[gltf_primitive->attributes["COLOR_0"]];
-		glm::vec4* dest = (glm::vec4*)primitive->mesh.color.QueueUpdate(upload_buffer);
+		glm::vec4* dest = (glm::vec4*)primitive->mesh.QueueColorUpdate(upload_buffer);
 		tinygltf::tools::Copy(dest, gltf, color_accessor);
 	}
 
 	// Create bone weights.
 	if (desc.flags & ::Mesh::FLAG_JOINT_WEIGHT) {
-		::Mesh::JointWeight* dest = (::Mesh::JointWeight*)primitive->mesh.joint_weight.QueueUpdate(upload_buffer);
+		::Mesh::JointWeight* dest = (::Mesh::JointWeight*)primitive->mesh.QueueJointWeightUpdate(upload_buffer);
 		tinygltf::Accessor* joint_accessor = &gltf->accessors[gltf_primitive->attributes["JOINTS_0"]];
 		tinygltf::tools::Iterate<4, uint32_t>(gltf, joint_accessor, [&](int i, const glm::u32vec4& data) {
 			dest[i].joints = data;
@@ -229,19 +229,19 @@ void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* 
 	morph_target->Create(device, srv_uav_cbv_descriptors, &desc);
 
 	if (desc.flags & MorphTarget::FLAG_POSITION) {
-		glm::vec3* dest = (glm::vec3*)morph_target->position.QueueUpdate(upload_buffer);
+		glm::vec3* dest = (glm::vec3*)morph_target->QueuePositionUpdate(upload_buffer);
 		tinygltf::Accessor* accessor = &gltf->accessors[target->at("POSITION")];
 		tinygltf::tools::Copy(dest, gltf, accessor);
 	}
 
 	if (desc.flags & MorphTarget::FLAG_NORMAL) {
-		glm::vec3* dest = (glm::vec3*)morph_target->normal.QueueUpdate(upload_buffer);
+		glm::vec3* dest = (glm::vec3*)morph_target->QueueNormalUpdate(upload_buffer);
 		tinygltf::Accessor* accessor = &gltf->accessors[target->at("NORMAL")];
 		tinygltf::tools::Copy(dest, gltf, accessor);
 	}
 
 	if (desc.flags & MorphTarget::FLAG_TANGENT) {
-		glm::vec3* dest = (glm::vec3*)morph_target->tangent.QueueUpdate(upload_buffer);
+		glm::vec3* dest = (glm::vec3*)morph_target->QueueTangentUpdate(upload_buffer);
 		tinygltf::Accessor* accessor = &gltf->accessors[target->at("TANGENT")];
 		tinygltf::tools::Copy(dest, gltf, accessor);
 	}

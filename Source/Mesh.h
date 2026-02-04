@@ -7,34 +7,30 @@
 #include "DescriptorAllocator.h"
 #include "UploadBuffer.h"
 
+struct VertexAllocation {
+	uint64_t size;
+	uint64_t alignment;
+};
+
 struct VertexBuffer {
-	Microsoft::WRL::ComPtr<ID3D12Resource> resource;
 	D3D12_VERTEX_BUFFER_VIEW view = {};
 	int descriptor = -1;
 
-	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name);
-	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t element_size, const wchar_t* name);
+    static VertexAllocation GetAllocationSize(uint32_t vertex_count, DXGI_FORMAT format);
+    static VertexAllocation GetAllocationSize(uint32_t vertex_count, uint32_t element_size);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t element_size);
+    void* QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource);
     void Destroy(CbvSrvUavPool* descriptor_allocator);
-    void* QueueUpdate(UploadBuffer* upload_buffer);
 };
 
 struct IndexBuffer {
-	Microsoft::WRL::ComPtr<ID3D12Resource> resource;
 	D3D12_INDEX_BUFFER_VIEW view = {};
 	int descriptor = -1;
 
-	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format, const wchar_t* name);
-    void Destroy(CbvSrvUavPool* descriptor_allocator);
-    void* QueueUpdate(UploadBuffer* upload_buffer);
-};
-
-struct DynamicVertexBuffer {
-	Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-	D3D12_VERTEX_BUFFER_VIEW view = {};
-	int descriptor = -1;
-
-	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format, const wchar_t* name);
-	void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t element_size, const wchar_t* name);
+    static VertexAllocation GetAllocationSize(uint32_t index_count, DXGI_FORMAT format);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format);
+    void* QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource);
     void Destroy(CbvSrvUavPool* descriptor_allocator);
 };
 
@@ -52,7 +48,7 @@ struct Mesh {
         DXGI_FORMAT index_format;
         uint32_t num_of_vertices;
         uint32_t num_of_indices;
-        uint32_t flags;
+        uint8_t flags;
     };
 
     enum Flags {
@@ -66,9 +62,11 @@ struct Mesh {
     };
 
     D3D12_PRIMITIVE_TOPOLOGY topology;
-    uint32_t flags = 0;
+    uint8_t flags = 0;
     uint32_t num_of_vertices = 0;
     uint32_t num_of_indices = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
 
     IndexBuffer index;
     VertexBuffer position;
@@ -78,7 +76,15 @@ struct Mesh {
     VertexBuffer color;
     VertexBuffer joint_weight;
 
-    void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description);
+    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description, const wchar_t* name = nullptr);
+    void* QueueIndexUpdate(UploadBuffer* upload_buffer);
+    void* QueuePositionUpdate(UploadBuffer* upload_buffer);
+    void* QueueNormalUpdate(UploadBuffer* upload_buffer);
+    void* QueueTangentUpdate(UploadBuffer* upload_buffer);
+    void* QueueTexcoord0Update(UploadBuffer* upload_buffer);
+    void* QueueTexcoord1Update(UploadBuffer* upload_buffer);
+    void* QueueColorUpdate(UploadBuffer* upload_buffer);
+    void* QueueJointWeightUpdate(UploadBuffer* upload_buffer);
     void Destroy(CbvSrvUavPool* descriptor_allocator);
 };
 
@@ -86,7 +92,7 @@ struct DynamicMesh {
 
     struct Desc {
         uint32_t num_of_vertices;
-        uint32_t flags;
+        uint8_t flags;
     };
 
     enum Flags {
@@ -95,19 +101,21 @@ struct DynamicMesh {
         FLAG_TANGENT = 1 << 2,
     };
 
-    uint32_t flags = 0;
+    uint8_t flags = 0;
     uint32_t num_of_vertices = 0;
     int current_position_buffer = 0;
 
-    DynamicVertexBuffer position[2];
-    DynamicVertexBuffer normal;
-    DynamicVertexBuffer tangent;
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
 
-    void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description);
-    void Destroy(CbvSrvUavPool* descriptor_allocator);
+    VertexBuffer position[2];
+    VertexBuffer normal;
+    VertexBuffer tangent;
+
+    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description, const wchar_t* name = nullptr);
     void Flip();
-    DynamicVertexBuffer* GetCurrentPositionBuffer();
-    DynamicVertexBuffer* GetPreviousPositionBuffer();
+    VertexBuffer* GetCurrentPositionBuffer();
+    VertexBuffer* GetPreviousPositionBuffer();
+    void Destroy(CbvSrvUavPool* descriptor_allocator);
 };
 
 struct MorphTarget {
@@ -120,16 +128,21 @@ struct MorphTarget {
 
     struct Desc {
         uint32_t num_of_vertices;
-        uint32_t flags;
+        uint8_t flags;
     };
 
-    uint32_t flags = 0;
+    uint8_t flags = 0;
     uint32_t num_of_vertices = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
     
     VertexBuffer position;
     VertexBuffer normal;
     VertexBuffer tangent;
 
-    void Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* attributes);
+    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* attributes, const wchar_t* name = nullptr);
+    void* QueuePositionUpdate(UploadBuffer* upload_buffer);
+    void* QueueNormalUpdate(UploadBuffer* upload_buffer);
+    void* QueueTangentUpdate(UploadBuffer* upload_buffer);
     void Destroy(CbvSrvUavPool* descriptor_allocator);
 };

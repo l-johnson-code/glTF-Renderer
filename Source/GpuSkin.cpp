@@ -65,6 +65,13 @@ void GpuSkin::Bind(ID3D12GraphicsCommandList* command_list)
 
 void GpuSkin::Run(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, Mesh* input, DynamicMesh* output, D3D12_GPU_VIRTUAL_ADDRESS bones, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights)
 {
+	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+		output->resource.Get(),
+		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+	);
+	command_list->ResourceBarrier(1, &barrier);
+
 	struct {
 		uint32_t num_of_vertices;
 		uint32_t input_mesh_flags;
@@ -114,28 +121,13 @@ void GpuSkin::Run(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer
     command_list->Dispatch((constant_buffer.num_of_vertices + THREAD_GROUP_SIZE - 1) / THREAD_GROUP_SIZE, 1, 1);
 
 	// Transition output from UAV to vertex buffer and shader resource view state.
-	int barrier_count = 0;
-	CD3DX12_RESOURCE_BARRIER barriers[3];
-	if (output->flags & DynamicMesh::FLAG_POSITION) {
-		barriers[barrier_count++] = CD3DX12_RESOURCE_BARRIER::Transition(
-			output->GetCurrentPositionBuffer()->resource.Get(),
+	CD3DX12_RESOURCE_BARRIER barriers[] = {
+		CD3DX12_RESOURCE_BARRIER::UAV(output->resource.Get()),
+		CD3DX12_RESOURCE_BARRIER::Transition(
+			output->resource.Get(),
 			D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 
 			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-		);
-	}
-	if (output->flags & DynamicMesh::FLAG_NORMAL) {
-		barriers[barrier_count++] = CD3DX12_RESOURCE_BARRIER::Transition(
-			output->normal.resource.Get(),
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 
-			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-		);
-	}
-	if (output->flags & DynamicMesh::FLAG_TANGENT) {
-		barriers[barrier_count++] = CD3DX12_RESOURCE_BARRIER::Transition(
-			output->tangent.resource.Get(),
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 
-			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-		);
-	}
-	command_list->ResourceBarrier(barrier_count, barriers);
+		)
+	};
+	command_list->ResourceBarrier(std::size(barriers), barriers);
 }
