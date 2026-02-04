@@ -8,7 +8,7 @@
 class LinearBuffer {
     public:
     
-    HRESULT Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, D3D12_RESOURCE_STATES initial_resource_state, const wchar_t* name = nullptr);
+    HRESULT Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, D3D12_RESOURCE_STATES initial_resource_state, const char* name = nullptr);
     void Destroy();
     uint64_t Size();
     uint64_t Capacity();
@@ -26,7 +26,7 @@ class LinearBuffer {
 class CpuMappedLinearBuffer : public LinearBuffer {
     public:
 
-    HRESULT Create(ID3D12Device* device, uint64_t capacity, bool use_gpu_upload_heap, const wchar_t* name = nullptr);
+    HRESULT Create(ID3D12Device* device, uint64_t capacity, bool use_gpu_upload_heap, const char* name = nullptr);
     void Destroy();
     void* Allocate(uint64_t size, uint64_t alignment, D3D12_GPU_VIRTUAL_ADDRESS* gpu_address);
     D3D12_GPU_VIRTUAL_ADDRESS Copy(const void* data, uint64_t size, uint64_t alignment);
@@ -44,7 +44,7 @@ class CpuMappedLinearBuffer : public LinearBuffer {
 
 class CircularBuffer {
     public:
-    HRESULT Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, const wchar_t* name = nullptr);
+    HRESULT Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, const char* name = nullptr);
     uint64_t Allocate(uint64_t size, uint64_t alignment);
     uint64_t GetMarker();
     void Free(uint64_t marker);

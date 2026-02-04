@@ -15,6 +15,7 @@
 
 #include "Animation.h"
 #include "DescriptorAllocator.h"
+#include "DirectXHelpers.h"
 #include "UploadBuffer.h"
 #include "TinyGltfTools.h"
 
@@ -933,9 +934,7 @@ void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, ID3D12Device*
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	HRESULT result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(this->textures[slot].resource.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	// TODO: Support full UTF-8 instead of just ASCII. 
-	result = textures[slot].resource->SetPrivateData(WKPDID_D3DDebugObjectName, image.name.size(), image.name.data());
-	assert(result == S_OK);
+	SetName(textures[slot].resource.Get(), image.name.data());
 
 	// Create the descriptor.
 	textures[slot].descriptor = srv_uav_cbv_descriptors->Allocate();

@@ -11,6 +11,7 @@
 #include <stb/stb_image.h>
 #include <tinyexr/tinyexr.h>
 
+#include "DirectXHelpers.h"
 #include "GpuResources.h"
 
 // Note: This is not perceptual roughness.
@@ -44,8 +45,7 @@ void EnvironmentMap::Init(ID3D12Device* device, CbvSrvUavPool* descriptor_alloca
     assert(result == S_OK);
     result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(this->root_signature.ReleaseAndGetAddressOf()));
     assert(result == S_OK);
-    result = this->root_signature->SetName(L"Environment Root Signature");
-    assert(result == S_OK);
+    SetName(this->root_signature.Get(), "Environment Root Signature");
 
     // Create the pipelines.
     D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {};
@@ -99,8 +99,7 @@ void EnvironmentMap::CreateEnvironmentMap(ID3D12GraphicsCommandList* command_lis
 	cubemap_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &cubemap_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&map->cube));
 	assert(result == S_OK);
-	result = map->cube->SetName(L"Environment Cube Map");
-	assert(result == S_OK);
+	SetName(map->cube.Get(), "Environment Cube Map");
 
 	// Create the importance map.
 	int importance_map_resolution = 1024;
@@ -108,8 +107,7 @@ void EnvironmentMap::CreateEnvironmentMap(ID3D12GraphicsCommandList* command_lis
 	importance_map_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &importance_map_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&map->importance));
 	assert(result == S_OK);
-	result = map->importance->SetName(L"Environment Importance Map");
-	assert(result == S_OK);
+	SetName(map->importance.Get(), "Environment Importance Map");
 
 	// Create the ggx map.
 	const int smallest_mip = 4;
@@ -118,8 +116,7 @@ void EnvironmentMap::CreateEnvironmentMap(ID3D12GraphicsCommandList* command_lis
 	ggx_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &ggx_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&map->ggx));
 	assert(result == S_OK);
-	result = map->ggx->SetName(L"Environment GGX Cube Map");
-	assert(result == S_OK);
+	SetName(map->ggx.Get(), "Environment GGX Cube Map");
 
 	// Create the diffuse map.
 	const int diffuse_resolution = 256;
@@ -127,8 +124,7 @@ void EnvironmentMap::CreateEnvironmentMap(ID3D12GraphicsCommandList* command_lis
 	diffuse_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &diffuse_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&map->diffuse));
 	assert(result == S_OK);
-	result = map->diffuse->SetName(L"Environment Diffuse Cube Map");
-	assert(result == S_OK);
+	SetName(map->diffuse.Get(), "Environment Diffuse Cube Map");
 
     CD3DX12_SHADER_RESOURCE_VIEW_DESC cube_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(DXGI_FORMAT_R16G16B16A16_FLOAT);
 	map->cube_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->cube.Get(), &cube_desc);
@@ -239,8 +235,7 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
         FreeEXRImage(&exr_image);
         return;
     }
-	result = this->equirectangular_image->SetName(L"Environment Map");
-	assert(result == S_OK);
+	SetName(this->equirectangular_image.Get(), "Environment Map");
 
 	int pixel_size = exr_header.channels[0].pixel_type == TINYEXR_PIXELTYPE_HALF ? 2 : 4;
 	int destination_stride = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
@@ -289,8 +284,7 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
         stbi_image_free(image);
         return;
     }
-	result = this->equirectangular_image->SetName(L"Environment Map");
-	assert(result == S_OK);
+	SetName(this->equirectangular_image.Get(), "Environment Map");
 
     uint32_t row_pitch = 0;
 	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.Get(), 0, &row_pitch);

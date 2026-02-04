@@ -1,4 +1,5 @@
 #include "UploadBuffer.h"
+#include "DirectXHelpers.h"
 
 #include <cassert>
 #include <vector>
@@ -14,7 +15,7 @@ void UploadBuffer::Create(ID3D12Device* device, size_t capacity, D3D12_COMMAND_Q
 
 	// Create a ring buffer.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_UPLOAD);
-	allocator.Create(device, capacity, &heap_properties, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE, L"Upload Buffer");
+	allocator.Create(device, capacity, &heap_properties, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE, "Upload Buffer");
 	markers = std::vector<uint64_t>(max_queued_uploads, 0);
 
     // Create command queue, allocators, and list for copying data from the upload resource to the gpu heap.
@@ -24,21 +25,18 @@ void UploadBuffer::Create(ID3D12Device* device, size_t capacity, D3D12_COMMAND_Q
 	};
 	result = device->CreateCommandQueue(&copy_queue_desc, IID_PPV_ARGS(this->copy_command_queue.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = this->copy_command_queue->SetName(L"Copy Command Queue");
-	assert(result == S_OK);
+	SetName(this->copy_command_queue.Get(), "Copy Command Queue");
 
 	command_allocators = std::vector<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>>(max_queued_uploads);
 	for (int i = 0; i < max_queued_uploads; i++) {
 		result = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(this->command_allocators[i].ReleaseAndGetAddressOf()));
 		assert(result == S_OK);
-		result = this->command_allocators[i]->SetName(L"Copy Command Allocator");
-		assert(result == S_OK);
+		SetName(this->command_allocators[i].Get(), "Copy Command Allocator");
 	}
 
 	result = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, this->command_allocators[0].Get(), nullptr, IID_PPV_ARGS(this->command_list.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = this->command_list->SetName(L"Copy Command List");
-	assert(result == S_OK);
+	SetName(this->command_list.Get(), "Copy Command List");
 	result = this->command_list->Close();
 	assert(result == S_OK);
 
@@ -46,8 +44,7 @@ void UploadBuffer::Create(ID3D12Device* device, size_t capacity, D3D12_COMMAND_Q
 	this->submission_count = 0;
 	result = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(this->upload_fence.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = this->upload_fence->SetName(L"Upload Fence");
-	assert(result == S_OK);
+	SetName(this->upload_fence.Get(), "Upload Fence");
 
 	this->recording = false;
 }

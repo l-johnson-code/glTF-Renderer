@@ -8,6 +8,7 @@
 #include <directx/d3dx12_root_signature.h>
 
 #include "Config.h"
+#include "DirectXHelpers.h"
 #include "GpuResources.h"
 #include "BufferAllocator.h"
 
@@ -42,8 +43,7 @@ void GpuSkin::Create(ID3D12Device* device)
 	assert(result == S_OK);
 	result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(&this->root_signature));
 	assert(result == S_OK);
-	result = root_signature->SetName(L"GPU skin Root Signature");
-	assert(result == S_OK);
+	SetName(root_signature.Get(), "GPU skin Root Signature");
 
     // Create the pipeline.
 	D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {

@@ -3,6 +3,7 @@
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
 
+#include "DirectXHelpers.h"
 #include "Memory.h"
 
 static uint64_t CalculateTotalAllocationSize(int allocation_count, const VertexAllocation* allocations, uint64_t* offsets)
@@ -107,7 +108,7 @@ void IndexBuffer::Destroy(CbvSrvUavPool* descriptor_allocator)
 	descriptor = -1;
 }
 
-HRESULT Mesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const wchar_t* name)
+HRESULT Mesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
 {
 	this->topology = desc->topology;
 	this->flags = desc->flags;
@@ -139,11 +140,10 @@ HRESULT Mesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, 
 		return result;
 	}
 	if (name) {
-		result = resource->SetName(name);
+		SetName(resource.Get(), name);
 	} else {
-		result = resource->SetName(L"Static Mesh");
+		SetName(resource.Get(), "Static Mesh");
 	}
-	assert(SUCCEEDED(result));
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = resource->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_INDEX) {
@@ -231,7 +231,7 @@ void Mesh::Destroy(CbvSrvUavPool* descriptor_allocator)
 	joint_weight.Destroy(descriptor_allocator);
 }
 
-HRESULT DynamicMesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const wchar_t* name)
+HRESULT DynamicMesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -257,11 +257,10 @@ HRESULT DynamicMesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allo
 		return result;
 	}
 	if (name) {
-		result = resource->SetName(name);
+		SetName(resource.Get(), name);
 	} else {
-		result = resource->SetName(L"Dynamic Mesh");
+		SetName(resource.Get(), "Dynamic Mesh");
 	}
-	assert(SUCCEEDED(result));
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = resource->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_POSITION) {
@@ -302,7 +301,7 @@ VertexBuffer* DynamicMesh::GetPreviousPositionBuffer()
 	return &position[(current_position_buffer - 1) % 1];
 }
 
-HRESULT MorphTarget::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const wchar_t* name)
+HRESULT MorphTarget::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -327,11 +326,10 @@ HRESULT MorphTarget::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allo
 		return result;
 	}
 	if (name) {
-		result = resource->SetName(name);
+		SetName(resource.Get(), name);
 	} else {
-		result = resource->SetName(L"Morph Target");
+		SetName(resource.Get(), "Morph Target");
 	}
-	assert(SUCCEEDED(result));
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = resource->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_POSITION) {

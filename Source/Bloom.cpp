@@ -28,8 +28,7 @@ void Bloom::Create(ID3D12Device* device, uint32_t width, uint32_t height, int ma
 	assert(result == S_OK);
 	result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(this->root_signature.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = this->root_signature->SetName(L"Bloom Root Signature");
-	assert(result == S_OK);
+	SetName(this->root_signature.Get(), "Bloom Root Signature");
     
     // Create the pipeline states.
 	D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {
@@ -58,8 +57,7 @@ void Bloom::Resize(uint32_t width, uint32_t height, int max_iterations)
     resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     HRESULT result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&this->mip_chain));
     assert(result == S_OK);
-    result = mip_chain->SetName(L"Bloom Mip Chain");
-    assert(result == S_OK);
+    SetName(mip_chain.Get(), "Bloom Mip Chain");
 }
 
 void Bloom::Execute(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* input, D3D12_RESOURCE_STATES input_resource_states, int iterations, float strength)

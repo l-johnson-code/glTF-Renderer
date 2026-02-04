@@ -5,9 +5,10 @@
 
 #include <directx/d3dx12_core.h>
 
+#include "DirectXHelpers.h"
 #include "Memory.h"
 
-HRESULT LinearBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, D3D12_RESOURCE_STATES initial_resource_state, const wchar_t* name)
+HRESULT LinearBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, D3D12_RESOURCE_STATES initial_resource_state, const char* name)
 {
     this->capacity = capacity;
     this->size = 0;
@@ -28,7 +29,7 @@ HRESULT LinearBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP
     }
 
     if (SUCCEEDED(result) && name) {
-        this->resource->SetName(name);
+        SetName(this->resource.Get(), name);
     }
     
     return result;
@@ -69,7 +70,7 @@ D3D12_GPU_VIRTUAL_ADDRESS LinearBuffer::Allocate(uint64_t size, uint64_t alignme
 	}
 }
 
-HRESULT CpuMappedLinearBuffer::Create(ID3D12Device* device, uint64_t capacity, bool use_gpu_upload_heap, const wchar_t* name)
+HRESULT CpuMappedLinearBuffer::Create(ID3D12Device* device, uint64_t capacity, bool use_gpu_upload_heap, const char* name)
 {
 	HRESULT result = S_OK;
 
@@ -105,7 +106,7 @@ HRESULT CpuMappedLinearBuffer::Create(ID3D12Device* device, uint64_t capacity, b
     }
 
     if (SUCCEEDED(result) && name) {
-	    this->resource->SetName(name);
+	    SetName(this->resource.Get(), name);
 	}
 
 	result = this->resource->Map(0, nullptr, &this->pointer);
@@ -148,7 +149,7 @@ D3D12_GPU_VIRTUAL_ADDRESS CpuMappedLinearBuffer::Copy(const void* data, uint64_t
     return gpu_ptr;
 }
 
-HRESULT CircularBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, const wchar_t* name)
+HRESULT CircularBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, const char* name)
 {
     this->capacity = capacity;
     this->size = 0;
@@ -169,7 +170,7 @@ HRESULT CircularBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HE
     }
 
     if (SUCCEEDED(result) && name) {
-        this->resource->SetName(name);
+        SetName(this->resource.Get(), name);
     }
 
     // Map the resource for CPU access.

@@ -12,6 +12,7 @@
 #include "BufferAllocator.h"
 #include "Config.h"
 #include "DescriptorAllocator.h"
+#include "DirectXHelpers.h"
 #include "GpuResources.h"
 #include "GpuSkin.h"
 
@@ -114,8 +115,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 		SPDLOG_ERROR("Failed to create command queue.");
 		return false;
 	}
-	result = graphics_command_queue->SetName(L"Graphics Command Queue");
-	assert(result == S_OK);
+	SetName(graphics_command_queue.Get(), "Graphics Command Queue");
 
 	// Create command allocators.
 	for (int i = 0; i < ::Config::FRAME_COUNT; i++) {
@@ -125,8 +125,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 			SPDLOG_ERROR("Failed to create command allocator.");
 			return false;
 		}
-		result = graphics_command_allocators[i]->SetName(L"Graphics Command Allocator");
-		assert(result == S_OK);
+		SetName(graphics_command_allocators[i].Get(), "Graphics Command Allocator");
 	}
 
 	// Create the command list.
@@ -136,14 +135,12 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 		SPDLOG_ERROR("Failed to create command list.");
 		return false;
 	}
-	result = graphics_command_list->SetName(L"Graphics Command List");
-	assert(result == S_OK);
+	SetName(graphics_command_list.Get(), "Graphics Command List");
 
 	// Create frame fence.
 	result = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(this->fence.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = this->fence->SetName(L"Frame Fence");
-	assert(result == S_OK);
+	SetName(this->fence.Get(), "Frame Fence");
 	this->frame_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
 	// Create the swapchain.
@@ -152,7 +149,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	upload_buffer.Create(this->device.Get(), ::Config::UPLOAD_BUFFER_CAPACITY, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, ::Config::FRAME_COUNT);
 
 	for (int i = 0; i < frame_allocators.Size(); i++) {
-		frame_allocators[i].Create(this->device.Get(), ::Config::FRAME_HEAP_CAPACITY, true, L"Transient Resources");
+		frame_allocators[i].Create(this->device.Get(), ::Config::FRAME_HEAP_CAPACITY, true, "Transient Resources");
 	}
 
 	InitializeImGui();
@@ -377,8 +374,7 @@ void Renderer::CreateRenderTargets()
 		
 		result = device->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, IID_PPV_ARGS(this->display.ReleaseAndGetAddressOf()));
 		assert(result == S_OK);
-		result = this->display->SetName(L"Display");
-		assert(result == S_OK);
+		SetName(this->display.Get(), "Display");
 
 		this->display_rtv = resources.rtv_allocator.AllocateAndCreateRtv(this->display.Get(), nullptr);
 		this->display_uav = resources.cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(this->display.Get(), nullptr, nullptr);

@@ -1,4 +1,5 @@
 #include "Rasterizer.h"
+#include "DirectXHelpers.h"
 
 #include <algorithm>
 
@@ -32,8 +33,7 @@ void Rasterizer::Resize(uint32_t width, uint32_t height)
         CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, DEPTH_CLEAR_VALUE, 0);
         result = device->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, IID_PPV_ARGS(this->depth.ReleaseAndGetAddressOf()));
         assert(result == S_OK);
-        result = depth->SetName(L"Depth Texture");
-        assert(result == S_OK);
+		SetName(depth.Get(), "Depth Texture");
 
         this->depth_dsv = dsv_allocator->AllocateAndCreateDsv(this->depth.Get(), nullptr);
         assert(this->depth_dsv.ptr != 0);
@@ -53,8 +53,7 @@ void Rasterizer::Resize(uint32_t width, uint32_t height)
 
         result = device->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, IID_PPV_ARGS(this->motion_vectors.ReleaseAndGetAddressOf()));
         assert(result == S_OK);
-        result = this->motion_vectors->SetName(L"Motion Vectors");
-        assert(result == S_OK);
+        SetName(this->motion_vectors.Get(), "Motion Vectors");
 
         this->motion_vectors_rtv = rtv_allocator->AllocateAndCreateRtv(this->motion_vectors.Get(), nullptr);
         assert(this->motion_vectors_rtv.ptr != 0);
@@ -69,8 +68,7 @@ void Rasterizer::Resize(uint32_t width, uint32_t height)
                     
         result = device->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(this->transmission.ReleaseAndGetAddressOf()));
         assert(result == S_OK);
-        result = this->transmission->SetName(L"Transmission");
-        assert(result == S_OK);
+        SetName(this->transmission.Get(), "Transmission");
 
         this->transmission_srv = cbv_uav_srv_allocator->AllocateAndCreateSrv(this->transmission.Get(), nullptr);
         assert(this->transmission_srv != -1);

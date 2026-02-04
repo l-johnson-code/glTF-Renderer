@@ -6,6 +6,7 @@
 #include <directx/d3dx12_root_signature.h>
 #include <glm/glm.hpp>
 
+#include "DirectXHelpers.h"
 #include "GpuResources.h"
 
 void ToneMapper::Create(ID3D12Device* device, GpuResources* resources)
@@ -24,8 +25,7 @@ void ToneMapper::Create(ID3D12Device* device, GpuResources* resources)
 	assert(result == S_OK);
 	result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(this->root_signature.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = this->root_signature->SetName(L"Tone Mapper Root Signature");
-	assert(result == S_OK);
+	SetName(this->root_signature.Get(), "Tone Mapper Root Signature");
 
     // Create pipeline.
 	D3D12_INPUT_ELEMENT_DESC input_layout[] = {
@@ -66,8 +66,7 @@ void ToneMapper::Create(ID3D12Device* device, GpuResources* resources)
 	};
 	result = device->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&this->pipeline_state));
 	assert(result == S_OK);
-	result = this->pipeline_state->SetName(L"Tone Mapper Pipeline");
-	assert(result == S_OK);
+	SetName(this->pipeline_state.Get(), "Tone Mapper Pipeline");
 
     // Cleanup.
 	GpuResources::FreeShader(pipeline_desc.VS);

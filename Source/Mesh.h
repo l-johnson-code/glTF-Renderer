@@ -76,7 +76,7 @@ struct Mesh {
     VertexBuffer color;
     VertexBuffer joint_weight;
 
-    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description, const wchar_t* name = nullptr);
+    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description, const char* name = nullptr);
     void* QueueIndexUpdate(UploadBuffer* upload_buffer);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueNormalUpdate(UploadBuffer* upload_buffer);
@@ -111,7 +111,7 @@ struct DynamicMesh {
     VertexBuffer normal;
     VertexBuffer tangent;
 
-    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description, const wchar_t* name = nullptr);
+    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description, const char* name = nullptr);
     void Flip();
     VertexBuffer* GetCurrentPositionBuffer();
     VertexBuffer* GetPreviousPositionBuffer();
@@ -140,7 +140,7 @@ struct MorphTarget {
     VertexBuffer normal;
     VertexBuffer tangent;
 
-    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* attributes, const wchar_t* name = nullptr);
+    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* attributes, const char* name = nullptr);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueNormalUpdate(UploadBuffer* upload_buffer);
     void* QueueTangentUpdate(UploadBuffer* upload_buffer);

@@ -11,6 +11,7 @@
 #include <tinyexr/tinyexr.h>
 
 #include "Config.h"
+#include "DirectXHelpers.h"
 #include "File.h"
 
 void GpuResources::Create(ID3D12Device* device)
@@ -99,8 +100,7 @@ void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 		
 		result = this->device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(this->sheen_e.ReleaseAndGetAddressOf()));
 		assert(result == S_OK);
-		result = sheen_e->SetName(L"Sheen E Lookup Table");
-		assert(result == S_OK);
+		SetName(sheen_e.Get(), "Sheen E Lookup Table");
 
 		D3D12_CPU_DESCRIPTOR_HANDLE descriptor_cpu_handle = cbv_uav_srv_allocator.GetCpuHandle(GpuResources::STATIC_DESCRIPTOR_SRV_SHEEN_E);
 

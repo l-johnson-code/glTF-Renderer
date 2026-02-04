@@ -10,6 +10,7 @@
 #include <directx/dxgiformat.h>
 #include <glm/gtc/matrix_inverse.hpp>
 
+#include "DirectXHelpers.h"
 #include "GpuResources.h"
 
 void ForwardPass::Create(ID3D12Device* device)
@@ -36,8 +37,7 @@ void ForwardPass::Create(ID3D12Device* device)
 	assert(result == S_OK);
 	result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(this->root_signature.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = this->root_signature->SetName(L"Forward Signature");
-	assert(result == S_OK);
+	SetName(this->root_signature.Get(), "Forward Signature");
 
 	// Load shaders.
 	D3D12_SHADER_BYTECODE vertex_shader = GpuResources::LoadShader("Shaders/Forward.vs.bin");
@@ -122,8 +122,7 @@ void ForwardPass::CreatePipeline(ID3D12Device* device, D3D12_SHADER_BYTECODE ver
 	pipeline_desc.pRootSignature = root_signature;
 	result = device->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&pipeline_states[flags]));
 	assert(result == S_OK);
-	result = pipeline_states[flags]->SetName(L"Forward Pipeline");
-	assert(result == S_OK);
+	SetName(pipeline_states[flags].Get(), "Forward Pipeline");
 }
 
 void ForwardPass::Destroy()
@@ -276,8 +275,7 @@ void ForwardPass::CreateBackgroundRenderer(ID3D12Device* device)
 	assert(result == S_OK);
 	result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(this->background_root_signature.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = this->background_root_signature->SetName(L"Background Signature");
-	assert(result == S_OK);
+	SetName(this->background_root_signature.Get(), "Background Signature");
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
 
@@ -319,8 +317,7 @@ void ForwardPass::CreateBackgroundRenderer(ID3D12Device* device)
 
 	result = device->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(this->background_pipeline_state.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = background_pipeline_state->SetName(L"Background Pipeline");
-	assert(result == S_OK);
+	SetName(background_pipeline_state.Get(), "Background Pipeline");
 
 	GpuResources::FreeShader(pipeline_desc.VS);
 	GpuResources::FreeShader(pipeline_desc.PS);
@@ -430,8 +427,7 @@ void ForwardPass::CreateTranmissionMipPipeline(ID3D12Device* device)
 	assert(result == S_OK);
 	result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(this->transmission_mips_root_signature.ReleaseAndGetAddressOf()));
 	assert(result == S_OK);
-	result = this->transmission_mips_root_signature->SetName(L"Transmission Mip Root Signature");
-	assert(result == S_OK);
+	SetName(this->transmission_mips_root_signature.Get(), "Transmission Mip Root Signature");
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {
 		.pRootSignature = transmission_mips_root_signature.Get(),
