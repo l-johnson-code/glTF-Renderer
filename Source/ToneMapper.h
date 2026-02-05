@@ -2,8 +2,7 @@
 
 #include <wrl/client.h>
 
-#include "GpuResources.h"
-#include "BufferAllocator.h"
+#include "CommandContext.h"
 
 class ToneMapper {
 
@@ -20,8 +19,8 @@ class ToneMapper {
 		int frame;
 	};
 
-    void Create(ID3D12Device* device, GpuResources* resources);
-    void Run(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, D3D12_GPU_DESCRIPTOR_HANDLE input_descriptor, const Config* config);
+    void Create(ID3D12Device* device);
+    void Run(CommandContext* context, D3D12_GPU_DESCRIPTOR_HANDLE input_descriptor, const Config* config);
 
 	private:
 

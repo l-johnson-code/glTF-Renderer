@@ -127,13 +127,12 @@ void Rasterizer::SortRenderObjects(glm::vec3 camera_pos)
 	std::sort(transparent_render_objects.begin(), transparent_render_objects.end(), comparison);
 }
 
-void Rasterizer::DrawRenderObjects(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, Gltf* gltf, const std::vector<RenderObject>& render_objects)
+void Rasterizer::DrawRenderObjects(CommandContext* context, Gltf* gltf, const std::vector<RenderObject>& render_objects)
 {
 	for (auto& render_object: render_objects) {
 		DynamicMesh* dynamic_mesh = render_object.dynamic_mesh_id != -1 ? &gltf->dynamic_primitives[render_object.dynamic_mesh_id].dynamic_meshes[render_object.primitive_id] : nullptr;
 		forward.Draw(
-			command_list,
-			frame_allocator,
+			context,
 			&gltf->meshes[render_object.mesh_id].primitives[render_object.primitive_id].mesh,
 			render_object.material_id,
 			render_object.transform,
@@ -144,15 +143,15 @@ void Rasterizer::DrawRenderObjects(ID3D12GraphicsCommandList* command_list, CpuM
 	}
 }
 
-void Rasterizer::SetViewportAndScissorRects(ID3D12GraphicsCommandList* command_list, int width, int height)
+void Rasterizer::SetViewportAndScissorRects(CommandContext* context, int width, int height)
 {
 	CD3DX12_VIEWPORT viewport(0.0f, 0.0f, width, height);
-	command_list->RSSetViewports(1, &viewport);
+	context->command_list->RSSetViewports(1, &viewport);
 	CD3DX12_RECT scissor_rect(0, 0, width, height);
-	command_list->RSSetScissorRects(1, &scissor_rect);
+	context->command_list->RSSetScissorRects(1, &scissor_rect);
 }
 
-void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, CbvSrvUavStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params)
+void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params)
 {
     // Get transform matrices.
 	glm::mat4x4 world_to_view = execute_params->camera->GetWorldToView();
@@ -168,31 +167,29 @@ void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLin
 	// Prepare render targets.
 	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = execute_params->output_rtv; 
 
-	CD3DX12_RESOURCE_BARRIER barriers[] = {
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			execute_params->output_resource, 
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
-			D3D12_RESOURCE_STATE_RENDER_TARGET
-		),
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			motion_vectors.Get(), 
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
-			D3D12_RESOURCE_STATE_RENDER_TARGET
-		),
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			depth.Get(), 
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
-			D3D12_RESOURCE_STATE_DEPTH_WRITE
-		),
-	};
-	command_list->ResourceBarrier(std::size(barriers), barriers);
+	context->PushTransitionBarrier(
+		execute_params->output_resource, 
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
+		D3D12_RESOURCE_STATE_RENDER_TARGET
+	);
+	context->PushTransitionBarrier(
+		motion_vectors.Get(), 
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
+		D3D12_RESOURCE_STATE_RENDER_TARGET
+	);
+	context->PushTransitionBarrier(
+		depth.Get(), 
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
+		D3D12_RESOURCE_STATE_DEPTH_WRITE
+	);
+	context->SubmitBarriers();
 	
 	float clear_color[4] = {0., 0., 0., 0.};
-	command_list->ClearRenderTargetView(render_rtv, clear_color, 0, nullptr);
-	command_list->ClearRenderTargetView(motion_vectors_rtv, clear_color, 0, nullptr);
-	command_list->ClearDepthStencilView(depth_dsv, D3D12_CLEAR_FLAG_DEPTH, DEPTH_CLEAR_VALUE, 0, 0, nullptr);
+	context->command_list->ClearRenderTargetView(render_rtv, clear_color, 0, nullptr);
+	context->command_list->ClearRenderTargetView(motion_vectors_rtv, clear_color, 0, nullptr);
+	context->command_list->ClearDepthStencilView(depth_dsv, D3D12_CLEAR_FLAG_DEPTH, DEPTH_CLEAR_VALUE, 0, 0, nullptr);
 	
-	SetViewportAndScissorRects(command_list, this->width, this->height);
+	SetViewportAndScissorRects(context, this->width, this->height);
 
 	// Render opaque objects.
 	ForwardPass::Config config = {
@@ -211,78 +208,71 @@ void Rasterizer::DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLin
 		.render_flags = settings->render_flags,
 	};
 	D3D12_PRIMITIVE_TOPOLOGY primitive_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	command_list->IASetPrimitiveTopology(primitive_topology);
-	forward.SetRootSignature(command_list);
-	forward.SetConfig(command_list, frame_allocator, &config);
-	forward.BindRenderTargets(command_list, render_rtv, motion_vectors_rtv, depth_dsv);
-	forward.BindPipeline(command_list, ForwardPass::PIPELINE_FLAGS_NONE);
-	DrawRenderObjects(command_list, frame_allocator, execute_params->gltf, opaque_render_objects);
+	context->command_list->IASetPrimitiveTopology(primitive_topology);
+	forward.SetRootSignature(context);
+	forward.SetConfig(context, &config);
+	forward.BindRenderTargets(context, render_rtv, motion_vectors_rtv, depth_dsv);
+	forward.BindPipeline(context, ForwardPass::PIPELINE_FLAGS_NONE);
+	DrawRenderObjects(context, execute_params->gltf, opaque_render_objects);
 
 	// TODO: Create a separate pipeline for alpha mask instead of sharing the opaque pass. This could potentially improve performance of the opaque rendering.
-	DrawRenderObjects(command_list, frame_allocator, execute_params->gltf, alpha_mask_render_objects);
+	DrawRenderObjects(context, execute_params->gltf, alpha_mask_render_objects);
 
 	if (execute_params->environment_map) {
-		forward.DrawBackground(command_list, frame_allocator, clip_to_world, 1.0, execute_params->environment_map->cube_srv_descriptor);
+		forward.DrawBackground(context, clip_to_world, 1.0, execute_params->environment_map->cube_srv_descriptor);
 		
 		// Set pipeline state back to rendering meshes.
-		forward.SetRootSignature(command_list);
-		forward.SetConfig(command_list, frame_allocator, &config);
+		forward.SetRootSignature(context);
+		forward.SetConfig(context, &config);
 	}
 
 	// Create transmission mip chain.
-	{
-		CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			execute_params->output_resource, 
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
-			D3D12_RESOURCE_STATE_COPY_SOURCE
-		);
-		command_list->ResourceBarrier(1, &resource_barrier);
-	}
-	forward.GenerateTransmissionMips(command_list, frame_allocator, descriptor_allocator, execute_params->output_resource, this->transmission.Get(), settings->transmission_downsample_sample_pattern);
-	{
-		CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-			execute_params->output_resource, 
-			D3D12_RESOURCE_STATE_COPY_SOURCE,
-			D3D12_RESOURCE_STATE_RENDER_TARGET
-		);
-		command_list->ResourceBarrier(1, &resource_barrier);
-	}
+	context->PushTransitionBarrier(
+		execute_params->output_resource, 
+		D3D12_RESOURCE_STATE_RENDER_TARGET,
+		D3D12_RESOURCE_STATE_COPY_SOURCE
+	);
+	context->SubmitBarriers();
+	forward.GenerateTransmissionMips(context, execute_params->output_resource, this->transmission.Get(), settings->transmission_downsample_sample_pattern);
+	context->PushTransitionBarrier(
+		execute_params->output_resource, 
+		D3D12_RESOURCE_STATE_COPY_SOURCE,
+		D3D12_RESOURCE_STATE_RENDER_TARGET
+	);
+	context->SubmitBarriers();
 
 	config.transmission_descriptor = this->transmission_srv;
-	forward.SetConfig(command_list, frame_allocator, &config);
+	forward.SetConfig(context, &config);
 
 	// Render transmissives.
-	forward.BindPipeline(command_list, ForwardPass::PIPELINE_FLAGS_ALPHA_BLEND);
-	DrawRenderObjects(command_list, frame_allocator, execute_params->gltf, transparent_render_objects);
+	forward.BindPipeline(context, ForwardPass::PIPELINE_FLAGS_ALPHA_BLEND);
+	DrawRenderObjects(context, execute_params->gltf, transparent_render_objects);
 
 	// Render alpha blended geometry.
-	DrawRenderObjects(command_list, frame_allocator, execute_params->gltf, alpha_render_objects);
+	DrawRenderObjects(context, execute_params->gltf, alpha_render_objects);
 
 	// Transition render targets to read state for post processing.
-	CD3DX12_RESOURCE_BARRIER resource_barriers[] = {
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			execute_params->output_resource, 
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-		),
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			motion_vectors.Get(), 
-			D3D12_RESOURCE_STATE_RENDER_TARGET, 
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-		),
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			depth.Get(), 
-			D3D12_RESOURCE_STATE_DEPTH_WRITE,
-			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-		)
-	};
-	command_list->ResourceBarrier(std::size(resource_barriers), resource_barriers);
+	context->PushTransitionBarrier(
+		execute_params->output_resource, 
+		D3D12_RESOURCE_STATE_RENDER_TARGET,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+	);
+	context->PushTransitionBarrier(
+		motion_vectors.Get(), 
+		D3D12_RESOURCE_STATE_RENDER_TARGET, 
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+	);
+	context->PushTransitionBarrier(
+		depth.Get(), 
+		D3D12_RESOURCE_STATE_DEPTH_WRITE,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+	);
+	context->SubmitBarriers();
 
-    bloom.Execute(command_list, frame_allocator, descriptor_allocator, execute_params->output_resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
-    {
-        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(execute_params->output_resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        command_list->ResourceBarrier(1, &barrier);
-    }
+    bloom.Execute(context, execute_params->output_resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
+
+	context->PushTransitionBarrier(execute_params->output_resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	context->SubmitBarriers();
 
 	this->previous_world_to_clip = world_to_clip;
 }

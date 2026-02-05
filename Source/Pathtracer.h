@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 #include <wrl.h>
 
-#include "BufferAllocator.h"
+#include "CommandContext.h"
 #include "EnvironmentMap.h"
 #include "Gltf.h"
 #include "ShaderTableBuilder.h"
@@ -102,7 +102,7 @@ class Pathtracer {
     static constexpr int MAX_BOUNCES = 5;
     
     void Init(ID3D12Device5* device, UploadBuffer* upload_buffer);
-	void PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, CbvSrvUavStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params);
+	void PathtraceScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
     
     private:
@@ -153,7 +153,7 @@ class Pathtracer {
     glm::mat4x4 previous_world_to_clip;
     int accumulated_frames = 0;
 
-    void BuildAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list);
-	void UpdateAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list);
-	void BuildTlas(Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* allocator);
+    void BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
+	void UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
+	void BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure);
 };

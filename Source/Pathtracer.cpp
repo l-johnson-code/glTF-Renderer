@@ -135,7 +135,7 @@ void Pathtracer::Shutdown()
     shader_tables_resource.Reset();
 }
 
-void Pathtracer::BuildAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list)
+void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
 {
     for (int i = 0; i < gltf->nodes.size(); i++) {
 		Gltf::Node& node = gltf->nodes[i];
@@ -151,21 +151,21 @@ void Pathtracer::BuildAllBlas(Gltf* gltf, RaytracingAccelerationStructure* accel
 					gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases.resize(gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes.size());
 					RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases[j];
 					if (!dynamic_blas.resource.Get()) {
-						acceleration_structure->BuildDynamicBlas(command_list, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
+						acceleration_structure->BuildDynamicBlas(context->command_list.Get(), primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
 					}
 				} else {
 					// Static.
 					if (!primitive.blas.resource.Get()) {
-						acceleration_structure->BuildStaticBlas(command_list, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
+						acceleration_structure->BuildStaticBlas(context->command_list.Get(), primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
 					}
 				}
 			}
         }
     }
-    acceleration_structure->EndBlasBuilds(command_list);
+    acceleration_structure->EndBlasBuilds(context->command_list.Get());
 }
 
-void Pathtracer::UpdateAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list)
+void Pathtracer::UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
 {
     for (int i = 0; i < gltf->nodes.size(); i++) {
 		Gltf::Node& node = gltf->nodes[i];
@@ -175,14 +175,14 @@ void Pathtracer::UpdateAllBlas(Gltf* gltf, RaytracingAccelerationStructure* acce
 			std::vector<Gltf::Primitive>& primitives = gltf->meshes[mesh_id].primitives; 
 			Gltf::DynamicPrimitives& dynamic_primitives = gltf->dynamic_primitives[skin_id];
 			for (int j = 0; j < dynamic_primitives.dynamic_blases.size(); j++) {
-				acceleration_structure->UpdateDynamicBlas(command_list, &dynamic_primitives.dynamic_blases[j], dynamic_primitives.dynamic_meshes[j].GetCurrentPositionBuffer()->view.BufferLocation, primitives[j].mesh.num_of_vertices, primitives[j].mesh.index.view, primitives[j].mesh.num_of_indices);
+				acceleration_structure->UpdateDynamicBlas(context->command_list.Get(), &dynamic_primitives.dynamic_blases[j], dynamic_primitives.dynamic_meshes[j].GetCurrentPositionBuffer()->view.BufferLocation, primitives[j].mesh.num_of_vertices, primitives[j].mesh.index.view, primitives[j].mesh.num_of_indices);
 			}
         }
     }
-    acceleration_structure->EndBlasBuilds(command_list);
+    acceleration_structure->EndBlasBuilds(context->command_list.Get());
 }
 
-void Pathtracer::BuildTlas(Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure, ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* allocator)
+void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure)
 {
 	mesh_instances.clear();
     acceleration_structure->BeginTlasBuild();
@@ -256,11 +256,11 @@ void Pathtracer::BuildTlas(Gltf* gltf, int scene_id, RaytracingAccelerationStruc
 		}
 	});
 
-    acceleration_structure->BuildTlas(command_list);
-	this->gpu_mesh_instances = allocator->Copy(mesh_instances.data(), sizeof(GpuMeshInstance) * mesh_instances.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+    acceleration_structure->BuildTlas(context->command_list.Get());
+	this->gpu_mesh_instances = context->AllocateAndCopy(mesh_instances.data(), sizeof(GpuMeshInstance) * mesh_instances.size(), 4);
 }
 
-void Pathtracer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMappedLinearBuffer* frame_allocator, CbvSrvUavStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params)
+void Pathtracer::PathtraceScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params)
 {
 	glm::mat4x4 world_to_view = execute_params->camera->GetWorldToView();
 	glm::mat4x4 world_to_clip = execute_params->camera->GetViewToClip() * world_to_view;
@@ -277,9 +277,9 @@ void Pathtracer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMap
 	if (accumulated_frames < settings->max_accumulated_frames) {
         
         // Update the acceleration structure.
-		BuildAllBlas(execute_params->gltf, &this->acceleration_structure, command_list);
-		UpdateAllBlas(execute_params->gltf, &this->acceleration_structure, command_list);
-		BuildTlas(execute_params->gltf, execute_params->scene, &this->acceleration_structure, command_list, frame_allocator);
+		BuildAllBlas(context, execute_params->gltf, &this->acceleration_structure);
+		UpdateAllBlas(context, execute_params->gltf, &this->acceleration_structure);
+		BuildTlas(context, execute_params->gltf, execute_params->scene, &this->acceleration_structure);
         
         struct {
             glm::mat4x4 clip_to_world;
@@ -327,16 +327,16 @@ void Pathtracer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMap
             .max_russian_roulette_continue_prob = settings->max_russian_roulette_continue_prob,
         };
 
-        D3D12_GPU_VIRTUAL_ADDRESS constant_buffer = frame_allocator->Copy(&constants, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        D3D12_GPU_VIRTUAL_ADDRESS constant_buffer = context->CreateConstantBuffer(&constants);
 
-        command_list->SetComputeRootSignature(this->root_signature.Get());
-        command_list->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
-        command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_ACCELERATION_STRUCTURE, this->acceleration_structure.GetAccelerationStructure());
-        command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, this->gpu_mesh_instances);
-        command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, execute_params->gpu_materials);
-        command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, execute_params->gpu_lights);
+        context->command_list->SetComputeRootSignature(this->root_signature.Get());
+        context->command_list->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
+        context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_ACCELERATION_STRUCTURE, this->acceleration_structure.GetAccelerationStructure());
+        context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, this->gpu_mesh_instances);
+        context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, execute_params->gpu_materials);
+        context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, execute_params->gpu_lights);
 
-        command_list->SetPipelineState1(this->state_object.Get());
+        context->command_list->SetPipelineState1(this->state_object.Get());
 
         D3D12_DISPATCH_RAYS_DESC desc = {
             .RayGenerationShaderRecord = this->shader_tables.ray_generation_shader_record,
@@ -347,7 +347,7 @@ void Pathtracer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMap
             .Height = execute_params->height,
             .Depth = 1,
         };
-        command_list->DispatchRays(&desc);
+        context->command_list->DispatchRays(&desc);
 
         if (settings->flags & FLAG_ACCUMULATE) {
             this->accumulated_frames++;
@@ -355,8 +355,8 @@ void Pathtracer::PathtraceScene(ID3D12GraphicsCommandList4* command_list, CpuMap
             this->accumulated_frames = 0;
         }
 		
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(execute_params->output_resource);
-		command_list->ResourceBarrier(1, &barrier);
+		context->PushUavBarrier(execute_params->output_resource);
+		context->SubmitBarriers();
 	}
 	
 	previous_world_to_clip = world_to_clip;

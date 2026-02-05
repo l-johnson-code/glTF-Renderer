@@ -3,7 +3,7 @@
 #include <directx/d3d12.h>
 #include <wrl/client.h>
 
-#include "BufferAllocator.h"
+#include "CommandContext.h"
 #include "Mesh.h"
 
 class GpuSkin {
@@ -15,8 +15,8 @@ class GpuSkin {
     };
 
     void Create(ID3D12Device* device);
-    void Bind(ID3D12GraphicsCommandList* command_list);
-    void Run(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, Mesh* input, DynamicMesh* output, D3D12_GPU_VIRTUAL_ADDRESS bones, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights);
+    void Bind(CommandContext* context);
+    void Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D12_GPU_VIRTUAL_ADDRESS bones, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights);
 
     private:
 

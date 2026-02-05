@@ -78,6 +78,7 @@ target_sources(glTF PRIVATE
     "Source/AnimationPlayer.cpp"
     "Source/Bloom.cpp"
     "Source/BufferAllocator.cpp"
+    "Source/CommandContext.cpp"
     "Source/Config.cpp"
     "Source/EnvironmentMap.cpp"
     "Source/File.cpp"

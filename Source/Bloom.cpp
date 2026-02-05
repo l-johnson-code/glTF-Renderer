@@ -54,31 +54,31 @@ void Bloom::Resize(uint32_t width, uint32_t height, int max_iterations)
     SetName(mip_chain.Get(), "Bloom Mip Chain");
 }
 
-void Bloom::Execute(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* input, D3D12_RESOURCE_STATES input_resource_states, int iterations, float strength)
+void Bloom::Execute(CommandContext* context, ID3D12Resource* input, D3D12_RESOURCE_STATES input_resource_states, int iterations, float strength)
 {
     iterations = std::min(this->max_iterations, iterations);
 
-    command_list->SetComputeRootSignature(this->root_signature.Get());
+    context->command_list->SetComputeRootSignature(this->root_signature.Get());
     
     D3D12_RESOURCE_DESC input_desc = input->GetDesc();
     D3D12_RESOURCE_DESC mip_chain_desc = this->mip_chain->GetDesc();
 
     // Create descriptors.
-	int descriptor_start = transient_descriptors->Allocate(iterations + 1);
-	assert(descriptor_start != -1);
+	DescriptorSpan descriptors = context->AllocateDescriptors((iterations + 1) * 2);
+	assert(!descriptors.IsEmpty());
     const CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(input_desc.Format, 1, 0);
     const CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(input_desc.Format, 0);
-    transient_descriptors->CreateSrv(descriptor_start, input, &srv_desc);
-    transient_descriptors->CreateUav(descriptor_start + 1, input, nullptr, &uav_desc);
+    context->CreateSrv(descriptors[0], input, &srv_desc);
+    context->CreateUav(descriptors[1], input, nullptr, &uav_desc);
 	for (int i = 0; i < iterations; i++) {
 		const CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(mip_chain_desc.Format, 1, i);
 		const CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(mip_chain_desc.Format, i);
-		transient_descriptors->CreateSrv(descriptor_start + 2 * (i + 1), this->mip_chain.Get(), &srv_desc);
-		transient_descriptors->CreateUav(descriptor_start + 2 * (i + 1) + 1, this->mip_chain.Get(), nullptr, &uav_desc);
+		context->CreateSrv(descriptors[2 * (i + 1)], this->mip_chain.Get(), &srv_desc);
+		context->CreateUav(descriptors[2 * (i + 1) + 1], this->mip_chain.Get(), nullptr, &uav_desc);
 	}
 
     // Downsample and blur.
-    command_list->SetPipelineState(this->downsample_pipeline_state.Get());
+    context->command_list->SetPipelineState(this->downsample_pipeline_state.Get());
     uint32_t width = input_desc.Width;
 	uint32_t height = input_desc.Height;
 
@@ -91,40 +91,34 @@ void Bloom::Execute(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuff
         int output_descriptor;
     } constant_buffer;
 
-    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(mip_chain.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0);
-    command_list->ResourceBarrier(1, &barrier);
+    context->PushTransitionBarrier(mip_chain.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0);
+    context->SubmitBarriers();
 
-    constant_buffer.input_descriptor = descriptor_start;
-    constant_buffer.output_descriptor = descriptor_start + 3;
+    constant_buffer.input_descriptor = descriptors[0];
+    constant_buffer.output_descriptor = descriptors[3];
 
-    command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
-	command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
+    context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+	context->command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 
-    CD3DX12_RESOURCE_BARRIER barriers[] = {
-        CD3DX12_RESOURCE_BARRIER::UAV(mip_chain.Get()),
-        CD3DX12_RESOURCE_BARRIER::Transition(mip_chain.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0),
-    };
-    command_list->ResourceBarrier(std::size(barriers), barriers);
+    context->PushUavBarrier(mip_chain.Get());
+    context->PushTransitionBarrier(mip_chain.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
 
     // Other iterations using mip chain texture.
     for (int i = 1; i < iterations; i++) {
         width = NextMipSize(width);
         height = NextMipSize(height);
 
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(mip_chain.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
-		command_list->ResourceBarrier(1, &barrier);
+		context->PushTransitionBarrier(mip_chain.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
+		context->SubmitBarriers();
 
-        constant_buffer.input_descriptor = descriptor_start + i * 2;
-        constant_buffer.output_descriptor = descriptor_start + (i + 1) * 2 + 1;
+        constant_buffer.input_descriptor = descriptors[i * 2];
+        constant_buffer.output_descriptor = descriptors[(i + 1) * 2 + 1];
 
-		command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
-		command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
+		context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+		context->command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 
-		CD3DX12_RESOURCE_BARRIER barriers[] = {
-			CD3DX12_RESOURCE_BARRIER::UAV(mip_chain.Get()),
-			CD3DX12_RESOURCE_BARRIER::Transition(mip_chain.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i),
-		};
-		command_list->ResourceBarrier(std::size(barriers), barriers);
+		context->PushUavBarrier(mip_chain.Get());
+		context->PushTransitionBarrier(mip_chain.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i);
     }
 
     struct {
@@ -135,40 +129,36 @@ void Bloom::Execute(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuff
     } upsample_constant_buffer;
 
     // Upsample and reconstruct.
-    command_list->SetPipelineState(this->upsample_pipeline_state.Get());
+    context->command_list->SetPipelineState(this->upsample_pipeline_state.Get());
     for (int i = iterations - 1; i > 0; i--) {
 		width = MipSize(input_desc.Width, i);
 		height = MipSize(input_desc.Height, i);
 
-		upsample_constant_buffer.input_descriptor = descriptor_start + (i + 1) * 2;
-		upsample_constant_buffer.output_descriptor = descriptor_start + i * 2 + 1;
+		upsample_constant_buffer.input_descriptor = descriptors[(i + 1) * 2];
+		upsample_constant_buffer.output_descriptor = descriptors[i * 2 + 1];
 		upsample_constant_buffer.input_scale = 1.0f;
 		upsample_constant_buffer.output_scale = 0.0f;
 
-		// TODO: Consolidate these barriers into one.
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(mip_chain.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i - 1);
-		command_list->ResourceBarrier(1, &barrier);
+		context->PushTransitionBarrier(mip_chain.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i - 1);
+		context->SubmitBarriers();
 
-		command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&upsample_constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
-		command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
-		CD3DX12_RESOURCE_BARRIER barriers[] = {
-			CD3DX12_RESOURCE_BARRIER::UAV(mip_chain.Get()),
-			CD3DX12_RESOURCE_BARRIER::Transition(mip_chain.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i - 1),
-		};
-		command_list->ResourceBarrier(std::size(barriers), barriers);
+		context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&upsample_constant_buffer));
+		context->command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
+
+		context->PushUavBarrier(mip_chain.Get());
+		context->PushTransitionBarrier(mip_chain.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i - 1);
     }
 
     width = input_desc.Width;
     height = input_desc.Height;
 
-    upsample_constant_buffer.input_descriptor = descriptor_start + 2;
-    upsample_constant_buffer.output_descriptor = descriptor_start + 1;
+    upsample_constant_buffer.input_descriptor = descriptors[2];
+    upsample_constant_buffer.output_descriptor = descriptors[1];
     upsample_constant_buffer.input_scale = strength;
 	upsample_constant_buffer.output_scale = 1.0f;
 
-    barrier = CD3DX12_RESOURCE_BARRIER::Transition(input, input_resource_states, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0);
-    command_list->ResourceBarrier(1, &barrier);
-    command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&upsample_constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
-    command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
-
+    context->PushTransitionBarrier(input, input_resource_states, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0);
+    context->SubmitBarriers();
+    context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&upsample_constant_buffer));
+    context->command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 }

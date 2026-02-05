@@ -9,7 +9,7 @@
 #include "DirectXHelpers.h"
 #include "GpuResources.h"
 
-void ToneMapper::Create(ID3D12Device* device, GpuResources* resources)
+void ToneMapper::Create(ID3D12Device* device)
 {
 	HRESULT result;
 
@@ -68,7 +68,7 @@ void ToneMapper::Create(ID3D12Device* device, GpuResources* resources)
 	GpuResources::FreeShader(pipeline_desc.PS);
 }
 
-void ToneMapper::Run(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, D3D12_GPU_DESCRIPTOR_HANDLE input_descriptor, const Config* config)
+void ToneMapper::Run(CommandContext* context, D3D12_GPU_DESCRIPTOR_HANDLE input_descriptor, const Config* config)
 {
 	struct {
 		int tonemapper;
@@ -83,11 +83,11 @@ void ToneMapper::Run(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuf
 		.exposure = config->exposure,
 		.frame = config->frame,
 	};
-	D3D12_GPU_VIRTUAL_ADDRESS constant_buffer_gpu = allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+	D3D12_GPU_VIRTUAL_ADDRESS constant_buffer_gpu = context->CreateConstantBuffer(&constant_buffer);
 
-	command_list->SetPipelineState(this->pipeline_state.Get());
-	command_list->SetGraphicsRootSignature(this->root_signature.Get());
-	command_list->SetGraphicsRootDescriptorTable(ROOT_PARAMETER_INPUT, input_descriptor);
-	command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONFIG, constant_buffer_gpu);
-	command_list->DrawInstanced(3, 1, 0, 0);
+	context->command_list->SetPipelineState(this->pipeline_state.Get());
+	context->command_list->SetGraphicsRootSignature(this->root_signature.Get());
+	context->command_list->SetGraphicsRootDescriptorTable(ROOT_PARAMETER_INPUT, input_descriptor);
+	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONFIG, constant_buffer_gpu);
+	context->command_list->DrawInstanced(3, 1, 0, 0);
 }

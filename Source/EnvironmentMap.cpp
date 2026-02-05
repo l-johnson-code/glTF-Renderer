@@ -81,7 +81,7 @@ void EnvironmentMap::LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const 
     }
 }
 
-void EnvironmentMap::CreateEnvironmentMap(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* equirectangular_image, Map* map)
+void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, ID3D12Resource* equirectangular_image, Map* map)
 {
     HRESULT result = S_OK;
     D3D12_RESOURCE_DESC equirectangular_desc = equirectangular_image->GetDesc();
@@ -127,10 +127,10 @@ void EnvironmentMap::CreateEnvironmentMap(ID3D12GraphicsCommandList* command_lis
 	map->ggx_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->ggx.Get(), &cube_desc);
 	map->importance_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->importance.Get(), nullptr);
 
-    GenerateCubemap(command_list, allocator, transient_descriptors, equirectangular_image, map->cube.Get());
-    GenerateGgxCube(command_list, allocator, transient_descriptors, map->cube_srv_descriptor, map->ggx.Get());
-    GenerateDiffuseCube(command_list, allocator, transient_descriptors, map->cube_srv_descriptor, map->diffuse.Get());
-    GenerateImportanceMap(command_list, allocator, transient_descriptors, map->cube_srv_descriptor, map->importance.Get());
+    GenerateCubemap(context, equirectangular_image, map->cube.Get());
+    GenerateGgxCube(context, map->cube_srv_descriptor, map->ggx.Get());
+    GenerateDiffuseCube(context, map->cube_srv_descriptor, map->diffuse.Get());
+    GenerateImportanceMap(context, map->cube_srv_descriptor, map->importance.Get());
 }
 
 void EnvironmentMap::DestroyEnvironmentMap(Map* map)
@@ -294,38 +294,38 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
 	}
 }
 
-void EnvironmentMap::GenerateCubemap(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* equirectangular_image, ID3D12Resource* cubemap)
+void EnvironmentMap::GenerateCubemap(CommandContext* context, ID3D12Resource* equirectangular_image, ID3D12Resource* cubemap)
 {
     // Create descriptors.
-    int input_descriptor = transient_descriptors->Allocate(1);
-    transient_descriptors->CreateSrv(input_descriptor, equirectangular_image, nullptr);
+    DescriptorSpan input_descriptor = context->AllocateDescriptors(1);
+    context->CreateSrv(input_descriptor[0], equirectangular_image, nullptr);
 
     D3D12_RESOURCE_DESC cube_desc = cubemap->GetDesc();
-    int mip_descriptor_start = transient_descriptors->Allocate(cube_desc.MipLevels);
+    DescriptorSpan mip_descriptors = context->AllocateDescriptors(cube_desc.MipLevels);
     for (int i = 0; i < cube_desc.MipLevels; i++) {
 		CD3DX12_UNORDERED_ACCESS_VIEW_DESC desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2DArray(cube_desc.Format, 6, 0, i);
-		transient_descriptors->CreateUav(mip_descriptor_start + i, cubemap, nullptr, &desc);
+		context->CreateUav(mip_descriptors[i], cubemap, nullptr, &desc);
 	}
 
     // Convert the equirectangular map to a cubemap.
-    command_list->SetComputeRootSignature(this->root_signature.Get());
-    command_list->SetPipelineState(this->generate_cubemap_pipeline_state.Get());
+    context->command_list->SetComputeRootSignature(this->root_signature.Get());
+    context->command_list->SetPipelineState(this->generate_cubemap_pipeline_state.Get());
     struct {
         int environment;
         int cube;
     } constant_buffer;
 
     constant_buffer = {
-        .environment = input_descriptor,
-        .cube = mip_descriptor_start,
+        .environment = input_descriptor[0],
+        .cube = mip_descriptors[0],
     };
-    command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+    context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
     uint32_t thread_groups_x = ((cube_desc.Width * 6) + 7) / 8;
     uint32_t thread_groups_y = (cube_desc.Height + 7) / 8;
-    command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
+    context->command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
 
     // Generate the mips.
-    command_list->SetPipelineState(this->generate_cube_mip_pipeline_state.Get());
+    context->command_list->SetPipelineState(this->generate_cube_mip_pipeline_state.Get());
     for (int i = 1; i < cube_desc.MipLevels; i++) {
         struct {
             int input_descriptor;
@@ -334,34 +334,34 @@ void EnvironmentMap::GenerateCubemap(ID3D12GraphicsCommandList* command_list, Cp
 
         int output_width = cube_desc.Width >> i;
         constant_buffer = {
-            .input_descriptor = mip_descriptor_start + i - 1,
-            .output_descriptor = mip_descriptor_start + i,
+            .input_descriptor = mip_descriptors[i - 1],
+            .output_descriptor = mip_descriptors[i],
         };
 
-        command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+        context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
         uint32_t thread_groups_x = ((output_width * 6) + 7) / 8;
         uint32_t thread_groups_y = (output_width + 7) / 8;
-        command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
+        context->command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
 
-        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(cubemap);
-        command_list->ResourceBarrier(1, &barrier);
+        context->PushUavBarrier(cubemap);
+        context->SubmitBarriers();
     }
 
-	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(cubemap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	command_list->ResourceBarrier(1, &barrier);
+	context->PushTransitionBarrier(cubemap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	context->SubmitBarriers();
 }
 
-void EnvironmentMap::FilterCube(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, int cubemap_srv_descriptor, Bsdf bsdf, float mip_bias, int num_of_samples, ID3D12Resource* filtered_cube_map)
+void EnvironmentMap::FilterCube(CommandContext* context, int cubemap_srv_descriptor, Bsdf bsdf, float mip_bias, int num_of_samples, ID3D12Resource* filtered_cube_map)
 {
     D3D12_RESOURCE_DESC ggx_cube_desc = filtered_cube_map->GetDesc();
     int mip_count = ggx_cube_desc.MipLevels;
     int resolution = ggx_cube_desc.Width;
     
 	// Create descriptors for each mip.
-	int mip_descriptors_start = transient_descriptors->Allocate(mip_count);
+	DescriptorSpan mip_descriptors = context->AllocateDescriptors(mip_count);
 	for (int i = 0; i < mip_count; i++) {
         CD3DX12_UNORDERED_ACCESS_VIEW_DESC desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2DArray(DXGI_FORMAT_R16G16B16A16_FLOAT, 6, 0, i);
-		transient_descriptors->CreateUav(mip_descriptors_start + i, filtered_cube_map, nullptr, &desc);
+		context->CreateUav(mip_descriptors[i], filtered_cube_map, nullptr, &desc);
 	}
     
     // Generate the mips.
@@ -379,64 +379,65 @@ void EnvironmentMap::FilterCube(ID3D12GraphicsCommandList* command_list, CpuMapp
         .mip_bias = mip_bias,
         .bsdf = bsdf,
     };
-    command_list->SetComputeRootSignature(this->root_signature.Get());
-    command_list->SetPipelineState(this->filter_cube_map_pipeline_state.Get());
+    context->command_list->SetComputeRootSignature(this->root_signature.Get());
+    context->command_list->SetPipelineState(this->filter_cube_map_pipeline_state.Get());
     for (int i = 0; i < mip_count; i++) {
-        constant_buffer.output = mip_descriptors_start + i;
+        constant_buffer.output = mip_descriptors[i];
         constant_buffer.roughness = MipToRoughness(i, mip_count);
-        command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+        context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
         uint32_t thread_groups_x = (resolution * 6 + 7) / 8;
         uint32_t thread_groups_y = (resolution + 7) / 8;
-        command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
+        context->command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
         resolution /= 2;
+        // TODO: Are there missing UAV barriers here?
     }
     
-    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(filtered_cube_map, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    command_list->ResourceBarrier(1, &barrier);
+    context->PushTransitionBarrier(filtered_cube_map, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    context->SubmitBarriers();
 }
 
-void EnvironmentMap::GenerateGgxCube(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, int cubemap_srv_descriptor, ID3D12Resource* ggx_cube_map)
+void EnvironmentMap::GenerateGgxCube(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* ggx_cube_map)
 {
-    FilterCube(command_list, allocator, transient_descriptors, cubemap_srv_descriptor, BSDF_GGX, 2, 256, ggx_cube_map);
+    FilterCube(context, cubemap_srv_descriptor, BSDF_GGX, 2, 256, ggx_cube_map);
 }
 
-void EnvironmentMap::GenerateDiffuseCube(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, int cubemap_srv_descriptor, ID3D12Resource* diffuse_cube_map)
+void EnvironmentMap::GenerateDiffuseCube(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* diffuse_cube_map)
 {
-    FilterCube(command_list, allocator, transient_descriptors, cubemap_srv_descriptor, BSDF_DIFFUSE, 3, 512, diffuse_cube_map);
+    FilterCube(context, cubemap_srv_descriptor, BSDF_DIFFUSE, 3, 512, diffuse_cube_map);
 }
 
-void EnvironmentMap::GenerateImportanceMap(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, int cubemap_srv_descriptor, ID3D12Resource* importance_map)
+void EnvironmentMap::GenerateImportanceMap(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* importance_map)
 {
     D3D12_RESOURCE_DESC importance_map_desc = importance_map->GetDesc();
 
 	// Create descriptors for each mip.
     int mip_count = importance_map_desc.MipLevels;
-	int mip_descriptors_start = transient_descriptors->Allocate(mip_count);
+	DescriptorSpan mip_descriptors = context->AllocateDescriptors(mip_count);
 	for (int i = 0; i < mip_count; i++) {
 		CD3DX12_UNORDERED_ACCESS_VIEW_DESC desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT, i);
-		transient_descriptors->CreateUav(mip_descriptors_start + i, importance_map, nullptr, &desc);
+		context->CreateUav(mip_descriptors[i], importance_map, nullptr, &desc);
 	}
 
     // Generate first mip level.
-    command_list->SetComputeRootSignature(this->root_signature.Get());
-    command_list->SetPipelineState(this->generate_importance_map_pipeline_state.Get());
+    context->command_list->SetComputeRootSignature(this->root_signature.Get());
+    context->command_list->SetPipelineState(this->generate_importance_map_pipeline_state.Get());
     struct {
         int environment_cube_map_srv;
         int environment_importance_map_uav;
     } constant_buffer;
     constant_buffer = {
         .environment_cube_map_srv = cubemap_srv_descriptor,
-        .environment_importance_map_uav = mip_descriptors_start,
+        .environment_importance_map_uav = mip_descriptors[0],
     };
-    command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+    context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
     uint32_t thread_groups = (importance_map_desc.Width + 7) / 8;
-    command_list->Dispatch(thread_groups, thread_groups, 1);
+    context->command_list->Dispatch(thread_groups, thread_groups, 1);
     
-    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(importance_map);
-    command_list->ResourceBarrier(1, &barrier);
+    context->PushUavBarrier(importance_map);
+    context->SubmitBarriers();
 
     // Generate all mip levels.
-    command_list->SetPipelineState(this->generate_importance_map_level_pipeline_state.Get());
+    context->command_list->SetPipelineState(this->generate_importance_map_level_pipeline_state.Get());
     for (int i = 1; i < importance_map_desc.MipLevels; i++) {
         int output_resolution = importance_map_desc.Width >> i;
         struct {
@@ -444,17 +445,17 @@ void EnvironmentMap::GenerateImportanceMap(ID3D12GraphicsCommandList* command_li
             int output_uav;
         } constant_buffer;
         constant_buffer = {
-            .input_uav = mip_descriptors_start + i - 1,
-            .output_uav = mip_descriptors_start + i,
+            .input_uav = mip_descriptors[i - 1],
+            .output_uav = mip_descriptors[i],
         };
-        command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+        context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
         uint32_t thread_groups = (output_resolution + 7) / 8;
-        command_list->Dispatch(thread_groups, thread_groups, 1);
+        context->command_list->Dispatch(thread_groups, thread_groups, 1);
 
-        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(importance_map);
-        command_list->ResourceBarrier(1, &barrier);
+        context->PushUavBarrier(importance_map);
+        context->SubmitBarriers();
     }
 
-    barrier = CD3DX12_RESOURCE_BARRIER::Transition(importance_map, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	command_list->ResourceBarrier(1, &barrier);
+    context->PushTransitionBarrier(importance_map, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	context->SubmitBarriers();
 }

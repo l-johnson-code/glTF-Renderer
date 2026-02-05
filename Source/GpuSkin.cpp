@@ -9,7 +9,6 @@
 
 #include "Config.h"
 #include "GpuResources.h"
-#include "BufferAllocator.h"
 
 void GpuSkin::Create(ID3D12Device* device)
 {
@@ -51,20 +50,20 @@ void GpuSkin::Create(ID3D12Device* device)
 	GpuResources::FreeShader(pipeline_desc.CS);
 }
 
-void GpuSkin::Bind(ID3D12GraphicsCommandList* command_list)
+void GpuSkin::Bind(CommandContext* context)
 {
-    command_list->SetPipelineState(this->pipeline_state.Get());
-    command_list->SetComputeRootSignature(this->root_signature.Get());
+    context->command_list->SetPipelineState(this->pipeline_state.Get());
+    context->command_list->SetComputeRootSignature(this->root_signature.Get());
 }
 
-void GpuSkin::Run(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, Mesh* input, DynamicMesh* output, D3D12_GPU_VIRTUAL_ADDRESS bones, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights)
+void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D12_GPU_VIRTUAL_ADDRESS bones, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights)
 {
-	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+	context->PushTransitionBarrier(
 		output->resource.Get(),
 		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
 		D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 	);
-	command_list->ResourceBarrier(1, &barrier);
+	context->SubmitBarriers();
 
 	struct {
 		uint32_t num_of_vertices;
@@ -99,29 +98,27 @@ void GpuSkin::Run(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer
 		constant_buffer.input_mesh_flags &= !Mesh::FLAG_JOINT_WEIGHT;
 	}
 
-    command_list->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+    context->command_list->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
 
-    command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_VERTEX_INPUT, input->position.view.BufferLocation);
-    command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_NORMAL_INPUT, input->normal.view.BufferLocation);
-    command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_TANGENT_INPUT, input->tangent.view.BufferLocation);
+    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_VERTEX_INPUT, input->position.view.BufferLocation);
+    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_NORMAL_INPUT, input->normal.view.BufferLocation);
+    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_TANGENT_INPUT, input->tangent.view.BufferLocation);
 	
-    command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_VERTEX_OUTPUT, output->GetCurrentPositionBuffer()->view.BufferLocation);
-    command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_NORMAL_OUTPUT, output->normal.view.BufferLocation);
-    command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_TANGENT_OUTPUT, output->tangent.view.BufferLocation);
+    context->command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_VERTEX_OUTPUT, output->GetCurrentPositionBuffer()->view.BufferLocation);
+    context->command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_NORMAL_OUTPUT, output->normal.view.BufferLocation);
+    context->command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_TANGENT_OUTPUT, output->tangent.view.BufferLocation);
 
-    command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_SKIN, input->joint_weight.view.BufferLocation);
-    command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_BONES, bones);
+    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_SKIN, input->joint_weight.view.BufferLocation);
+    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_BONES, bones);
 
-    command_list->Dispatch((constant_buffer.num_of_vertices + THREAD_GROUP_SIZE - 1) / THREAD_GROUP_SIZE, 1, 1);
+    context->command_list->Dispatch((constant_buffer.num_of_vertices + THREAD_GROUP_SIZE - 1) / THREAD_GROUP_SIZE, 1, 1);
 
 	// Transition output from UAV to vertex buffer and shader resource view state.
-	CD3DX12_RESOURCE_BARRIER barriers[] = {
-		CD3DX12_RESOURCE_BARRIER::UAV(output->resource.Get()),
-		CD3DX12_RESOURCE_BARRIER::Transition(
-			output->resource.Get(),
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 
-			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-		)
-	};
-	command_list->ResourceBarrier(std::size(barriers), barriers);
+	context->PushUavBarrier(output->resource.Get());
+	context->PushTransitionBarrier(
+		output->resource.Get(),
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 
+		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	);
+	context->SubmitBarriers();
 }

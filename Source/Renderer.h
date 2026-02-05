@@ -39,7 +39,6 @@ public:
 	};
 
 	Microsoft::WRL::ComPtr<ID3D12Device5> device;
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> graphics_command_list;
 	GpuResources resources;
 	UploadBuffer upload_buffer;
 	EnvironmentMap environment_map;
@@ -203,7 +202,9 @@ private:
 
 	// Command submission.
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> graphics_command_queue;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> graphics_command_list;
 	MultiBuffer<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, Config::FRAME_COUNT> graphics_command_allocators;
+	std::vector<D3D12_RESOURCE_BARRIER> resource_barriers;
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence;
 	MultiBuffer<int, Config::FRAME_COUNT> fence_values;
 	uint64_t current_frame = 0;
@@ -222,7 +223,7 @@ private:
 	void EndFrame();
 
 	// Skinning.
-	void PerformSkinning(Gltf* gltf, int scene, CpuMappedLinearBuffer* frame_allocator);
+	void PerformSkinning(CommandContext* context, Gltf* gltf, int scene);
 
 	// UI.
 	void InitializeImGui();

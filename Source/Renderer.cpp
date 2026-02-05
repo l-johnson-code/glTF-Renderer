@@ -158,7 +158,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 
 	CreateRenderTargets();
 	gpu_skinner.Create(this->device.Get());
-	tone_mapper.Create(this->device.Get(), &this->resources);
+	tone_mapper.Create(this->device.Get());
 	environment_map.Init(this->device.Get(), &this->resources.cbv_uav_srv_dynamic_allocator);
 	resources.LoadLookupTables(&this->upload_buffer);
 
@@ -288,6 +288,9 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	CbvSrvUavStack* descriptor_allocator = &this->resources.cbv_uav_srv_frame_allocators.Current();
 	descriptor_allocator->Reset();
 
+	CommandContext command_context;
+	command_context.Init(this->graphics_command_list.Get(), descriptor_allocator, frame_allocator, &this->resource_barriers);
+
 	// Set descriptor heaps.
 	ID3D12DescriptorHeap* descriptor_heaps[] = {
 		this->resources.cbv_uav_srv_allocator.DescriptorHeap(),
@@ -297,7 +300,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 
 	// Generate environment map.
 	if (environment_map.equirectangular_image.Get()) {
-		environment_map.CreateEnvironmentMap(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, environment_map.equirectangular_image.Get(), &map);
+		environment_map.CreateEnvironmentMap(&command_context, environment_map.equirectangular_image.Get(), &map);
 		deferred_release.Current().push_back(environment_map.equirectangular_image);
 		environment_map.equirectangular_image.Reset();
 		environment_map_loaded = true;
@@ -306,8 +309,8 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	GatherLights(gltf, scene, frame_allocator);
 	GatherMaterials(gltf, frame_allocator);
 
-	gpu_skinner.Bind(this->graphics_command_list.Get());
-	PerformSkinning(gltf, scene, frame_allocator);
+	gpu_skinner.Bind(&command_context);
+	PerformSkinning(&command_context, gltf, scene);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 		Rasterizer::ExecuteParams params = {
@@ -321,7 +324,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.output_rtv= this->display_rtv,
         	.output_resource = this->display.Get(),
 		};
-		rasterizer.DrawScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, &settings->raster, &params);
+		rasterizer.DrawScene(&command_context, &settings->raster, &params);
 	} else {
 		Pathtracer::ExecuteParams params = {
 			.gltf = gltf,
@@ -337,7 +340,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.output_descriptor = this->display_uav,
         	.output_resource = this->display.Get(),
 		};
-		pathtracer.PathtraceScene(this->graphics_command_list.Get(), frame_allocator, descriptor_allocator, &settings->pathtracer, &params);
+		pathtracer.PathtraceScene(&command_context, &settings->pathtracer, &params);
 	}
 
 	CD3DX12_RECT scissor_rect(0, 0, this->display_width, this->display_height);
@@ -351,7 +354,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	this->graphics_command_list->OMSetRenderTargets(1, &backbuffer_rtv, false, nullptr);
 
 	// Tone mapping.
-	this->tone_mapper.Run(this->graphics_command_list.Get(), frame_allocator, this->resources.cbv_uav_srv_dynamic_allocator.GetGpuHandle(this->display_uav), &this->settings.tone_mapper_config);
+	this->tone_mapper.Run(&command_context, this->resources.cbv_uav_srv_dynamic_allocator.GetGpuHandle(this->display_uav), &this->settings.tone_mapper_config);
 	DrawImGui();
 
 	EndFrame();
@@ -381,7 +384,7 @@ void Renderer::CreateRenderTargets()
 	}
 }
 
-void Renderer::PerformSkinning(Gltf* gltf, int scene, CpuMappedLinearBuffer* frame_allocator)
+void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf, int scene)
 {
 	gltf->TraverseScene(scene, [&](Gltf* gltf, int node_id) {
 		const Gltf::Node& node = gltf->nodes[node_id];
@@ -393,7 +396,7 @@ void Renderer::PerformSkinning(Gltf* gltf, int scene, CpuMappedLinearBuffer* fra
 			D3D12_GPU_VIRTUAL_ADDRESS gpu_bones = 0;
 			if (skinned) {
 				Gltf::Skin& skin = gltf->skins[node.skin_id];
-				GpuSkin::Bone* bones = (GpuSkin::Bone*)frame_allocator->Allocate(sizeof(bones[0]) * skin.joints.size(), D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT, &gpu_bones);
+				GpuSkin::Bone* bones = (GpuSkin::Bone*)context->Allocate(sizeof(bones[0]) * skin.joints.size(), D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT, &gpu_bones);
 				for (int i = 0; i < skin.joints.size(); i++) {
 					int joint = skin.joints[i];
 					bones[i].transform = glm::affineInverse(node.global_transform) * gltf->nodes[joint].global_transform * skin.inverse_bind_poses[i];
@@ -428,8 +431,7 @@ void Renderer::PerformSkinning(Gltf* gltf, int scene, CpuMappedLinearBuffer* fra
 				}
 
 				gpu_skinner.Run(
-					this->graphics_command_list.Get(),
-					frame_allocator,
+					context,
 					&primitive[i].mesh,
 					&dynamic[i],
 					skinned ? gpu_bones : 0,

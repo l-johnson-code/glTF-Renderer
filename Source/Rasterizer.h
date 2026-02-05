@@ -30,7 +30,7 @@ class Rasterizer {
 
     void Init(ID3D12Device* device, RtvPool* rtv_allocator, DsvPool* dsv_allocator, CbvSrvUavPool* cbv_uav_srv_allocator, uint32_t width, uint32_t height);
     void Resize(uint32_t width, uint32_t height);
-	void DrawScene(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, CbvSrvUavStack* descriptor_allocator, const Settings* settings, const ExecuteParams* execute_params);
+	void DrawScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
 
     private:
@@ -74,8 +74,8 @@ class Rasterizer {
     Bloom bloom;
 
     // Forward renderer.
-	void SetViewportAndScissorRects(ID3D12GraphicsCommandList* command_list, int width, int height);
+	void SetViewportAndScissorRects(CommandContext* context, int width, int height);
 	void GatherRenderObjects(Gltf* gltf, int scene);
 	void SortRenderObjects(glm::vec3 camera_pos);
-	void DrawRenderObjects(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* frame_allocator, Gltf* gltf, const std::vector<RenderObject>& render_objects);
+	void DrawRenderObjects(CommandContext* context, Gltf* gltf, const std::vector<RenderObject>& render_objects);
 };

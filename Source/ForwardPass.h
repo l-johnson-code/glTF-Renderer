@@ -3,7 +3,7 @@
 #include <directx/d3d12.h>
 #include <wrl/client.h>
 
-#include "BufferAllocator.h"
+#include "CommandContext.h"
 #include "Mesh.h"
 
 class ForwardPass {
@@ -45,13 +45,13 @@ class ForwardPass {
 
     void Create(ID3D12Device* device);
     void Destroy();
-    void SetRootSignature(ID3D12GraphicsCommandList* command_list);
-    void SetConfig(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, const Config* config);
-    void BindRenderTargets(ID3D12GraphicsCommandList* command_list, D3D12_CPU_DESCRIPTOR_HANDLE render, D3D12_CPU_DESCRIPTOR_HANDLE velocity, D3D12_CPU_DESCRIPTOR_HANDLE depth);
-    void BindPipeline(ID3D12GraphicsCommandList* command_list, uint32_t pipeline_flags);
-    void Draw(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, Mesh* model, int material_id, glm::mat4x4 model_to_world, glm::mat4x4 model_to_world_normals, glm::mat4x4 previous_model_to_world, DynamicMesh* dynamic_mesh = nullptr);
-    void DrawBackground(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, glm::mat4x4 clip_to_world, float environment_intensity, int environment_descriptor);
-    void GenerateTransmissionMips(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* input, ID3D12Resource* output, int sample_pattern);
+    void SetRootSignature(CommandContext* context);
+    void SetConfig(CommandContext* context, const Config* config);
+    void BindRenderTargets(CommandContext* context, D3D12_CPU_DESCRIPTOR_HANDLE render, D3D12_CPU_DESCRIPTOR_HANDLE velocity, D3D12_CPU_DESCRIPTOR_HANDLE depth);
+    void BindPipeline(CommandContext* context, uint32_t pipeline_flags);
+    void Draw(CommandContext* context, Mesh* model, int material_id, glm::mat4x4 model_to_world, glm::mat4x4 model_to_world_normals, glm::mat4x4 previous_model_to_world, DynamicMesh* dynamic_mesh = nullptr);
+    void DrawBackground(CommandContext* context, glm::mat4x4 clip_to_world, float environment_intensity, int environment_descriptor);
+    void GenerateTransmissionMips(CommandContext* context, ID3D12Resource* input, ID3D12Resource* output, int sample_pattern);
 
     private:
 

@@ -127,12 +127,12 @@ void ForwardPass::Destroy()
 	}
 }
 
-void ForwardPass::SetRootSignature(ID3D12GraphicsCommandList* command_list)
+void ForwardPass::SetRootSignature(CommandContext* context)
 {
-	command_list->SetGraphicsRootSignature(this->root_signature.Get());
+	context->command_list->SetGraphicsRootSignature(this->root_signature.Get());
 }
 
-void ForwardPass::SetConfig(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, const Config* config)
+void ForwardPass::SetConfig(CommandContext* context, const Config* config)
 {
 	struct {
 		alignas(16) glm::mat4x4 world_to_clip;
@@ -168,29 +168,29 @@ void ForwardPass::SetConfig(ID3D12GraphicsCommandList* command_list, CpuMappedLi
 		.transmission_descriptor = config->transmission_descriptor,
 	};
 	
-	command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME, allocator->Copy(&cb_vertex, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
-	command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_FRAME, allocator->Copy(&cb_pixel, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
-	command_list->SetGraphicsRootShaderResourceView(ROOT_PARAMETER_SRV_LIGHTS, config->lights);
-	command_list->SetGraphicsRootShaderResourceView(ROOT_PARAMETER_SRV_MATERIALS, config->materials);
+	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME, context->CreateConstantBuffer(&cb_vertex));
+	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_FRAME, context->CreateConstantBuffer(&cb_pixel));
+	context->command_list->SetGraphicsRootShaderResourceView(ROOT_PARAMETER_SRV_LIGHTS, config->lights);
+	context->command_list->SetGraphicsRootShaderResourceView(ROOT_PARAMETER_SRV_MATERIALS, config->materials);
 }
 
-void ForwardPass::BindRenderTargets(ID3D12GraphicsCommandList* command_list, D3D12_CPU_DESCRIPTOR_HANDLE render, D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors, D3D12_CPU_DESCRIPTOR_HANDLE depth)
+void ForwardPass::BindRenderTargets(CommandContext* context, D3D12_CPU_DESCRIPTOR_HANDLE render, D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors, D3D12_CPU_DESCRIPTOR_HANDLE depth)
 {
     D3D12_CPU_DESCRIPTOR_HANDLE rtv_handles[] = {
         render,
 		motion_vectors,
     };
-	command_list->OMSetRenderTargets(2, rtv_handles, false, &depth);
+	context->command_list->OMSetRenderTargets(2, rtv_handles, false, &depth);
 }
 
-void ForwardPass::BindPipeline(ID3D12GraphicsCommandList* command_list, uint32_t flags)
+void ForwardPass::BindPipeline(CommandContext* context, uint32_t flags)
 {
 	assert(flags < std::size(pipeline_states));
 	flags &= PIPELINE_FLAGS_BITMASK;
-    command_list->SetPipelineState(pipeline_states[flags].Get());
+    context->command_list->SetPipelineState(pipeline_states[flags].Get());
 }
 
-void ForwardPass::Draw(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, Mesh* model, int material_id, glm::mat4x4 model_to_world, glm::mat4x4 model_to_world_normals, glm::mat4x4 previous_model_to_world, DynamicMesh* dynamic_mesh)
+void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, glm::mat4x4 model_to_world, glm::mat4x4 model_to_world_normals, glm::mat4x4 previous_model_to_world, DynamicMesh* dynamic_mesh)
 {
     // Write constant buffers.
 	struct {
@@ -204,7 +204,7 @@ void ForwardPass::Draw(ID3D12GraphicsCommandList* command_list, CpuMappedLinearB
 		.model_to_world_normals = glm::inverseTranspose(model_to_world),
 		.previous_model_to_world = previous_model_to_world,
 	};
-	command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL, allocator->Copy(&vertex_per_model, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL, context->CreateConstantBuffer(&vertex_per_model));
 	
 	struct {
 		uint32_t mesh_flags;
@@ -217,10 +217,10 @@ void ForwardPass::Draw(ID3D12GraphicsCommandList* command_list, CpuMappedLinearB
 		.material_index = material_id,
     	.model_to_world = model_to_world,
 	};
-	command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL, allocator->Copy(&pixel_per_model, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL, context->CreateConstantBuffer(&pixel_per_model));
 
 	if (model->topology != this->current_topology) {
-		command_list->IASetPrimitiveTopology(model->topology);
+		context->command_list->IASetPrimitiveTopology(model->topology);
 		this->current_topology = model->topology;
 	}
 	
@@ -235,13 +235,13 @@ void ForwardPass::Draw(ID3D12GraphicsCommandList* command_list, CpuMappedLinearB
 		// TODO: We don't always want to use the previous position buffer, such as on a new frame.
 		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_POSITION) ? dynamic_mesh->GetPreviousPositionBuffer()->view : model->position.view
 	};
-	command_list->IASetVertexBuffers(0, std::size(vertex_buffers), vertex_buffers);
+	context->command_list->IASetVertexBuffers(0, std::size(vertex_buffers), vertex_buffers);
 
     if (model->num_of_indices > 0) {
-        command_list->IASetIndexBuffer(&model->index.view);
-        command_list->DrawIndexedInstanced(model->num_of_indices, 1, 0, 0, 0);
+        context->command_list->IASetIndexBuffer(&model->index.view);
+        context->command_list->DrawIndexedInstanced(model->num_of_indices, 1, 0, 0, 0);
     } else {
-        command_list->DrawInstanced(model->num_of_vertices, 1, 0, 0);
+        context->command_list->DrawInstanced(model->num_of_vertices, 1, 0, 0);
     }
 }
 
@@ -311,11 +311,11 @@ void ForwardPass::CreateBackgroundRenderer(ID3D12Device* device)
 	GpuResources::FreeShader(pipeline_desc.PS);
 }
 
-void ForwardPass::DrawBackground(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, glm::mat4x4 clip_to_world, float environment_intensity, int environment_descriptor)
+void ForwardPass::DrawBackground(CommandContext* context, glm::mat4x4 clip_to_world, float environment_intensity, int environment_descriptor)
 {
-	command_list->SetGraphicsRootSignature(this->background_root_signature.Get());
-    command_list->SetPipelineState(this->background_pipeline_state.Get());
-	command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->command_list->SetGraphicsRootSignature(this->background_root_signature.Get());
+    context->command_list->SetPipelineState(this->background_pipeline_state.Get());
+	context->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	struct {
 		glm::mat4x4 clip_to_world;
@@ -324,7 +324,7 @@ void ForwardPass::DrawBackground(ID3D12GraphicsCommandList* command_list, CpuMap
 	cb_vertex = {
 		.clip_to_world = clip_to_world,
 	};
-	command_list->SetGraphicsRootConstantBufferView(0, allocator->Copy(&cb_vertex, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+	context->command_list->SetGraphicsRootConstantBufferView(0, context->CreateConstantBuffer(&cb_vertex));
 	
 	struct {
     	float environment_intensity;
@@ -335,40 +335,36 @@ void ForwardPass::DrawBackground(ID3D12GraphicsCommandList* command_list, CpuMap
 		.environment_intensity = environment_intensity,
 		.environment_descriptor = environment_descriptor,
 	};
-	command_list->SetGraphicsRootConstantBufferView(1, allocator->Copy(&cb_pixel, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
+	context->command_list->SetGraphicsRootConstantBufferView(1, context->CreateConstantBuffer(&cb_pixel));
 
-    command_list->DrawInstanced(3, 1, 0, 0);
+    context->command_list->DrawInstanced(3, 1, 0, 0);
 }
 
-void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_list, CpuMappedLinearBuffer* allocator, CbvSrvUavStack* transient_descriptors, ID3D12Resource* input, ID3D12Resource* output, int sample_pattern)
+void ForwardPass::GenerateTransmissionMips(CommandContext* context, ID3D12Resource* input, ID3D12Resource* output, int sample_pattern)
 {
 	// Create mip 0.
-	{
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
-		command_list->ResourceBarrier(1, &barrier);
-	}
+	context->PushTransitionBarrier(output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
+	context->SubmitBarriers();
+
 	const CD3DX12_TEXTURE_COPY_LOCATION copy_dest(output);
 	const CD3DX12_TEXTURE_COPY_LOCATION copy_source(input);
-	command_list->CopyTextureRegion(&copy_dest, 0, 0, 0, &copy_source, nullptr);
-	{
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(output, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
-		command_list->ResourceBarrier(1, &barrier);
-	}
+	context->command_list->CopyTextureRegion(&copy_dest, 0, 0, 0, &copy_source, nullptr);
+	context->PushTransitionBarrier(output, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
 
 	// Create descriptors.
 	D3D12_RESOURCE_DESC output_desc = output->GetDesc();
-	int descriptor_start = transient_descriptors->Allocate(output_desc.MipLevels * 2);
-	assert(descriptor_start != -1);
+	DescriptorSpan descriptors = context->AllocateDescriptors(output_desc.MipLevels * 2);
+	assert(!descriptors.IsEmpty());
 	for (int i = 0; i < output_desc.MipLevels; i++) {
 		const CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(output_desc.Format, 1, i);
 		const CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(output_desc.Format, i);
-		transient_descriptors->CreateSrv(descriptor_start + 2 * i, output, &srv_desc);
-		transient_descriptors->CreateUav(descriptor_start + 2 * i + 1, output, nullptr, &uav_desc);
+		context->CreateSrv(descriptors[2 * i], output, &srv_desc);
+		context->CreateUav(descriptors[2 * i + 1], output, nullptr, &uav_desc);
 	}
 
 	// Generate the mips.
-	command_list->SetComputeRootSignature(this->transmission_mips_root_signature.Get());
-	command_list->SetPipelineState(this->transmission_mips_pipeline_state.Get());
+	context->command_list->SetComputeRootSignature(this->transmission_mips_root_signature.Get());
+	context->command_list->SetPipelineState(this->transmission_mips_pipeline_state.Get());
 
 	struct {
 		int input_descriptor;
@@ -384,21 +380,18 @@ void ForwardPass::GenerateTransmissionMips(ID3D12GraphicsCommandList* command_li
 		width = std::max(width / 2u, 1u);
 		height = std::max(height / 2u, 1u);
 
-		constant_buffer.input_descriptor = descriptor_start + (i - 1) * 2;
-		constant_buffer.output_descriptor = descriptor_start + i * 2 + 1;
+		constant_buffer.input_descriptor = descriptors[(i - 1) * 2];
+		constant_buffer.output_descriptor = descriptors[i * 2 + 1];
 
-		// TODO: Consolidate these barriers into one.
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
-		command_list->ResourceBarrier(1, &barrier);
+		context->PushTransitionBarrier(output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
+		context->SubmitBarriers();
 
-		command_list->SetComputeRootConstantBufferView(0, allocator->Copy(&constant_buffer, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));
-		command_list->Dispatch((width + 7) / 8, (height + 7) / 8, 1);
-		CD3DX12_RESOURCE_BARRIER barriers[] = {
-			CD3DX12_RESOURCE_BARRIER::UAV(output),
-			CD3DX12_RESOURCE_BARRIER::Transition(output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i),
-		};
-		command_list->ResourceBarrier(std::size(barriers), barriers);
+		context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+		context->command_list->Dispatch((width + 7) / 8, (height + 7) / 8, 1);
+		context->PushUavBarrier(output);
+		context->PushTransitionBarrier(output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i);
 	}
+	context->SubmitBarriers();
 }
 
 void ForwardPass::CreateTranmissionMipPipeline(ID3D12Device* device)
