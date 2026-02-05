@@ -127,6 +127,24 @@ void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 	}
 }
 
+HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name)
+{
+	HRESULT result = S_OK;
+	Microsoft::WRL::ComPtr<ID3DBlob> root_signature_blob;
+	result = D3D12SerializeRootSignature(desc, D3D_ROOT_SIGNATURE_VERSION_1_0, &root_signature_blob, nullptr);
+	if (FAILED(result)) {
+		return result;
+	}
+	result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(root_signature));
+	if (FAILED(result)) {
+		return result;
+	}
+	if (name) {
+		SetName(*root_signature, name);
+	}
+	return result;
+}
+
 D3D12_SHADER_BYTECODE GpuResources::LoadShader(const char* filepath)
 {
     D3D12_SHADER_BYTECODE shader_bytecode = {};

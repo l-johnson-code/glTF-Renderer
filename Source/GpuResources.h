@@ -34,6 +34,7 @@ class GpuResources {
 	void Create(ID3D12Device* device);
 	void LoadLookupTables(UploadBuffer* upload_buffer);
 
+	static HRESULT CreateRootSignature(ID3D12Device* device, const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name = nullptr);
 	static D3D12_SHADER_BYTECODE LoadShader(const char* filepath);
 	static void FreeShader(D3D12_SHADER_BYTECODE shader);
 	
@@ -43,6 +44,4 @@ class GpuResources {
 
 	// Lookup tables.
 	Microsoft::WRL::ComPtr<ID3D12Resource> sheen_e;
-
-
 };

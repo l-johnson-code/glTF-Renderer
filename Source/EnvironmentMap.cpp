@@ -39,13 +39,8 @@ void EnvironmentMap::Init(ID3D12Device* device, CbvSrvUavPool* descriptor_alloca
         CD3DX12_STATIC_SAMPLER_DESC(1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP)
     };
     CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(1, &root_parameter, std::size(sampler_descs), sampler_descs, D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-    Microsoft::WRL::ComPtr<ID3DBlob> root_signature_blob;
-    Microsoft::WRL::ComPtr<ID3DBlob> root_signature_error_blob;
-    result = D3D12SerializeRootSignature(&root_signature_desc, D3D_ROOT_SIGNATURE_VERSION_1_0, root_signature_blob.GetAddressOf(), root_signature_error_blob.GetAddressOf());
+    result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->root_signature, "Environment Root Signature");
     assert(result == S_OK);
-    result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(this->root_signature.ReleaseAndGetAddressOf()));
-    assert(result == S_OK);
-    SetName(this->root_signature.Get(), "Environment Root Signature");
 
     // Create the pipelines.
     D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {};

@@ -19,13 +19,8 @@ void ToneMapper::Create(ID3D12Device* device, GpuResources* resources)
 	root_parameters[ROOT_PARAMETER_INPUT].InitAsDescriptorTable(1, &descriptor_range, D3D12_SHADER_VISIBILITY_PIXEL);
 	root_parameters[ROOT_PARAMETER_CONFIG].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(ROOT_PARAMETER_COUNT, root_parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-	Microsoft::WRL::ComPtr<ID3DBlob> root_signature_blob;
-	Microsoft::WRL::ComPtr<ID3DBlob> root_signature_error_blob;
-	result = D3D12SerializeRootSignature(&root_signature_desc, D3D_ROOT_SIGNATURE_VERSION_1_0, root_signature_blob.GetAddressOf(), root_signature_error_blob.GetAddressOf());
+	result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->root_signature, "Tone Mapper Root Signature");
 	assert(result == S_OK);
-	result = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(), root_signature_blob->GetBufferSize(), IID_PPV_ARGS(this->root_signature.ReleaseAndGetAddressOf()));
-	assert(result == S_OK);
-	SetName(this->root_signature.Get(), "Tone Mapper Root Signature");
 
     // Create pipeline.
 	D3D12_INPUT_ELEMENT_DESC input_layout[] = {
