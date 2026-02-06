@@ -300,17 +300,21 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 
 	// Generate environment map.
 	if (environment_map.equirectangular_image.Get()) {
+		command_context.BeginEvent("Environment Map");
 		environment_map.CreateEnvironmentMap(&command_context, environment_map.equirectangular_image.Get(), &map);
 		deferred_release.Current().push_back(environment_map.equirectangular_image);
 		environment_map.equirectangular_image.Reset();
 		environment_map_loaded = true;
+		command_context.EndEvent();
 	}
 
 	GatherLights(gltf, scene, frame_allocator);
 	GatherMaterials(gltf, frame_allocator);
 
+	command_context.BeginEvent("Skinning");
 	gpu_skinner.Bind(&command_context);
 	PerformSkinning(&command_context, gltf, scene);
+	command_context.EndEvent();
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 		Rasterizer::ExecuteParams params = {
@@ -354,8 +358,13 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	this->graphics_command_list->OMSetRenderTargets(1, &backbuffer_rtv, false, nullptr);
 
 	// Tone mapping.
+	command_context.BeginEvent("Tone Mapping");
 	this->tone_mapper.Run(&command_context, this->resources.cbv_uav_srv_dynamic_allocator.GetGpuHandle(this->display_uav), &this->settings.tone_mapper_config);
+	command_context.EndEvent();
+
+	command_context.BeginEvent("ImGui");
 	DrawImGui();
+	command_context.EndEvent();
 
 	EndFrame();
 }

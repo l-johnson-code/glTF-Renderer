@@ -1,6 +1,24 @@
 #include "CommandContext.h"
 
 #include <directx/d3dx12_barriers.h>
+#if USE_PIX
+#include <WinPixEventRuntime/pix3.h>
+
+void CommandContext::InsertMarker(const char* name)
+{
+    PIXSetMarker(this->command_list.Get(), PIX_COLOR_INDEX(0), "%s", name);
+}
+
+void CommandContext::BeginEvent(const char* name)
+{
+    PIXBeginEvent(this->command_list.Get(), PIX_COLOR_INDEX(0), "%s", name);
+}
+
+void CommandContext::EndEvent()
+{
+    PIXEndEvent(this->command_list.Get());
+}
+#endif
 
 void CommandContext::Init(ID3D12GraphicsCommandList4* command_list, CbvSrvUavStack* transient_descriptors, CpuMappedLinearBuffer* transient_allocator, std::vector<D3D12_RESOURCE_BARRIER>* barriers)
 {

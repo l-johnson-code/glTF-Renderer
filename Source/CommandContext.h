@@ -47,9 +47,15 @@ class CommandContext
     void Init(ID3D12GraphicsCommandList4* command_list, CbvSrvUavStack* transient_descriptors, CpuMappedLinearBuffer* transient_allocator, std::vector<D3D12_RESOURCE_BARRIER>* barriers);
 
     // Debug markers.
+    #if USE_PIX
+    void InsertMarker(const char* name);
+    void BeginEvent(const char* name);
+    void EndEvent();
+    #else
     void InsertMarker(const char* name) {}
-    void PushMarker(const char* name) {}
-    void PopMarker() {}
+    void BeginEvent(const char* name) {}
+    void EndEvent() {}
+    #endif
 
     // Barriers.
     void PushTransitionBarrier(ID3D12Resource* resource, D3D12_RESOURCE_STATES before_state, D3D12_RESOURCE_STATES after_state, uint32_t subresource = std::numeric_limits<uint32_t>::max(), D3D12_RESOURCE_BARRIER_FLAGS flags = D3D12_RESOURCE_BARRIER_FLAG_NONE);

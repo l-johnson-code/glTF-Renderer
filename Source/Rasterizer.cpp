@@ -192,6 +192,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	SetViewportAndScissorRects(context, this->width, this->height);
 
 	// Render opaque objects.
+	context->BeginEvent("Opaque");
 	ForwardPass::Config config = {
 		.width = (int)this->width,
 		.height = (int)this->height,
@@ -214,10 +215,14 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	forward.BindRenderTargets(context, render_rtv, motion_vectors_rtv, depth_dsv);
 	forward.BindPipeline(context, ForwardPass::PIPELINE_FLAGS_NONE);
 	DrawRenderObjects(context, execute_params->gltf, opaque_render_objects);
+	context->EndEvent();
 
+	context->BeginEvent("Alpha Tested");
 	// TODO: Create a separate pipeline for alpha mask instead of sharing the opaque pass. This could potentially improve performance of the opaque rendering.
 	DrawRenderObjects(context, execute_params->gltf, alpha_mask_render_objects);
+	context->EndEvent();
 
+	context->BeginEvent("Background");
 	if (execute_params->environment_map) {
 		forward.DrawBackground(context, clip_to_world, 1.0, execute_params->environment_map->cube_srv_descriptor);
 		
@@ -225,8 +230,10 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 		forward.SetRootSignature(context);
 		forward.SetConfig(context, &config);
 	}
+	context->EndEvent();
 
 	// Create transmission mip chain.
+	context->BeginEvent("Transmission Mip Chain");
 	context->PushTransitionBarrier(
 		execute_params->output_resource, 
 		D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -240,16 +247,21 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 		D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
 	context->SubmitBarriers();
+	context->EndEvent();
 
 	config.transmission_descriptor = this->transmission_srv;
 	forward.SetConfig(context, &config);
 
 	// Render transmissives.
+	context->BeginEvent("Transmissive");
 	forward.BindPipeline(context, ForwardPass::PIPELINE_FLAGS_ALPHA_BLEND);
 	DrawRenderObjects(context, execute_params->gltf, transparent_render_objects);
-
+	context->EndEvent();
+	
 	// Render alpha blended geometry.
+	context->BeginEvent("Alpha Blended");
 	DrawRenderObjects(context, execute_params->gltf, alpha_render_objects);
+	context->EndEvent();
 
 	// Transition render targets to read state for post processing.
 	context->PushTransitionBarrier(
@@ -269,7 +281,9 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	);
 	context->SubmitBarriers();
 
+	context->BeginEvent("Bloom");
     bloom.Execute(context, execute_params->output_resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
+	context->EndEvent();
 
 	context->PushTransitionBarrier(execute_params->output_resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	context->SubmitBarriers();

@@ -6,6 +6,8 @@ add_executable(glTF WIN32)
 
 set_property(TARGET glTF PROPERTY CXX_STANDARD 20)
 
+option(OVERLOAD_NEW_AND_DELETE "Overload new and delete operators. Increases tracy memory usage." ON)
+
 set_target_properties(glTF PROPERTIES 
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>"
 )
@@ -16,6 +18,7 @@ target_include_directories(glTF PRIVATE
     "${CMAKE_SOURCE_DIR}/External/imgui"
     "${CMAKE_SOURCE_DIR}/External"
     "${CMAKE_SOURCE_DIR}/External/DirectX-Headers/include"
+    "${CMAKE_SOURCE_DIR}/External/winpixeventruntime.1.0.240308001/Include"
 )
 
 # DirectX Headers.
@@ -44,9 +47,14 @@ target_link_libraries(glTF PRIVATE
     "D3d12.lib" 
     "DXGI.lib"
     "dxguid.lib"
+    "${CMAKE_SOURCE_DIR}/External/winpixeventruntime.1.0.240308001/bin/x64/WinPixEventRuntime.lib"
 )
 
-target_compile_definitions(glTF PRIVATE $<$<CONFIG:Debug>:DEBUG> NOMINMAX)
+target_compile_definitions(glTF PRIVATE
+    NOMINMAX
+    $<$<CONFIG:Debug>:DEBUG>
+    $<$<BOOL:${OVERLOAD_NEW_AND_DELETE}>:OVERLOAD_NEW_AND_DELETE>
+)
 
 # ImGui.
 target_compile_definitions(glTF PRIVATE IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
@@ -73,6 +81,20 @@ target_sources(glTF PRIVATE
     "External/tinygltf/tiny_gltf.cc"
 )
 
+# Tracy.
+option(TRACY_ENABLE "Enable profiling using tracy." ON)
+option(TRACY_ON_DEMAND "Only profile when a connection is established with the tracy server." OFF)
+option(TRACY_NO_SAMPLING "Disable call stack sampling" ON)
+option(TRACY_NO_SYSTEM_TRACING "Disable systrace sampling" ON)
+add_subdirectory(External/tracy)
+target_link_libraries(glTF PRIVATE Tracy::TracyClient)
+
+# PIX.
+option(USE_PIX "Enable PIX markers." ON)
+if (USE_PIX)
+    target_compile_definitions(glTF PRIVATE "USE_PIX")
+endif()
+
 target_sources(glTF PRIVATE
     "Source/Animation.cpp"
     "Source/AnimationPlayer.cpp"
@@ -87,8 +109,10 @@ target_sources(glTF PRIVATE
     "Source/GpuResources.cpp"
     "Source/GpuSkin.cpp"
     "Source/Main.cpp"
+    "Source/Memory.cpp"
     "Source/Mesh.cpp"
     "Source/Pathtracer.cpp"
+    "Source/Profiling.cpp"
     "Source/Rasterizer.cpp"
     "Source/RaytracingAccelerationStructure.cpp"
     "Source/Renderer.cpp"
@@ -179,5 +203,8 @@ add_custom_command(
     VERBATIM
 )
 
-
-
+add_custom_command(
+    TARGET glTF POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/External/winpixeventruntime.1.0.240308001/bin/x64/WinPixEventRuntime.dll" $<TARGET_FILE_DIR:glTF>
+    VERBATIM
+)

@@ -277,10 +277,17 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
 	if (accumulated_frames < settings->max_accumulated_frames) {
         
         // Update the acceleration structure.
+        context->BeginEvent("Acceleration Structure");
+        context->BeginEvent("BLAS");
 		BuildAllBlas(context, execute_params->gltf, &this->acceleration_structure);
 		UpdateAllBlas(context, execute_params->gltf, &this->acceleration_structure);
+        context->EndEvent();
+        context->BeginEvent("TLAS");
 		BuildTlas(context, execute_params->gltf, execute_params->scene, &this->acceleration_structure);
+        context->EndEvent();
+        context->EndEvent();
         
+        context->BeginEvent("Path Trace Scene");
         struct {
             glm::mat4x4 clip_to_world;
             glm::vec3 camera_pos;
@@ -357,6 +364,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
 		
 		context->PushUavBarrier(execute_params->output_resource);
 		context->SubmitBarriers();
+        context->EndEvent();
 	}
 	
 	previous_world_to_clip = world_to_clip;
