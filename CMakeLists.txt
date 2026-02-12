@@ -138,35 +138,35 @@ target_sources(glTF PRIVATE
 
 # Shaders
 set(SHADER_SOURCE_FILES
+    "Source/Shaders/Background.ps.hlsl"
+    "Source/Shaders/Background.vs.hlsl"
     "Source/Shaders/BloomDownsample.cs.hlsl"
     "Source/Shaders/BloomUpsample.cs.hlsl"
-    "Source/Shaders/Background.vs.hlsl"
-    "Source/Shaders/Background.ps.hlsl"
+    "Source/Shaders/Bsdf.hlsli"
+    "Source/Shaders/Color.hlsli"
+    "Source/Shaders/Common.hlsli"
     "Source/Shaders/ConvertEquirectangularToCubemap.cs.hlsl"
     "Source/Shaders/FilterEnvironmentCubeMap.cs.hlsl"
-    "Source/Shaders/Forward.vs.hlsl"
     "Source/Shaders/Forward.ps.hlsl"
+    "Source/Shaders/Forward.vs.hlsl"
     "Source/Shaders/FullscreenTriangle.vs.hlsl"
     "Source/Shaders/GenerateEnvironmentImportanceMap.cs.hlsl"
     "Source/Shaders/GenerateEnvironmentImportanceMapLevel.cs.hlsl"
     "Source/Shaders/GenerateMipLevel.cs.hlsl"
     "Source/Shaders/GenerateMipLevelArray.cs.hlsl"
-    "Source/Shaders/PathTracer.lib.hlsl"
-    "Source/Shaders/Skin.cs.hlsl"
-    "Source/Shaders/ToneMapper.ps.hlsl"
-    "Source/Shaders/TransmissionDownsample.cs.hlsl"
-)
-    
-set(SHADER_HEADER_FILES
-    "Source/Shaders/Bsdf.hlsli"
-    "Source/Shaders/Color.hlsli"
-    "Source/Shaders/Common.hlsli"
-    "Source/Shaders/Random.hlsli"
     "Source/Shaders/Lights.hlsli"
     "Source/Shaders/Material.hlsli"
+    "Source/Shaders/PathTracer.lib.hlsl"
+    "Source/Shaders/Random.hlsli"
     "Source/Shaders/Sampling.hlsli"
+    "Source/Shaders/Skin.cs.hlsl"
+    "Source/Shaders/ToneMapper.ps.hlsl"
     "Source/Shaders/Transforms.hlsli"
+    "Source/Shaders/TransmissionDownsample.cs.hlsl"
 )
+
+set(SHADER_HEADER_FILES ${SHADER_SOURCE_FILES})
+list(FILTER SHADER_HEADER_FILES INCLUDE REGEX "^.*(\.hlsli)$")
 
 # Workaround for TARGET_FILE_DIR generator expression not being usable in OUTPUT custom commands.
 get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -191,6 +191,8 @@ foreach(FILE ${SHADER_SOURCE_FILES})
     elseif (${SHADER_EXTENSION} STREQUAL .cs.hlsl)
         set(SHADER_OUTPUT_EXTENSION .cs.bin)
         set(SHADER_PROFILE cs_6_6)
+    else()
+        continue()
     endif()
     set(SHADER_INPUT_FILE ${FILE})
     set(SHADER_OUTPUT_FILE ${SHADER_BIN_DIR}/${SHADER_NAME}${SHADER_OUTPUT_EXTENSION})
