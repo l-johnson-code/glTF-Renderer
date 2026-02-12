@@ -656,7 +656,7 @@ void Gltf::LoadAnimationChannel(tinygltf::Model* gltf, tinygltf::AnimationChanne
 		} break;
 		case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
 			channel.format = Animation::Channel::FORMAT_UNORM_8;
-		};
+		} break;
 		case TINYGLTF_COMPONENT_TYPE_BYTE: {
 			channel.format = Animation::Channel::FORMAT_SNORM_8;	
 		} break;
