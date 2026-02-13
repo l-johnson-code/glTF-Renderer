@@ -1,6 +1,5 @@
 #include "File.h"
 
-#include <cassert>
 #include <string>
 
 #include <Windows.h>
