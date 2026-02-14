@@ -231,6 +231,5 @@ class Gltf {
     void ReserveTextures(tinygltf::Model* gltf);
     void LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, ID3D12Device* device, UploadBuffer* upload_buffer);
     void CreateDynamicMesh(ID3D12Device* device);
-    int AddDynamicMesh(DynamicMesh* skinned_vertices);
     void CalculateGlobalTransforms(Node* node, glm::mat4x4 parent_global_transform);
 };
