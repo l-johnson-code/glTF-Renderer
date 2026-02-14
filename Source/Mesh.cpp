@@ -86,7 +86,7 @@ void IndexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buf
 	
 	// Create an index buffer view.
 	view = {
-		.BufferLocation = resource->GetGPUVirtualAddress(),
+		.BufferLocation = buffer,
 		.SizeInBytes = index_count * index_size,
 		.Format = format,
 	};
