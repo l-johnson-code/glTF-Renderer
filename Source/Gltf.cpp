@@ -15,10 +15,10 @@
 
 #include "Animation.h"
 #include "DescriptorAllocator.h"
-#include "DirectXHelpers.h"
 #include "Profiling.h"
 #include "UploadBuffer.h"
 #include "TinyGltfTools.h"
+#include "GpuResources.h"
 
 void Gltf::TraverseScene(int scene, const std::function<void(Gltf*, int)>& lambda)
 {
@@ -953,9 +953,8 @@ void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, ID3D12Device*
 	DXGI_FORMAT format = srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(format, image.width, image.height, 1, 1);
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-	HRESULT result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(this->textures[slot].resource.ReleaseAndGetAddressOf()));
+	HRESULT result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, this->textures[slot].resource.ReleaseAndGetAddressOf(), image.name.data());
 	assert(result == S_OK);
-	SetName(textures[slot].resource.Get(), image.name.data());
 
 	// Create the descriptor.
 	textures[slot].descriptor = srv_uav_cbv_descriptors->Allocate();

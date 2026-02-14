@@ -101,9 +101,8 @@ void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 		CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT, x, y, 1, 1);
 		
-		result = this->device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(this->sheen_e.ReleaseAndGetAddressOf()));
+		result = GpuResources::CreateCommittedResource(this->device.Get(), &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, this->sheen_e.ReleaseAndGetAddressOf(), "Sheen E Lookup Table");
 		assert(result == S_OK);
-		SetName(sheen_e.Get(), "Sheen E Lookup Table");
 
 		D3D12_CPU_DESCRIPTOR_HANDLE descriptor_cpu_handle = cbv_uav_srv_allocator.GetCpuHandle(GpuResources::STATIC_DESCRIPTOR_SRV_SHEEN_E);
 
@@ -145,6 +144,20 @@ HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT
 	}
 	if (name) {
 		SetName(*root_signature, name);
+	}
+	return result;
+}
+
+HRESULT GpuResources::CreateCommittedResource(ID3D12Device* device, const D3D12_HEAP_PROPERTIES* heap_properties, D3D12_HEAP_FLAGS heap_flags, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_resource_state, const D3D12_CLEAR_VALUE* optimized_clear_value, ID3D12Resource** resource, const char* name)
+{
+	ProfileZoneScoped();
+	HRESULT result = device->CreateCommittedResource(heap_properties, heap_flags, desc, initial_resource_state, optimized_clear_value, IID_PPV_ARGS(resource));
+	assert(SUCCEEDED(result));
+	if (FAILED(result)) {
+		return result;
+	}
+	if (name) {
+		SetName(*resource, name);
 	}
 	return result;
 }

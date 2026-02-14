@@ -5,7 +5,7 @@
 
 #include <directx/d3dx12_core.h>
 
-#include "DirectXHelpers.h"
+#include "GpuResources.h"
 #include "Memory.h"
 
 HRESULT LinearBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, D3D12_RESOURCE_STATES initial_resource_state, const char* name)
@@ -15,21 +15,19 @@ HRESULT LinearBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP
 
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(capacity, resource_flags);
 	
-    HRESULT result = device->CreateCommittedResource(
+    HRESULT result = GpuResources::CreateCommittedResource(
+        device, 
         heap_properties,
         D3D12_HEAP_FLAG_NONE,
         &resource_desc,
         initial_resource_state,
         nullptr,
-        IID_PPV_ARGS(this->resource.ReleaseAndGetAddressOf())
+        this->resource.ReleaseAndGetAddressOf(),
+        name
 	);
     if (FAILED(result)) {
         Destroy();
         return result;
-    }
-
-    if (SUCCEEDED(result) && name) {
-        SetName(this->resource.Get(), name);
     }
     
     return result;
@@ -92,22 +90,20 @@ HRESULT CpuMappedLinearBuffer::Create(ID3D12Device* device, uint64_t capacity, b
 
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(capacity);
 
-    result = device->CreateCommittedResource(
+    result = GpuResources::CreateCommittedResource(
+        device, 
         &heap_properties,
         D3D12_HEAP_FLAG_NONE,
         &resource_desc,
         D3D12_RESOURCE_STATE_COMMON,
         nullptr,
-        IID_PPV_ARGS(this->resource.ReleaseAndGetAddressOf())
+        this->resource.ReleaseAndGetAddressOf(),
+        name
 	);
     if (FAILED(result)) {
         Destroy();
         return result;
     }
-
-    if (SUCCEEDED(result) && name) {
-	    SetName(this->resource.Get(), name);
-	}
 
 	result = this->resource->Map(0, nullptr, &this->pointer);
 	if (FAILED(result)) {
@@ -156,21 +152,19 @@ HRESULT CircularBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HE
 
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(capacity, resource_flags);
 	
-    HRESULT result = device->CreateCommittedResource(
+    HRESULT result = GpuResources::CreateCommittedResource(
+        device, 
         heap_properties,
         D3D12_HEAP_FLAG_NONE,
         &resource_desc,
         D3D12_RESOURCE_STATE_COMMON,
         nullptr,
-        IID_PPV_ARGS(this->resource.ReleaseAndGetAddressOf())
+        this->resource.ReleaseAndGetAddressOf(),
+        name
 	);
     if (FAILED(result)) {
         Destroy();
         return result;
-    }
-
-    if (SUCCEEDED(result) && name) {
-        SetName(this->resource.Get(), name);
     }
 
     // Map the resource for CPU access.

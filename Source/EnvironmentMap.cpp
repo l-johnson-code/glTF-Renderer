@@ -11,7 +11,6 @@
 #include <stb/stb_image.h>
 #include <tinyexr/tinyexr.h>
 
-#include "DirectXHelpers.h"
 #include "GpuResources.h"
 
 // Note: This is not perceptual roughness.
@@ -92,34 +91,30 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, ID3D12Resourc
     int cube_map_resolution = std::max(((int)equirectangular_desc.Width / 4) / 2, 1) + 1; // TODO: I dont think this is correct.
 	CD3DX12_RESOURCE_DESC cubemap_resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, cube_map_resolution, cube_map_resolution, 6);
 	cubemap_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &cubemap_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&map->cube));
+	result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &cubemap_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->cube, "Environment Cube Map");
 	assert(result == S_OK);
-	SetName(map->cube.Get(), "Environment Cube Map");
 
 	// Create the importance map.
 	int importance_map_resolution = 1024;
 	CD3DX12_RESOURCE_DESC importance_map_resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT, importance_map_resolution, importance_map_resolution);
 	importance_map_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &importance_map_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&map->importance));
+	result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &importance_map_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->importance, "Environment Importance Map");
 	assert(result == S_OK);
-	SetName(map->importance.Get(), "Environment Importance Map");
 
 	// Create the ggx map.
 	const int smallest_mip = 4;
 	int ggx_mips = std::max((int)std::floorf(std::log2f(cube_map_resolution)) + 1 - smallest_mip, 1);
 	CD3DX12_RESOURCE_DESC ggx_resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, cube_map_resolution, cube_map_resolution, 6, ggx_mips);
 	ggx_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &ggx_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&map->ggx));
+	result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &ggx_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->ggx, "Environment GGX Cube Map");
 	assert(result == S_OK);
-	SetName(map->ggx.Get(), "Environment GGX Cube Map");
 
 	// Create the diffuse map.
 	const int diffuse_resolution = 256;
 	CD3DX12_RESOURCE_DESC diffuse_resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, diffuse_resolution, diffuse_resolution, 6, 1);
 	diffuse_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &diffuse_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&map->diffuse));
+	result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &diffuse_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->diffuse, "Environment Diffuse Cube Map");
 	assert(result == S_OK);
-	SetName(map->diffuse.Get(), "Environment Diffuse Cube Map");
 
     CD3DX12_SHADER_RESOURCE_VIEW_DESC cube_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(DXGI_FORMAT_R16G16B16A16_FLOAT);
 	map->cube_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->cube.Get(), &cube_desc);
@@ -223,14 +218,13 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(format, x, y, 1, 1);
 	
-	result = this->device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(this->equirectangular_image.ReleaseAndGetAddressOf()));
+	result = GpuResources::CreateCommittedResource(this->device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, this->equirectangular_image.ReleaseAndGetAddressOf(), "Environment Map");
 	if (result != S_OK) {
         SPDLOG_ERROR("Failed to create texture.");
         FreeEXRHeader(&exr_header);
         FreeEXRImage(&exr_image);
         return;
     }
-	SetName(this->equirectangular_image.Get(), "Environment Map");
 
 	int pixel_size = exr_header.channels[0].pixel_type == TINYEXR_PIXELTYPE_HALF ? 2 : 4;
 	int destination_stride = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
@@ -273,13 +267,12 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(format, x, y, 1, 1);
 	
-	result = this->device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(this->equirectangular_image.ReleaseAndGetAddressOf()));
+	result = GpuResources::CreateCommittedResource(this->device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, this->equirectangular_image.ReleaseAndGetAddressOf(), "Environment Map");
 	if (result != S_OK) {
         SPDLOG_ERROR("Failed to create texture.");
         stbi_image_free(image);
         return;
     }
-	SetName(this->equirectangular_image.Get(), "Environment Map");
 
     uint32_t row_pitch = 0;
 	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.Get(), 0, &row_pitch);

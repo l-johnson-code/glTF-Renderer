@@ -3,7 +3,7 @@
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
 
-#include "DirectXHelpers.h"
+#include "GpuResources.h"
 #include "Memory.h"
 #include "Profiling.h"
 
@@ -136,15 +136,10 @@ HRESULT Mesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, 
 	// Allocate a resource for indices and vertices.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(size);
-	HRESULT result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&resource));
+	HRESULT result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &resource, name ? name : "Static Mesh");
 	if (result != S_OK) {
 		Destroy(descriptor_allocator);
 		return result;
-	}
-	if (name) {
-		SetName(resource.Get(), name);
-	} else {
-		SetName(resource.Get(), "Static Mesh");
 	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = resource->GetGPUVirtualAddress();
@@ -253,15 +248,10 @@ HRESULT DynamicMesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allo
 	// Allocate a resource for vertices.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	HRESULT result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&resource));
+	HRESULT result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &resource, name ? name : "Dynamic Mesh");
 	if (result != S_OK) {
 		Destroy(descriptor_allocator);
 		return result;
-	}
-	if (name) {
-		SetName(resource.Get(), name);
-	} else {
-		SetName(resource.Get(), "Dynamic Mesh");
 	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = resource->GetGPUVirtualAddress();
@@ -322,15 +312,10 @@ HRESULT MorphTarget::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allo
 	// Allocate a resource for vertices.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(size);
-	HRESULT result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&resource));
+	HRESULT result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &resource, name ? name : "Morph Target");
 	if (result != S_OK) {
 		Destroy(descriptor_allocator);
 		return result;
-	}
-	if (name) {
-		SetName(resource.Get(), name);
-	} else {
-		SetName(resource.Get(), "Morph Target");
 	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = resource->GetGPUVirtualAddress();

@@ -388,9 +388,8 @@ void Renderer::CreateRenderTargets()
 		float clear_color[4] = {0.0, 0.0, 0.0, 0.0};
 		CD3DX12_CLEAR_VALUE clear_value(display_format, clear_color);
 		
-		result = device->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, IID_PPV_ARGS(this->display.ReleaseAndGetAddressOf()));
+		result = GpuResources::CreateCommittedResource(device.Get(), &render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, this->display.ReleaseAndGetAddressOf(), "Display");
 		assert(result == S_OK);
-		SetName(this->display.Get(), "Display");
 
 		this->display_rtv = resources.rtv_allocator.AllocateAndCreateRtv(this->display.Get(), nullptr);
 		this->display_uav = resources.cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(this->display.Get(), nullptr, nullptr);

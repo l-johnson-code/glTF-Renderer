@@ -6,7 +6,7 @@
 #include <directx/d3dx12_core.h>
 #include <spdlog/spdlog.h>
 
-#include "DirectXHelpers.h"
+#include "GpuResources.h"
 #include "Memory.h"
 
 void RaytracingAccelerationStructure::Init(ID3D12Device5* device, uint32_t max_blas_vertices, uint32_t max_tlas_instances)
@@ -68,17 +68,17 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, uint32_t max_b
 
 	CD3DX12_RESOURCE_DESC tlas_scratch_desc = CD3DX12_RESOURCE_DESC::Buffer(tlas_prebuild_info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-	result = device->CreateCommittedResource(
+	result = GpuResources::CreateCommittedResource(
+		device, 
 		&tlas_scratch_heap_properties, 
 		D3D12_HEAP_FLAG_NONE, 
 		&tlas_scratch_desc, 
 		D3D12_RESOURCE_STATE_COMMON, 
 		nullptr, 
-		IID_PPV_ARGS(&this->tlas_scratch)
+		&this->tlas_scratch,
+		"TLAS Scratch"
 	);
 	assert(result == S_OK);
-
-	SetName(this->tlas_scratch.Get(), "TLAS Scratch");
 
 	// Create heap to store TLAS.
 	D3D12_HEAP_PROPERTIES tlas_heap_properties = {};
@@ -86,17 +86,17 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, uint32_t max_b
 
 	CD3DX12_RESOURCE_DESC tlas_desc = CD3DX12_RESOURCE_DESC::Buffer(tlas_prebuild_info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-	result = device->CreateCommittedResource(
+	result = GpuResources::CreateCommittedResource(
+		device, 
 		&tlas_heap_properties, 
 		D3D12_HEAP_FLAG_NONE, 
 		&tlas_desc, 
 		D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, 
 		nullptr, 
-		IID_PPV_ARGS(&this->tlas)
+		&this->tlas,
+		"TLAS"
 	);
 	assert(result == S_OK);
-
-	SetName(this->tlas.Get(), "TLAS");
 }
 
 void RaytracingAccelerationStructure::BuildStaticBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Blas* blas)
@@ -264,9 +264,8 @@ void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* comm
 
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(prebuild_info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-	HRESULT result = this->device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nullptr, IID_PPV_ARGS(blas_resource));
+	HRESULT result = GpuResources::CreateCommittedResource(this->device.Get(), &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nullptr, blas_resource, "BLAS");
 	assert(result == S_OK);
-	SetName((*blas_resource), "BLAS");
 
 	if (blas_scratch.Capacity() < prebuild_info.ScratchDataSizeInBytes) {
 		SPDLOG_INFO("BLAS build scratch size exceeded maximum BLAS scratch size.");

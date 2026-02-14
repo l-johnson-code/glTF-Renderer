@@ -99,7 +99,7 @@ void Pathtracer::Init(ID3D12Device5* device, UploadBuffer* upload_buffer)
     int shader_table_size = ShaderTableCollectionBuilder::CalculateRequiredSize(1, 1, 0);
     CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
     CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(shader_table_size, D3D12_RESOURCE_FLAG_NONE, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
-    result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&this->shader_tables_resource));
+    result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->shader_tables_resource, "Shader Tables");
     assert(SUCCEEDED(result));
     void* shader_tables_data = upload_buffer->QueueBufferUpload(shader_table_size, this->shader_tables_resource.Get(), 0);
     assert(shader_tables_data);

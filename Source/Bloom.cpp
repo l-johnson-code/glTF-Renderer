@@ -49,9 +49,8 @@ void Bloom::Resize(uint32_t width, uint32_t height, int max_iterations)
     CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
     CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, width, height, 1, this->max_iterations);
     resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    HRESULT result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&this->mip_chain));
+    HRESULT result = GpuResources::CreateCommittedResource(device.Get(), &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, &this->mip_chain, "Bloom Mip Chain");
     assert(result == S_OK);
-    SetName(mip_chain.Get(), "Bloom Mip Chain");
 }
 
 void Bloom::Execute(CommandContext* context, ID3D12Resource* input, D3D12_RESOURCE_STATES input_resource_states, int iterations, float strength)
