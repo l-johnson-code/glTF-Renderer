@@ -45,27 +45,27 @@ void EnvironmentMap::Init(ID3D12Device* device, CbvSrvUavPool* descriptor_alloca
     D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {};
     pipeline_desc.pRootSignature = this->root_signature.Get();
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/ConvertEquirectangularToCubemap.cs.bin");
-    result = device->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&this->generate_cubemap_pipeline_state));
+    result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->generate_cubemap_pipeline_state, "Convert Equirectangular To Cubemap");
     assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/GenerateMipLevelArray.cs.bin");
-	result = device->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&this->generate_cube_mip_pipeline_state));
+	result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->generate_cube_mip_pipeline_state, "Generate Mip Level Array");
 	assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/GenerateEnvironmentImportanceMap.cs.bin");
-    result = device->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&this->generate_importance_map_pipeline_state));
+    result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->generate_importance_map_pipeline_state, "Generate Environment Importance Map");
     assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/GenerateEnvironmentImportanceMapLevel.cs.bin");
-    result = device->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&this->generate_importance_map_level_pipeline_state));
+    result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->generate_importance_map_level_pipeline_state, "Generate Environment Importance Map Level");
     assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/FilterEnvironmentCubeMap.cs.bin");
-    result = device->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&this->filter_cube_map_pipeline_state));
+    result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->filter_cube_map_pipeline_state, "Filter Environment Cube Map");
     assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 }

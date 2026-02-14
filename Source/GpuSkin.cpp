@@ -43,7 +43,7 @@ void GpuSkin::Create(ID3D12Device* device)
 		.pRootSignature = this->root_signature.Get(),
 		.CS = GpuResources::LoadShader("Shaders/Skin.cs.bin"),
 	};
-	result = device->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&this->pipeline_state));
+	result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->pipeline_state, "Skin");
 	assert(result == S_OK);
 
     // Cleanup.

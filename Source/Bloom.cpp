@@ -30,12 +30,12 @@ void Bloom::Create(ID3D12Device* device, uint32_t width, uint32_t height, int ma
 	};
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/BloomDownsample.cs.bin");
-	result = device->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&this->downsample_pipeline_state));
+	result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->downsample_pipeline_state, "Bloom Downsample");
 	assert(result == S_OK);
 	GpuResources::FreeShader(pipeline_desc.CS);
     	
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/BloomUpsample.cs.bin");
-	result = device->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&this->upsample_pipeline_state));
+	result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->upsample_pipeline_state, "Bloom Upsample");
 	assert(result == S_OK);
 	GpuResources::FreeShader(pipeline_desc.CS);
 }

@@ -59,9 +59,8 @@ void ToneMapper::Create(ID3D12Device* device)
 			.Quality = 0,
 		}
 	};
-	result = device->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&this->pipeline_state));
+	result = GpuResources::CreateGraphicsPipelineState(device, &pipeline_desc, &this->pipeline_state, "Tone Mapper Pipeline");
 	assert(result == S_OK);
-	SetName(this->pipeline_state.Get(), "Tone Mapper Pipeline");
 
     // Cleanup.
 	GpuResources::FreeShader(pipeline_desc.VS);

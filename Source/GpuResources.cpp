@@ -148,6 +148,34 @@ HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT
 	return result;
 }
 
+HRESULT GpuResources::CreateComputePipelineState(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
+{
+	ProfileZoneScoped();
+	HRESULT result = device->CreateComputePipelineState(desc, IID_PPV_ARGS(pipeline_state));
+	assert(SUCCEEDED(result));
+	if (FAILED(result)) {
+		return result;
+	}
+	if (name) {
+		SetName(*pipeline_state, name);
+	}
+	return result;
+}
+
+HRESULT GpuResources::CreateGraphicsPipelineState(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
+{
+	ProfileZoneScoped();
+	HRESULT result = device->CreateGraphicsPipelineState(desc, IID_PPV_ARGS(pipeline_state));
+	assert(SUCCEEDED(result));
+	if (FAILED(result)) {
+		return result;
+	}
+	if (name) {
+		SetName(*pipeline_state, name);
+	}
+	return result;
+}
+
 HRESULT GpuResources::CreateCommittedResource(ID3D12Device* device, const D3D12_HEAP_PROPERTIES* heap_properties, D3D12_HEAP_FLAGS heap_flags, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_resource_state, const D3D12_CLEAR_VALUE* optimized_clear_value, ID3D12Resource** resource, const char* name)
 {
 	ProfileZoneScoped();
