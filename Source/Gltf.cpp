@@ -22,6 +22,7 @@
 
 void Gltf::TraverseScene(int scene, const std::function<void(Gltf*, int)>& lambda)
 {
+	ProfileZoneScoped();
 	for (auto node_id: scenes[scene].nodes) {
 		TraverseNode(node_id, lambda);
 	}
@@ -38,6 +39,7 @@ void Gltf::TraverseNode(int node_id, const std::function<void(Gltf*, int)>& lamb
 
 void Gltf::Unload()
 {
+	ProfileZoneScoped();
 	scenes = std::vector<Scene>(1);
 	
 	// Need to explicitly free descriptors for all meshes and textures.
@@ -222,7 +224,8 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 
 void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, ID3D12Device* device, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target)
 {
-	// Morph targets.
+	ProfileZoneScoped();
+
 	MorphTarget::Desc desc = {};
 	desc.num_of_vertices = num_of_vertices;
 	desc.flags |= target->contains("POSITION") ? MorphTarget::FLAG_POSITION : 0;
@@ -606,6 +609,7 @@ void Gltf::LoadAnimations(tinygltf::Model* gltf)
 
 void Gltf::LoadAnimationChannel(tinygltf::Model* gltf, tinygltf::AnimationChannel* gltf_channel, tinygltf::AnimationSampler* sampler, Animation* animation)
 {	
+	ProfileZoneScoped();
 	// Get path.
 	Animation::Channel channel;
 	channel.node_id = gltf_channel->target_node;
@@ -881,6 +885,7 @@ void Gltf::ApplyRestTransforms()
 
 void Gltf::Animate(Animation* animation, float time)
 {
+	ProfileZoneScoped();
     ApplyRestTransforms();
     for (Animation::Channel& channel: animation->channels) {
         int target = channel.node_id;
@@ -936,6 +941,7 @@ void Gltf::ReserveTextures(tinygltf::Model* gltf)
 
 void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, ID3D12Device* device, UploadBuffer* upload_buffer)
 {
+	ProfileZoneScoped();
 	this->textures.reserve(slot + 1);
 
 	tinygltf::Image& image = gltf->images[slot];

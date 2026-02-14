@@ -51,6 +51,8 @@ void UploadBuffer::Create(ID3D12Device* device, size_t capacity, D3D12_COMMAND_Q
 
 uint64_t UploadBuffer::Allocate(uint64_t size, uint64_t alignment)
 {
+	ProfileZoneScoped();
+
 	// If the ring buffer is too small, allocation always fails.
 	assert(size <= this->allocator.Capacity());
 	uint64_t offset = std::numeric_limits<uint64_t>::max();
@@ -90,6 +92,7 @@ void* UploadBuffer::GetCpuAddress(uint64_t offset)
 
 void UploadBuffer::Begin()
 {
+	ProfileZoneScoped();
 	assert(!this->recording);
 
 	HRESULT result = S_OK;
@@ -122,6 +125,7 @@ void UploadBuffer::Begin()
 
 uint64_t UploadBuffer::Submit()
 {
+	ProfileZoneScoped();
 	assert(this->recording);
 
 	HRESULT result = S_OK;
@@ -149,6 +153,7 @@ uint64_t UploadBuffer::Submit()
 
 void UploadBuffer::WaitForSubmissionToComplete(uint64_t submission)
 {
+	ProfileZoneScoped();
 	assert(submission <= this->submission_count);
 	
 	HRESULT result = S_OK;
@@ -165,11 +170,13 @@ void UploadBuffer::WaitForSubmissionToComplete(uint64_t submission)
 
 void UploadBuffer::WaitForAllSubmissionsToComplete()
 {
+	ProfileZoneScoped();
 	WaitForSubmissionToComplete(this->submission_count);
 }
 
 void* UploadBuffer::QueueBufferUpload(uint64_t size, ID3D12Resource* destination_resource, uint64_t destination_offset)
 {
+	ProfileZoneScoped();
 	uint64_t offset = Allocate(size, 0);
 	void* pointer = GetCpuAddress(offset);
 	command_list->CopyBufferRegion(destination_resource, destination_offset, this->allocator.Resource(), offset, size);
@@ -178,6 +185,7 @@ void* UploadBuffer::QueueBufferUpload(uint64_t size, ID3D12Resource* destination
 
 void* UploadBuffer::QueueTextureUpload(DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t depth, ID3D12Resource* destination_resource, int destination_subresource_index, uint32_t* row_pitch)
 {
+	ProfileZoneScoped();
     HRESULT result = S_OK;
 
 	result = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::CalculateMinimumRowMajorRowPitch(format, width, *row_pitch);

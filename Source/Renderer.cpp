@@ -214,6 +214,7 @@ void Renderer::DrawImGui()
 
 void Renderer::WaitForNextFrame()
 {
+	ProfileZoneScoped();
 	// Wait until we are ready to render.
 	current_frame++;
 	uint64_t completed_frame = fence->GetCompletedValue();
@@ -523,6 +524,7 @@ void Renderer::EndFrame()
 
 void Renderer::WaitForOutstandingWork()
 {
+	ProfileZoneScoped();
 	// Wait for GPU to finish rendering queued frames.
 	uint64_t completed_frame = this->fence->GetCompletedValue();
 	if (completed_frame < this->current_frame) {
