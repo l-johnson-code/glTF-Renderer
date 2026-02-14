@@ -19,7 +19,7 @@ struct VertexBuffer {
     static VertexAllocation GetAllocationSize(uint32_t vertex_count, DXGI_FORMAT format);
     static VertexAllocation GetAllocationSize(uint32_t vertex_count, uint32_t element_size);
 	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t element_size);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size);
     void* QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource);
     void Destroy(CbvSrvUavPool* descriptor_allocator);
 };
@@ -76,7 +76,7 @@ struct Mesh {
     VertexBuffer color;
     VertexBuffer joint_weight;
 
-    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description, const char* name = nullptr);
+    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void* QueueIndexUpdate(UploadBuffer* upload_buffer);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueNormalUpdate(UploadBuffer* upload_buffer);
@@ -111,7 +111,7 @@ struct DynamicMesh {
     VertexBuffer normal;
     VertexBuffer tangent;
 
-    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* description, const char* name = nullptr);
+    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void Flip();
     VertexBuffer* GetCurrentPositionBuffer();
     VertexBuffer* GetPreviousPositionBuffer();
@@ -140,7 +140,7 @@ struct MorphTarget {
     VertexBuffer normal;
     VertexBuffer tangent;
 
-    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* attributes, const char* name = nullptr);
+    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueNormalUpdate(UploadBuffer* upload_buffer);
     void* QueueTangentUpdate(UploadBuffer* upload_buffer);
