@@ -15,6 +15,7 @@
 #include "DirectXHelpers.h"
 #include "GpuResources.h"
 #include "GpuSkin.h"
+#include "Profiling.h"
 
 bool Renderer::Init(HWND window, RenderSettings* settings)
 {
@@ -367,6 +368,8 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	command_context.EndEvent();
 
 	EndFrame();
+	ProfilePlotBytes("Transient Allocator", (int64_t)frame_allocator->Size());
+	ProfilePlotNumber("Transient Descriptors", (int64_t)descriptor_allocator->Size());
 }
 
 void Renderer::CreateRenderTargets()

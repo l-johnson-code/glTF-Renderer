@@ -5,6 +5,7 @@
 
 #include "DirectXHelpers.h"
 #include "Memory.h"
+#include "Profiling.h"
 
 static uint64_t CalculateTotalAllocationSize(int allocation_count, const VertexAllocation* allocations, uint64_t* offsets)
 {
@@ -110,6 +111,7 @@ void IndexBuffer::Destroy(CbvSrvUavPool* descriptor_allocator)
 
 HRESULT Mesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
 {
+	ProfileZoneScoped();
 	this->topology = desc->topology;
 	this->flags = desc->flags;
 	this->num_of_indices = desc->num_of_indices;

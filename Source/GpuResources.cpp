@@ -13,9 +13,11 @@
 #include "Config.h"
 #include "DirectXHelpers.h"
 #include "File.h"
+#include "Profiling.h"
 
 void GpuResources::Create(ID3D12Device* device)
 {
+	ProfileZoneScoped();
 	HRESULT result = S_OK;
 
 	this->device = device;
@@ -67,6 +69,7 @@ void GpuResources::Create(ID3D12Device* device)
 
 void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 {
+	ProfileZoneScoped();
 	HRESULT result = S_OK;
 	{
 		int x, y;
@@ -129,6 +132,7 @@ void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 
 HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name)
 {
+	ProfileZoneScoped();
 	HRESULT result = S_OK;
 	Microsoft::WRL::ComPtr<ID3DBlob> root_signature_blob;
 	result = D3D12SerializeRootSignature(desc, D3D_ROOT_SIGNATURE_VERSION_1_0, &root_signature_blob, nullptr);
@@ -147,6 +151,7 @@ HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT
 
 D3D12_SHADER_BYTECODE GpuResources::LoadShader(const char* filepath)
 {
+	ProfileZoneScoped();
     D3D12_SHADER_BYTECODE shader_bytecode = {};
 	shader_bytecode.pShaderBytecode = File::Load(filepath, &shader_bytecode.BytecodeLength);
     return shader_bytecode;
@@ -154,7 +159,8 @@ D3D12_SHADER_BYTECODE GpuResources::LoadShader(const char* filepath)
 
 void GpuResources::FreeShader(D3D12_SHADER_BYTECODE bytecode)
 {
+	ProfileZoneScoped();
 	if (bytecode.pShaderBytecode) {
-    	File::Free((void**)&bytecode.pShaderBytecode);
+    	File::Free((void*)bytecode.pShaderBytecode);
 	}
 }

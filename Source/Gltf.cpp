@@ -16,6 +16,7 @@
 #include "Animation.h"
 #include "DescriptorAllocator.h"
 #include "DirectXHelpers.h"
+#include "Profiling.h"
 #include "UploadBuffer.h"
 #include "TinyGltfTools.h"
 
@@ -72,6 +73,7 @@ void Gltf::Unload()
 
 void Gltf::LoadMeshes(tinygltf::Model* gltf, ID3D12Device* device, UploadBuffer* upload_buffer)
 {
+	ProfileZoneScoped();
 	// Create meshes.
 	this->meshes.resize(gltf->meshes.size());
 	for (int i = 0; i < gltf->meshes.size(); i++) {
@@ -348,6 +350,7 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::
 
 void Gltf::LoadMaterials(tinygltf::Model* gltf, ID3D12Device* device, UploadBuffer* upload_buffer)
 {
+	ProfileZoneScoped();
 	materials.resize(gltf->materials.size() + 1);
 	for (int i = 0; i < gltf->materials.size(); i++) {
 		tinygltf::Material* tiny_gltf_material = &gltf->materials[i];
@@ -512,6 +515,7 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, ID3D12Device* device, UploadBuff
 
 void Gltf::LoadScenes(tinygltf::Model* gltf)
 {
+	ProfileZoneScoped();
 	this->scenes.resize(gltf->scenes.size());
 	for (int i = 0; i < gltf->scenes.size(); i++) {
 		this->scenes[i].name = gltf->scenes[i].name;
@@ -521,6 +525,7 @@ void Gltf::LoadScenes(tinygltf::Model* gltf)
 
 void Gltf::LoadCameras(tinygltf::Model* gltf)
 {
+	ProfileZoneScoped();
 	for (auto gltf_camera: gltf->cameras) {
 		Camera camera;
 		if (gltf_camera.type == "Perspective") {
@@ -534,6 +539,7 @@ void Gltf::LoadCameras(tinygltf::Model* gltf)
 
 void Gltf::LoadNodes(tinygltf::Model* gltf)
 {
+	ProfileZoneScoped();
 	this->nodes.resize(gltf->nodes.size());
 
 	for (int i = 0; i < gltf->nodes.size(); i++) {
@@ -584,6 +590,7 @@ void Gltf::LoadNodes(tinygltf::Model* gltf)
 
 void Gltf::LoadAnimations(tinygltf::Model* gltf)
 {
+	ProfileZoneScoped();
 	for (int i = 0; i < gltf->animations.size(); i++) {
 		tinygltf::Animation& tiny_gltf_animation = gltf->animations[i];
 		Animation animation;
@@ -687,6 +694,7 @@ void Gltf::LoadAnimationChannel(tinygltf::Model* gltf, tinygltf::AnimationChanne
 
 void Gltf::LoadSkins(tinygltf::Model* gltf)
 {
+	ProfileZoneScoped();
 	for (int i = 0; i < gltf->skins.size(); i++) {
 		Skin skin;
 
@@ -715,6 +723,7 @@ void Gltf::LoadSkins(tinygltf::Model* gltf)
 
 void Gltf::LoadSamplers(tinygltf::Model* gltf)
 {
+	ProfileZoneScoped();
 	for (int i = 0; i < gltf->samplers.size(); i++) {
 		const tinygltf::Sampler& gltf_sampler = gltf->samplers[i];
 		D3D12_SAMPLER_DESC sampler_desc = {
@@ -731,6 +740,7 @@ void Gltf::LoadSamplers(tinygltf::Model* gltf)
 
 void Gltf::LoadLights(tinygltf::Model* gltf)
 {
+	ProfileZoneScoped();
 	lights.resize(gltf->lights.size());
 	for (int i = 0; i < gltf->lights.size(); i++) {
 		const tinygltf::Light& tiny_gltf_light = gltf->lights[i];
@@ -764,6 +774,7 @@ void Gltf::Init(CbvSrvUavPool* srv_uav_cbv_descriptors, SamplerStack* sampler_de
 
 bool Gltf::LoadFromGltf(const char* filepath, ID3D12Device* device, UploadBuffer* upload_buffer)
 {
+	ProfileZoneScoped();
 	tinygltf::TinyGLTF gltf;
 	tinygltf::Model model;
 	std::string error, warning;
@@ -771,8 +782,10 @@ bool Gltf::LoadFromGltf(const char* filepath, ID3D12Device* device, UploadBuffer
 
 	std::filesystem::path path(filepath);
 	if (path.extension() == ".glb") {
+		ProfileZoneScopedN("LoadBinaryFromFile");
 		result = gltf.LoadBinaryFromFile(&model, &error, &warning, filepath);
 	} else if (path.extension() == ".gltf") {
+		ProfileZoneScopedN("LoadASCIIFromFile");
 		result = gltf.LoadASCIIFromFile(&model, &error, &warning, filepath);
 	} else {
 		Unload();
@@ -820,6 +833,7 @@ bool Gltf::LoadFromGltf(const char* filepath, ID3D12Device* device, UploadBuffer
 
 void Gltf::CreateDynamicMesh(ID3D12Device* device)
 {
+	ProfileZoneScoped();
 	// Create dynamic mesh instances for any meshes that are skinned or have morph weights.
     for (int i = 0; i < this->nodes.size(); i++) {
 		Node& node = nodes[i];
@@ -852,6 +866,7 @@ void Gltf::CreateDynamicMesh(ID3D12Device* device)
 
 void Gltf::ApplyRestTransforms()
 {
+	ProfileZoneScoped();
     for (Node& node: nodes) {
         node.local_transform = node.rest_transform;
 		if (node.weights.size() > 0) {

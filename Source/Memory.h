@@ -5,6 +5,25 @@
 #include <cstdint>
 #include <cstring>
 
+#include "Profiling.h"
+
+inline void* Allocate(size_t size)
+{
+	ProfileZoneScoped();
+	void* ptr = malloc(size);
+	if (ptr) {
+		ProfileAlloc(ptr, size);
+	}
+	return ptr;
+}
+
+inline void Free(void* ptr)
+{
+	ProfileZoneScoped();
+	ProfileFree(ptr);
+	free(ptr);
+}
+
 constexpr size_t Mebibytes(size_t mebibytes)
 {
 	return mebibytes << 20;
@@ -36,8 +55,15 @@ constexpr size_t Align(size_t offset, size_t alignment)
 	return alignment == 0 ? offset : alignment * ((offset + alignment - 1) / alignment);
 }
 
+inline void Copy(void* destination, void* source, size_t size)
+{
+	ProfileZoneScoped();
+	memcpy(destination, source, size);
+}
+
 inline void Copy(void* destination, void* source, size_t element_size, uint32_t element_count, size_t source_stride)
 {
+	ProfileZoneScoped();
 	if (element_size == source_stride) {
 		memcpy(destination, source, element_size * element_count);
 	} else {

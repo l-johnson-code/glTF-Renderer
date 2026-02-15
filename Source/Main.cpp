@@ -7,9 +7,10 @@
 
 #include "AnimationPlayer.h"
 #include "Camera.h"
+#include "CameraController.h"
 #include "Gltf.h"
 #include "imgui.h"
-#include "CameraController.h"
+#include "Profiling.h"
 #include "Renderer.h"
 #include "Timer.h"
 
@@ -340,6 +341,7 @@ void DrawGraphicsTab()
 
 void DrawUi()
 {
+	ProfileZoneScoped();
 	ImGui::SetNextWindowPos(ImVec2(0., 0.));
 	ImGuiIO& io = ImGui::GetIO();
 	ImGui::SetNextWindowSize(ImVec2(500 * g_window_scale, io.DisplaySize.y));
@@ -364,6 +366,7 @@ void DrawUi()
 
 void ProcessEvents()
 {
+	ProfileZoneScoped();
 	SDL_Event event = {};
  	while (SDL_PollEvent(&event)) {
 		bool event_handled = false;
@@ -518,11 +521,24 @@ int main(int argc, char* argv[])
 		if (g_context.animation_player.playing) {
 			g_render_settings.pathtracer.reset = true;
 		}
-		g_context.animation_player.Tick(&g_gltf, delta_time);
-		g_gltf.CalculateGlobalTransforms(g_context.scene_id);
-		ImGui::Render();
-		renderer.DrawFrame(&g_gltf, g_context.scene_id, &camera, &g_render_settings);
+		{
+			ProfileZoneScopedN("Animate");
+			g_context.animation_player.Tick(&g_gltf, delta_time);
+		}
+		{
+			ProfileZoneScopedN("Global Transforms");
+			g_gltf.CalculateGlobalTransforms(g_context.scene_id);
+		}
+		{
+			ProfileZoneScopedN("ImGui Draw List");
+			ImGui::Render();
+		}
+		{
+			ProfileZoneScopedN("Draw Frame");
+			renderer.DrawFrame(&g_gltf, g_context.scene_id, &camera, &g_render_settings);
+		}
 		g_render_settings.pathtracer.reset = false;
+		ProfileMarkFrame();
     }
 
 	// Wait for all outstanding GPU work to complete before releasing resources.

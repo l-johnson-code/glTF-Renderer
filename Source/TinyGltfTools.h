@@ -8,6 +8,8 @@
 #include <glm/gtc/packing.hpp>
 #include <tinygltf/tiny_gltf.h>
 
+#include "Profiling.h"
+
 namespace tinygltf {
 namespace tools {
 
@@ -289,6 +291,7 @@ inline void CopyContiguous(const tinygltf::Model* model, const tinygltf::Accesso
 template<glm::length_t L, typename T>
 inline void Copy(glm::vec<L, T>* output, const tinygltf::Model* model, const tinygltf::Accessor* accessor)
 {
+    ProfileZoneScoped();
     // Check if conversion is required.
     bool same_dimension = tinygltf::GetNumComponentsInType(accessor->type) == L;
     bool same_component = IsSameType<T>(accessor->componentType);
@@ -305,6 +308,7 @@ inline void Copy(glm::vec<L, T>* output, const tinygltf::Model* model, const tin
 // Copy without conversion.
 inline void Copy(std::byte* out, const tinygltf::Model* model, const tinygltf::Accessor* accessor)
 {
+    ProfileZoneScoped();
     int element_size = GetTypeSize(accessor);
     if (IsContiguous(model, accessor)) {
         CopyContiguous(model, accessor, out);
