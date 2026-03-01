@@ -7,6 +7,7 @@
 #include "DescriptorAllocator.h"
 #include "MultiBuffer.h"
 #include "UploadBuffer.h"
+#include "GpuAllocator.h"
 
 class GpuResources {
     public:
@@ -30,6 +31,8 @@ class GpuResources {
 
 	// Per frame descriptor allocators.
 	MultiBuffer<CbvSrvUavStack, Config::FRAME_COUNT> cbv_uav_srv_frame_allocators;
+
+	GpuAllocator allocator;
 	
 	void Create(ID3D12Device* device);
 	void LoadLookupTables(UploadBuffer* upload_buffer);

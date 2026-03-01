@@ -65,6 +65,8 @@ void GpuResources::Create(ID3D12Device* device)
 	// Render target and depth stencil views.
 	rtv_allocator.Create(this->device.Get(), Config::MAX_RENDER_TARGET_VIEWS);
 	dsv_allocator.Create(this->device.Get(), Config::MAX_DEPTH_STENCIL_VIEWS);
+
+	allocator.Init(this->device.Get());
 }
 
 void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)

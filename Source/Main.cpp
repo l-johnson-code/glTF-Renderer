@@ -47,7 +47,7 @@ void LoadGltf(const char* filepath)
 	renderer.upload_buffer.WaitForAllSubmissionsToComplete();
 	g_gltf.Unload();
 	renderer.upload_buffer.Begin();
-	g_gltf.LoadFromGltf(filepath, renderer.device.Get(), &renderer.upload_buffer);
+	g_gltf.LoadFromGltf(filepath, &renderer.resources.allocator, &renderer.upload_buffer);
 	g_context.scene_id = 0;
 	renderer.upload_buffer.WaitForSubmissionToComplete(renderer.upload_buffer.Submit());
 	g_render_settings.pathtracer.reset = true;

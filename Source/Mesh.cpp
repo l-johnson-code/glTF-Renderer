@@ -3,7 +3,8 @@
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
 
-#include "GpuResources.h"
+#include "DirectXHelpers.h"
+#include "GpuAllocator.h"
 #include "Memory.h"
 #include "Profiling.h"
 
@@ -109,7 +110,7 @@ void IndexBuffer::Destroy(CbvSrvUavPool* descriptor_allocator)
 	descriptor = -1;
 }
 
-HRESULT Mesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
+HRESULT Mesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
 {
 	ProfileZoneScoped();
 	this->topology = desc->topology;
@@ -134,13 +135,13 @@ HRESULT Mesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, 
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
 	
 	// Allocate a resource for indices and vertices.
-	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(size);
-	HRESULT result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &resource, name ? name : "Static Mesh");
+	HRESULT result = allocator->CreateResource(&resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->resource, &this->allocation);
 	if (result != S_OK) {
 		Destroy(descriptor_allocator);
 		return result;
 	}
+	SetName(this->resource.Get(), name ? name : "Mesh");
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = resource->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_INDEX) {
@@ -228,7 +229,7 @@ void Mesh::Destroy(CbvSrvUavPool* descriptor_allocator)
 	joint_weight.Destroy(descriptor_allocator);
 }
 
-HRESULT DynamicMesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
+HRESULT DynamicMesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -246,13 +247,13 @@ HRESULT DynamicMesh::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allo
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
 	
 	// Allocate a resource for vertices.
-	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	HRESULT result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &resource, name ? name : "Dynamic Mesh");
+	HRESULT result = allocator->CreateResource(&resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->resource, &this->allocation);
 	if (result != S_OK) {
 		Destroy(descriptor_allocator);
 		return result;
 	}
+	SetName(this->resource.Get(), name ? name : "Dynamic Mesh");
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = resource->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_POSITION) {
@@ -293,7 +294,7 @@ VertexBuffer* DynamicMesh::GetPreviousPositionBuffer()
 	return &position[(current_position_buffer - 1) % 1];
 }
 
-HRESULT MorphTarget::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
+HRESULT MorphTarget::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -310,13 +311,13 @@ HRESULT MorphTarget::Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allo
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
 	
 	// Allocate a resource for vertices.
-	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(size);
-	HRESULT result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &resource, name ? name : "Morph Target");
+	HRESULT result = allocator->CreateResource(&resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->resource, &this->allocation);
 	if (result != S_OK) {
 		Destroy(descriptor_allocator);
 		return result;
 	}
+	SetName(this->resource.Get(), name ? name : "Morph Target");
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = resource->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_POSITION) {

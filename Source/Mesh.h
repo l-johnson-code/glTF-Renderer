@@ -5,6 +5,7 @@
 #include <wrl/client.h>
 
 #include "DescriptorAllocator.h"
+#include "GpuAllocator.h"
 #include "UploadBuffer.h"
 
 struct VertexAllocation {
@@ -67,6 +68,7 @@ struct Mesh {
     uint32_t num_of_indices = 0;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    GpuAllocator::Allocation allocation;
 
     IndexBuffer index;
     VertexBuffer position;
@@ -76,7 +78,7 @@ struct Mesh {
     VertexBuffer color;
     VertexBuffer joint_weight;
 
-    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void* QueueIndexUpdate(UploadBuffer* upload_buffer);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueNormalUpdate(UploadBuffer* upload_buffer);
@@ -106,12 +108,13 @@ struct DynamicMesh {
     int current_position_buffer = 0;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    GpuAllocator::Allocation allocation;
 
     VertexBuffer position[2];
     VertexBuffer normal;
     VertexBuffer tangent;
 
-    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void Flip();
     VertexBuffer* GetCurrentPositionBuffer();
     VertexBuffer* GetPreviousPositionBuffer();
@@ -135,12 +138,13 @@ struct MorphTarget {
     uint32_t num_of_vertices = 0;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    GpuAllocator::Allocation allocation;
     
     VertexBuffer position;
     VertexBuffer normal;
     VertexBuffer tangent;
 
-    HRESULT Create(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueNormalUpdate(UploadBuffer* upload_buffer);
     void* QueueTangentUpdate(UploadBuffer* upload_buffer);

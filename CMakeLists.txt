@@ -14,13 +14,13 @@ set_target_properties(glTF PROPERTIES
 
 target_include_directories(glTF PRIVATE 
     "External"
+    "External/DirectX-Headers/include/directx" # Make sure the d3d12.h file from DirectX-Headers is included, instead of the version that comes with the Windows SDK.
     "External/winpixeventruntime.1.0.240308001/Include"
 )
 
 target_link_libraries(glTF PRIVATE 
     "D3d12.lib" 
     "DXGI.lib"
-    "dxguid.lib"
 )
 
 target_compile_definitions(glTF PRIVATE
@@ -30,7 +30,7 @@ target_compile_definitions(glTF PRIVATE
 
 # DirectX Headers.
 add_subdirectory("External/DirectX-Headers")
-target_link_libraries(glTF PRIVATE "DirectX-Headers")
+target_link_libraries(glTF PRIVATE Microsoft::DirectX-Headers Microsoft::DirectX-Guids)
 
 # SDL.
 add_subdirectory("External/SDL")
@@ -54,7 +54,6 @@ target_include_directories(glTF PRIVATE "External/spdlog/include")
 # ImGui.
 add_library(ImGui STATIC)
 target_compile_definitions(ImGui PUBLIC IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
-target_include_directories(ImGui PUBLIC "External/imgui")
 target_include_directories(ImGui PUBLIC "External/imgui")
 target_sources(ImGui PRIVATE
     "External/imgui/imgui_demo.cpp"
@@ -135,6 +134,8 @@ target_sources(glTF PRIVATE
     "Source/ForwardPass.h"
     "Source/Gltf.cpp"
     "Source/Gltf.h"
+    "Source/GpuAllocator.cpp"
+    "Source/GpuAllocator.h"
     "Source/GpuResources.cpp"
     "Source/GpuResources.h"
     "Source/GpuSkin.cpp"
@@ -147,6 +148,7 @@ target_sources(glTF PRIVATE
     "Source/MultiBuffer.h"
     "Source/Pathtracer.cpp"
     "Source/Pathtracer.h"
+    "Source/Pool.h"
     "Source/Profiling.cpp"
     "Source/Profiling.h"
     "Source/Rasterizer.cpp"

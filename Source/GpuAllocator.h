@@ -1,0 +1,134 @@
+#pragma once
+
+#include <vector>
+
+#include <directx/d3d12.h>
+#include <directx/d3dx12_core.h>
+#include <wrl.h>
+
+#include "Memory.h"
+#include "Pool.h"
+
+class TlsfHeap {
+
+    public:
+
+    struct Allocation {
+        void* handle;
+        uint64_t offset;
+    };
+    
+    Microsoft::WRL::ComPtr<ID3D12Heap> heap;
+
+    void Init(ID3D12Device* device, uint64_t heap_size, uint32_t max_allocations);
+    Allocation Allocate(uint64_t size, uint64_t alignment);
+    void Free(void* handle);
+
+    private:
+
+    struct Block {
+        uint64_t offset;
+        uint64_t size;
+        Block* next;
+        Block* previous;
+        Block* next_free;
+        Block* previous_free;
+        bool is_occupied;
+    };
+
+    static constexpr uint8_t significand_bits = 4;
+    static constexpr uint8_t exponent_bits = 5;
+    static constexpr uint8_t second_level_bins = 1 << significand_bits;
+    static constexpr uint8_t first_level_bins = 1 << exponent_bits;
+    static constexpr uint8_t max_significand_value = (2 << significand_bits) - 1;
+    static constexpr uint8_t max_exponent_value = (1 << exponent_bits) - 1;
+    static constexpr uint64_t max_allocation_size = max_significand_value << max_exponent_value;
+
+    uint64_t capacity = 0;
+    uint64_t size = 0;
+
+    uint32_t first_level_bitmap = 0;
+    uint16_t second_level_bitmaps[first_level_bins] = {};
+
+    Block* free_lists[first_level_bins][second_level_bins] = {};
+
+    Pool<Block> blocks;
+
+    uint8_t FirstLevelIndex(uint64_t size);
+    uint8_t SecondLevelIndex(uint64_t size, uint32_t first_level_index);
+    Block* GetGoodFitBlock(uint64_t size);
+    void InsertAfter(Block* block, Block* new_block);
+    void InsertBefore(Block* block, Block* new_block);
+    void RemoveBlock(Block* block);
+    void InsertFreeBlock(Block* block);
+    void RemoveFreeBlock(Block* block);
+};
+
+class GpuAllocator {
+    public:
+
+    class Allocation {
+        public:
+
+        Allocation()
+        {
+            this->allocator = nullptr;
+            this->heap = 0;
+            this->handle = nullptr;
+        }
+
+        Allocation(const Allocation&) = delete;
+        Allocation operator=(const Allocation&) = delete;
+
+        Allocation(Allocation&& allocation) noexcept
+        {
+            this->allocator = allocation.allocator;
+            this->heap = allocation.heap;
+            this->handle = allocation.handle;
+            allocation.allocator = nullptr;
+            allocation.heap = 0;
+            allocation.handle = nullptr;
+        }
+
+        Allocation& operator=(Allocation&& allocation) noexcept
+        {
+            Free();
+            this->allocator = allocation.allocator;
+            this->heap = allocation.heap;
+            this->handle = allocation.handle;
+            allocation.allocator = nullptr;
+            allocation.heap = 0;
+            allocation.handle = nullptr;
+            return *this;
+        }
+
+        ~Allocation()
+        {
+            Free();
+        }
+
+        void Free() 
+        {
+            if (allocator) {
+                allocator->Free(this);
+            }
+        }
+
+        GpuAllocator* allocator = nullptr;
+        int heap = 0;
+        void* handle = nullptr;
+    };
+
+    void Init(ID3D12Device* device);
+    HRESULT CreateResource(D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, ID3D12Resource** resource, Allocation* allocation);
+    HRESULT Allocate(uint64_t size, uint64_t alignment, int* heap_index, TlsfHeap::Allocation* allocation);
+    void Free(Allocation* allocation);
+
+    private:
+
+    static constexpr uint64_t heap_size = Mebibytes(256);
+
+    Microsoft::WRL::ComPtr<ID3D12Device> device;
+    std::vector<TlsfHeap> heaps;
+};
+
