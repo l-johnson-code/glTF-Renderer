@@ -59,7 +59,7 @@ void GpuSkin::Bind(CommandContext* context)
 void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D12_GPU_VIRTUAL_ADDRESS bones, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights)
 {
 	context->PushTransitionBarrier(
-		output->resource.Get(),
+		output->resource.resource.Get(),
 		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
 		D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 	);
@@ -114,9 +114,9 @@ void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D
     context->command_list->Dispatch((constant_buffer.num_of_vertices + THREAD_GROUP_SIZE - 1) / THREAD_GROUP_SIZE, 1, 1);
 
 	// Transition output from UAV to vertex buffer and shader resource view state.
-	context->PushUavBarrier(output->resource.Get());
+	context->PushUavBarrier(output->resource.resource.Get());
 	context->PushTransitionBarrier(
-		output->resource.Get(),
+		output->resource.resource.Get(),
 		D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 
 		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
 	);

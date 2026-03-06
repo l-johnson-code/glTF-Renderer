@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include <directx/d3d12.h>
@@ -8,6 +9,9 @@
 
 #include "Memory.h"
 #include "Pool.h"
+
+class GpuAllocation;
+struct GpuResource;
 
 class TlsfHeap {
 
@@ -67,62 +71,10 @@ class TlsfHeap {
 class GpuAllocator {
     public:
 
-    class Allocation {
-        public:
-
-        Allocation()
-        {
-            this->allocator = nullptr;
-            this->heap = 0;
-            this->handle = nullptr;
-        }
-
-        Allocation(const Allocation&) = delete;
-        Allocation operator=(const Allocation&) = delete;
-
-        Allocation(Allocation&& allocation) noexcept
-        {
-            this->allocator = allocation.allocator;
-            this->heap = allocation.heap;
-            this->handle = allocation.handle;
-            allocation.allocator = nullptr;
-            allocation.heap = 0;
-            allocation.handle = nullptr;
-        }
-
-        Allocation& operator=(Allocation&& allocation) noexcept
-        {
-            Free();
-            this->allocator = allocation.allocator;
-            this->heap = allocation.heap;
-            this->handle = allocation.handle;
-            allocation.allocator = nullptr;
-            allocation.heap = 0;
-            allocation.handle = nullptr;
-            return *this;
-        }
-
-        ~Allocation()
-        {
-            Free();
-        }
-
-        void Free() 
-        {
-            if (allocator) {
-                allocator->Free(this);
-            }
-        }
-
-        GpuAllocator* allocator = nullptr;
-        int heap = 0;
-        void* handle = nullptr;
-    };
-
     void Init(ID3D12Device* device);
-    HRESULT CreateResource(D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, ID3D12Resource** resource, Allocation* allocation);
+    HRESULT CreateResource(D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource);
     HRESULT Allocate(uint64_t size, uint64_t alignment, int* heap_index, TlsfHeap::Allocation* allocation);
-    void Free(Allocation* allocation);
+    void Free(GpuAllocation* allocation);
 
     private:
 
@@ -130,5 +82,70 @@ class GpuAllocator {
 
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     std::vector<TlsfHeap> heaps;
+};
+
+class GpuAllocation {
+    public:
+
+    GpuAllocation() = default;
+    GpuAllocation(GpuAllocator* allocator, int heap, void* handle)
+    {
+        this->allocator = allocator;
+        this->heap = heap;
+        this->handle = handle;
+    }
+
+    GpuAllocation(const GpuAllocation&) = delete;
+    GpuAllocation operator=(const GpuAllocation&) = delete;
+
+    GpuAllocation(GpuAllocation&& allocation) noexcept
+    {
+        this->allocator = allocation.allocator;
+        this->heap = allocation.heap;
+        this->handle = allocation.handle;
+        allocation.allocator = nullptr;
+        allocation.heap = 0;
+        allocation.handle = nullptr;
+    }
+
+    GpuAllocation& operator=(GpuAllocation&& allocation) noexcept
+    {
+        Free();
+        this->allocator = allocation.allocator;
+        this->heap = allocation.heap;
+        this->handle = allocation.handle;
+        allocation.allocator = nullptr;
+        allocation.heap = 0;
+        allocation.handle = nullptr;
+        return *this;
+    }
+
+    ~GpuAllocation()
+    {
+        Free();
+    }
+
+    void Free() 
+    {
+        if (allocator) {
+            allocator->Free(this);
+        }
+    }
+
+    GpuAllocator* allocator = nullptr;
+    int heap = 0;
+    void* handle = nullptr;
+};
+
+struct GpuResource {
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+	std::shared_ptr<GpuAllocation> allocation;
+
+    void Reset()
+    {
+        resource.Reset();
+        allocation.reset();
+    }
 };
 

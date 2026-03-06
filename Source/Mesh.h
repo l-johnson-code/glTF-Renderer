@@ -67,8 +67,7 @@ struct Mesh {
     uint32_t num_of_vertices = 0;
     uint32_t num_of_indices = 0;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-    GpuAllocator::Allocation allocation;
+    GpuResource resource;
 
     IndexBuffer index;
     VertexBuffer position;
@@ -107,8 +106,7 @@ struct DynamicMesh {
     uint32_t num_of_vertices = 0;
     int current_position_buffer = 0;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-    GpuAllocator::Allocation allocation;
+    GpuResource resource;
 
     VertexBuffer position[2];
     VertexBuffer normal;
@@ -137,8 +135,7 @@ struct MorphTarget {
     uint8_t flags = 0;
     uint32_t num_of_vertices = 0;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-    GpuAllocator::Allocation allocation;
+    GpuResource resource;
     
     VertexBuffer position;
     VertexBuffer normal;

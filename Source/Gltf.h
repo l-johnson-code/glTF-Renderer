@@ -178,8 +178,7 @@ class Gltf {
     struct Texture {
         std::string name;
         int descriptor = -1;
-        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-        GpuAllocator::Allocation allocation;
+        GpuResource resource;
     };
 
     std::string filename;

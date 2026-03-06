@@ -247,7 +247,7 @@ void GpuAllocator::Init(ID3D12Device* device)
     this->device = device;
 }
 
-HRESULT GpuAllocator::CreateResource(D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, ID3D12Resource** resource, GpuAllocator::Allocation* allocation)
+HRESULT GpuAllocator::CreateResource(D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource)
 {
     // TODO: Support tight alignment.
     D3D12_RESOURCE_ALLOCATION_INFO allocation_info = device->GetResourceAllocationInfo(0, 1, desc);
@@ -259,15 +259,13 @@ HRESULT GpuAllocator::CreateResource(D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_S
         return result;
     }
 
-    result = this->device->CreatePlacedResource(heaps[heap_index].heap.Get(), heap_allocation.offset, desc, initial_state, optimized_clear_value, IID_PPV_ARGS(resource));
+    result = this->device->CreatePlacedResource(heaps[heap_index].heap.Get(), heap_allocation.offset, desc, initial_state, optimized_clear_value, IID_PPV_ARGS(&resource->resource));
     if (FAILED(result)) {
         heaps[heap_index].Free(heap_allocation.handle);
         return result;
     }
 
-    allocation->allocator = this;
-    allocation->heap = heap_index;
-    allocation->handle = heap_allocation.handle;
+    resource->allocation = std::make_shared<GpuAllocation>(this, heap_index, heap_allocation.handle);
 
     return S_OK;
 }
@@ -296,7 +294,7 @@ HRESULT GpuAllocator::Allocate(uint64_t size, uint64_t alignment, int* heap_inde
     return E_FAIL;
 }
 
-void GpuAllocator::Free(Allocation* allocation)
+void GpuAllocator::Free(GpuAllocation* allocation)
 {
     if (allocation->handle) {
         TlsfHeap& heap = heaps[allocation->heap];
