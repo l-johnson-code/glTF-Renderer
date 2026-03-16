@@ -22,9 +22,10 @@ class TlsfHeap {
         uint64_t offset;
     };
     
-    Microsoft::WRL::ComPtr<ID3D12Heap> heap;
+    ID3D12Heap* heap = nullptr;
 
     void Init(ID3D12Device* device, uint64_t heap_size, uint32_t max_allocations);
+    void DeInit();
     Allocation Allocate(uint64_t size, uint64_t alignment);
     void Free(void* handle);
 

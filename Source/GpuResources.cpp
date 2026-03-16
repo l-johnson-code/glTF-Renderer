@@ -178,33 +178,6 @@ HRESULT GpuResources::CreateGraphicsPipelineState(ID3D12Device* device, const D3
 	return result;
 }
 
-HRESULT GpuResources::CreateHeap(ID3D12Device* device, const D3D12_HEAP_DESC* desc, ID3D12Heap** heap)
-{
-	ProfileZoneScoped();
-	HRESULT result = device->CreateHeap(desc, IID_PPV_ARGS(heap));
-	if (SUCCEEDED(result)) {
-		D3D12_HEAP_PROPERTIES heap_properties;
-		if (desc->Properties.Type == D3D12_HEAP_TYPE_CUSTOM) {
-			heap_properties = desc->Properties;
-		} else {
-			heap_properties = device->GetCustomHeapProperties(0, desc->Properties.Type);
-		}
-		Profiling::MemoryPool pool = heap_properties.MemoryPoolPreference == D3D12_MEMORY_POOL_L0 ? Profiling::MEMORY_POOL_CPU : Profiling::MEMORY_POOL_GPU;
-		ProfileAllocP((*heap), desc->SizeInBytes, pool);
-	}
-	return result;
-}
-
-void GpuResources::DestroyHeap(ID3D12Heap* heap)
-{
-	ProfileZoneScoped();
-	D3D12_HEAP_DESC desc = heap->GetDesc();
-	assert(desc.Properties.Type == D3D12_HEAP_TYPE_CUSTOM);
-	Profiling::MemoryPool pool = desc.Properties.MemoryPoolPreference == D3D12_MEMORY_POOL_L0 ? Profiling::MEMORY_POOL_CPU : Profiling::MEMORY_POOL_GPU;
-	ProfileFreeP(heap, pool);
-	heap->Release();
-}
-
 D3D12_SHADER_BYTECODE GpuResources::LoadShader(const char* filepath)
 {
 	ProfileZoneScoped();

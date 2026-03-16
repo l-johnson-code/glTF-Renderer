@@ -27,13 +27,36 @@ static Profiling::MemoryPool GetPoolFromHeapProperties(ID3D12Device* device, con
     return detailed_heap_properties.MemoryPoolPreference == D3D12_MEMORY_POOL_L0 ? Profiling::MEMORY_POOL_CPU : Profiling::MEMORY_POOL_GPU;
 }
 
+static HRESULT CreateHeap(ID3D12Device* device, const D3D12_HEAP_DESC* desc, ID3D12Heap** heap)
+{
+	ProfileZoneScoped();
+	HRESULT result = device->CreateHeap(desc, IID_PPV_ARGS(heap));
+	if (SUCCEEDED(result)) {
+		Profiling::MemoryPool pool = GetPoolFromHeapProperties(device, &desc->Properties);
+		ProfileAllocP((*heap), desc->SizeInBytes, pool);
+	}
+	return result;
+}
+
+static void DestroyHeap(ID3D12Heap* heap)
+{
+    ProfileZoneScoped();
+    if (heap) {
+        D3D12_HEAP_DESC desc = heap->GetDesc();
+        assert(desc.Properties.Type == D3D12_HEAP_TYPE_CUSTOM);
+        Profiling::MemoryPool pool = desc.Properties.MemoryPoolPreference == D3D12_MEMORY_POOL_L0 ? Profiling::MEMORY_POOL_CPU : Profiling::MEMORY_POOL_GPU;
+        ProfileFreeP(heap, pool);
+        heap->Release();
+    }
+}
+
 void TlsfHeap::Init(ID3D12Device* device, uint64_t heap_size, uint32_t max_allocations)
 {
     this->size = 0;
 
     // Create the underlying heap.
     CD3DX12_HEAP_DESC heap_desc(heap_size, D3D12_HEAP_TYPE_DEFAULT);
-    HRESULT result = device->CreateHeap(&heap_desc, IID_PPV_ARGS(&heap));
+    HRESULT result = CreateHeap(device, &heap_desc, &heap);
     this->capacity = heap_size;
 
     // Allocate pool for blocks.
@@ -59,6 +82,17 @@ void TlsfHeap::Init(ID3D12Device* device, uint64_t heap_size, uint32_t max_alloc
     initial_block->next = nullptr;
     initial_block->is_occupied = false;
     InsertFreeBlock(initial_block);
+}
+
+void TlsfHeap::DeInit()
+{
+    if (heap) {
+        DestroyHeap(heap);
+        heap = nullptr;
+    }
+    this->size = 0;
+    this->capacity = 0;
+    this->first_level_bitmap = 0;
 }
 
 TlsfHeap::Allocation TlsfHeap::Allocate(uint64_t size, uint64_t alignment)
@@ -276,7 +310,7 @@ HRESULT GpuAllocator::CreateResource(const D3D12_RESOURCE_DESC* desc, D3D12_RESO
         return result;
     }
 
-    result = this->device->CreatePlacedResource(heaps[heap_index].heap.Get(), heap_allocation.offset, desc, initial_state, optimized_clear_value, IID_PPV_ARGS(&resource->resource));
+    result = this->device->CreatePlacedResource(heaps[heap_index].heap, heap_allocation.offset, desc, initial_state, optimized_clear_value, IID_PPV_ARGS(&resource->resource));
     if (FAILED(result)) {
         heaps[heap_index].Free(heap_allocation.handle);
         return result;

@@ -39,8 +39,6 @@ class GpuResources {
 	static HRESULT CreateComputePipelineState(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	static HRESULT CreateGraphicsPipelineState(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	static HRESULT CreateRootSignature(ID3D12Device* device, const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name = nullptr);
-	static HRESULT CreateHeap(ID3D12Device* device, const D3D12_HEAP_DESC* desc, ID3D12Heap** heap);
-	static void DestroyHeap(ID3D12Heap* heap);
 	static D3D12_SHADER_BYTECODE LoadShader(const char* filepath);
 	static void FreeShader(D3D12_SHADER_BYTECODE shader);
 	
