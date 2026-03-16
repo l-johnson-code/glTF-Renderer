@@ -300,6 +300,8 @@ void GpuAllocator::Init(ID3D12Device* device)
 
 HRESULT GpuAllocator::CreateResource(const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource, const char* name)
 {
+    ProfileZoneScoped();
+
     // TODO: Support tight alignment.
     D3D12_RESOURCE_ALLOCATION_INFO allocation_info = device->GetResourceAllocationInfo(0, 1, desc);
 
