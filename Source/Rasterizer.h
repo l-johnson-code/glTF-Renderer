@@ -28,7 +28,7 @@ class Rasterizer {
         ID3D12Resource* output_resource = nullptr;
     };
 
-    void Init(ID3D12Device* device, RtvPool* rtv_allocator, DsvPool* dsv_allocator, CbvSrvUavPool* cbv_uav_srv_allocator, uint32_t width, uint32_t height);
+    void Init(ID3D12Device* device, GpuAllocator* allocator, RtvPool* rtv_allocator, DsvPool* dsv_allocator, CbvSrvUavPool* cbv_uav_srv_allocator, uint32_t width, uint32_t height);
     void Resize(uint32_t width, uint32_t height);
 	void DrawScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
@@ -46,6 +46,7 @@ class Rasterizer {
 	};
 
 	Microsoft::WRL::ComPtr<ID3D12Device> device;
+    GpuAllocator* allocator;
     RtvPool* rtv_allocator;
     DsvPool* dsv_allocator;
     CbvSrvUavPool* cbv_uav_srv_allocator;
@@ -58,12 +59,12 @@ class Rasterizer {
 	static constexpr float DEPTH_CLEAR_VALUE = 0.0f;
     D3D12_CPU_DESCRIPTOR_HANDLE depth_dsv = {0};
     int depth_srv = -1;
-	Microsoft::WRL::ComPtr<ID3D12Resource> depth;
+	GpuResource depth;
     D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors_rtv = {0};
     int motion_vectors_srv = -1;
-	Microsoft::WRL::ComPtr<ID3D12Resource> motion_vectors;
+	GpuResource motion_vectors;
     int transmission_srv = -1;
-	Microsoft::WRL::ComPtr<ID3D12Resource> transmission;
+	GpuResource transmission;
     
     std::vector<RenderObject> opaque_render_objects;
 	std::vector<RenderObject> alpha_mask_render_objects;

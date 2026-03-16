@@ -9,7 +9,7 @@
 
 #include "GpuResources.h"
 
-void Pathtracer::Init(ID3D12Device5* device, UploadBuffer* upload_buffer)
+void Pathtracer::Init(ID3D12Device5* device, GpuAllocator* allocator, UploadBuffer* upload_buffer)
 {
     HRESULT result = S_OK;
 
@@ -99,9 +99,9 @@ void Pathtracer::Init(ID3D12Device5* device, UploadBuffer* upload_buffer)
     int shader_table_size = ShaderTableCollectionBuilder::CalculateRequiredSize(1, 1, 0);
     CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
     CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(shader_table_size, D3D12_RESOURCE_FLAG_NONE, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
-    result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->shader_tables_resource, "Shader Tables");
+    result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->shader_tables_resource, "Shader Tables");
     assert(SUCCEEDED(result));
-    void* shader_tables_data = upload_buffer->QueueBufferUpload(shader_table_size, this->shader_tables_resource.Get(), 0);
+    void* shader_tables_data = upload_buffer->QueueBufferUpload(shader_table_size, this->shader_tables_resource.resource.Get(), 0);
     assert(shader_tables_data);
     
     Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> state_object_properties;
@@ -120,9 +120,9 @@ void Pathtracer::Init(ID3D12Device5* device, UploadBuffer* upload_buffer)
     collection_builder.miss_table.SetShader(MISS_SHADER_SHADOW, shadow_miss_identifier);
     collection_builder.hit_group_table.SetShader(HIT_GROUP_BOUNCE, hit_group_identifier);
     collection_builder.hit_group_table.SetShader(HIT_GROUP_SHADOW, shadow_hit_group_identifier);
-    this->shader_tables = collection_builder.GetShaderTableCollection(this->shader_tables_resource->GetGPUVirtualAddress());
+    this->shader_tables = collection_builder.GetShaderTableCollection(this->shader_tables_resource.resource->GetGPUVirtualAddress());
 
-    acceleration_structure.Init(device, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
+    acceleration_structure.Init(device, allocator, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
 
     // Cleanup.
     GpuResources::FreeShader(dxil_library_desc.DXILLibrary);
@@ -150,12 +150,12 @@ void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAcc
 					DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes[j];
 					gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases.resize(gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes.size());
 					RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases[j];
-					if (!dynamic_blas.resource.Get()) {
+					if (!dynamic_blas.resource.resource.Get()) {
 						acceleration_structure->BuildDynamicBlas(context->command_list.Get(), primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
 					}
 				} else {
 					// Static.
-					if (!primitive.blas.resource.Get()) {
+					if (!primitive.blas.resource.resource.Get()) {
 						acceleration_structure->BuildStaticBlas(context->command_list.Get(), primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
 					}
 				}

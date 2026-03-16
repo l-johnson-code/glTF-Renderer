@@ -11,7 +11,7 @@ class UploadBuffer {
 
     public:
 
-    void Create(ID3D12Device* device, size_t capacity, D3D12_COMMAND_QUEUE_PRIORITY command_queue_priority, int max_queued_uploads);
+    void Create(ID3D12Device* device, GpuAllocator* allocator, size_t capacity, D3D12_COMMAND_QUEUE_PRIORITY command_queue_priority, int max_queued_uploads);
     void Begin();
     void* QueueBufferUpload(uint64_t size, ID3D12Resource* destination_resource, uint64_t destination_offset);
     void* QueueTextureUpload(DXGI_FORMAT format, uint32_t width, uint32_t height, uint32_t depth, ID3D12Resource* destination_resource, int destination_subresource_index, uint32_t* row_pitch);

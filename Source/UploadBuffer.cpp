@@ -9,13 +9,13 @@
 #include <directx/d3dx12_property_format_table.h>
 #include <directx/dxgiformat.h>
 
-void UploadBuffer::Create(ID3D12Device* device, size_t capacity, D3D12_COMMAND_QUEUE_PRIORITY command_queue_priority, int max_queued_uploads)
+void UploadBuffer::Create(ID3D12Device* device, GpuAllocator* gpu_allocator, size_t capacity, D3D12_COMMAND_QUEUE_PRIORITY command_queue_priority, int max_queued_uploads)
 {
 	HRESULT result = S_OK;
 
 	// Create a ring buffer.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_UPLOAD);
-	allocator.Create(device, capacity, &heap_properties, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE, "Upload Buffer");
+	allocator.Create(gpu_allocator, capacity, &heap_properties, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE, "Upload Buffer");
 	markers = std::vector<uint64_t>(max_queued_uploads, 0);
 
     // Create command queue, allocators, and list for copying data from the upload resource to the gpu heap.

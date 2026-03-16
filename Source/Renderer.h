@@ -180,7 +180,7 @@ private:
 	RenderSettings settings;
 
 	// Render targets and resolution dependent resources.
-	Microsoft::WRL::ComPtr<ID3D12Resource> display;
+	GpuResource display;
 	D3D12_CPU_DESCRIPTOR_HANDLE display_rtv = {0};
 	int display_uav = -1;
 	
@@ -192,7 +192,7 @@ private:
 
 	uint64_t frame = 0;
 
-	MultiBuffer<std::vector<Microsoft::WRL::ComPtr<IUnknown>>, Config::FRAME_COUNT> deferred_release;
+	MultiBuffer<std::vector<GpuResource>, Config::FRAME_COUNT> deferred_release;
 
 	Swapchain swapchain;
 	MultiBuffer<CpuMappedLinearBuffer, Config::FRAME_COUNT> frame_allocators;

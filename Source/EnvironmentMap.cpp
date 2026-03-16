@@ -21,11 +21,12 @@ float EnvironmentMap::MipToRoughness(int mip_level, int mip_count)
     return result;
 }
 
-void EnvironmentMap::Init(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator)
+void EnvironmentMap::Init(ID3D12Device* device, GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator)
 {
     HRESULT result;
 
     this->device = device;
+    this->allocator = allocator;
     this->descriptor_allocator = descriptor_allocator;
 
     // Create the root signature.
@@ -91,14 +92,14 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, ID3D12Resourc
     int cube_map_resolution = std::max(((int)equirectangular_desc.Width / 4) / 2, 1) + 1; // TODO: I dont think this is correct.
 	CD3DX12_RESOURCE_DESC cubemap_resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, cube_map_resolution, cube_map_resolution, 6);
 	cubemap_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &cubemap_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->cube, "Environment Cube Map");
+	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &cubemap_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->cube, "Environment Cube Map");
 	assert(result == S_OK);
 
 	// Create the importance map.
 	int importance_map_resolution = 1024;
 	CD3DX12_RESOURCE_DESC importance_map_resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT, importance_map_resolution, importance_map_resolution);
 	importance_map_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &importance_map_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->importance, "Environment Importance Map");
+	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &importance_map_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->importance, "Environment Importance Map");
 	assert(result == S_OK);
 
 	// Create the ggx map.
@@ -106,26 +107,26 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, ID3D12Resourc
 	int ggx_mips = std::max((int)std::floorf(std::log2f(cube_map_resolution)) + 1 - smallest_mip, 1);
 	CD3DX12_RESOURCE_DESC ggx_resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, cube_map_resolution, cube_map_resolution, 6, ggx_mips);
 	ggx_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &ggx_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->ggx, "Environment GGX Cube Map");
+	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &ggx_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->ggx, "Environment GGX Cube Map");
 	assert(result == S_OK);
 
 	// Create the diffuse map.
 	const int diffuse_resolution = 256;
 	CD3DX12_RESOURCE_DESC diffuse_resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, diffuse_resolution, diffuse_resolution, 6, 1);
 	diffuse_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	result = GpuResources::CreateCommittedResource(device, &heap_properties, D3D12_HEAP_FLAG_NONE, &diffuse_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->diffuse, "Environment Diffuse Cube Map");
+	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &diffuse_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->diffuse, "Environment Diffuse Cube Map");
 	assert(result == S_OK);
 
     CD3DX12_SHADER_RESOURCE_VIEW_DESC cube_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(DXGI_FORMAT_R16G16B16A16_FLOAT);
-	map->cube_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->cube.Get(), &cube_desc);
-	map->diffuse_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->diffuse.Get(), &cube_desc);
-	map->ggx_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->ggx.Get(), &cube_desc);
-	map->importance_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->importance.Get(), nullptr);
+	map->cube_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->cube.resource.Get(), &cube_desc);
+	map->diffuse_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->diffuse.resource.Get(), &cube_desc);
+	map->ggx_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->ggx.resource.Get(), &cube_desc);
+	map->importance_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->importance.resource.Get(), nullptr);
 
-    GenerateCubemap(context, equirectangular_image, map->cube.Get());
-    GenerateGgxCube(context, map->cube_srv_descriptor, map->ggx.Get());
-    GenerateDiffuseCube(context, map->cube_srv_descriptor, map->diffuse.Get());
-    GenerateImportanceMap(context, map->cube_srv_descriptor, map->importance.Get());
+    GenerateCubemap(context, equirectangular_image, map->cube.resource.Get());
+    GenerateGgxCube(context, map->cube_srv_descriptor, map->ggx.resource.Get());
+    GenerateDiffuseCube(context, map->cube_srv_descriptor, map->diffuse.resource.Get());
+    GenerateImportanceMap(context, map->cube_srv_descriptor, map->importance.resource.Get());
 }
 
 void EnvironmentMap::DestroyEnvironmentMap(Map* map)
@@ -218,7 +219,7 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(format, x, y, 1, 1);
 	
-	result = GpuResources::CreateCommittedResource(this->device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, this->equirectangular_image.ReleaseAndGetAddressOf(), "Environment Map");
+	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->equirectangular_image, "Environment Map");
 	if (result != S_OK) {
         SPDLOG_ERROR("Failed to create texture.");
         FreeEXRHeader(&exr_header);
@@ -229,7 +230,7 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
 	int pixel_size = exr_header.channels[0].pixel_type == TINYEXR_PIXELTYPE_HALF ? 2 : 4;
 	int destination_stride = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 	uint32_t row_pitch = 0;
-	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.Get(), 0, &row_pitch);
+	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.resource.Get(), 0, &row_pitch);
 	if (!upload_ptr) {
         SPDLOG_ERROR("Not enough space on the upload buffer to allocate image.");
         FreeEXRHeader(&exr_header);
@@ -267,7 +268,7 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(format, x, y, 1, 1);
 	
-	result = GpuResources::CreateCommittedResource(this->device, &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, this->equirectangular_image.ReleaseAndGetAddressOf(), "Environment Map");
+	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->equirectangular_image, "Environment Map");
 	if (result != S_OK) {
         SPDLOG_ERROR("Failed to create texture.");
         stbi_image_free(image);
@@ -275,7 +276,7 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
     }
 
     uint32_t row_pitch = 0;
-	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.Get(), 0, &row_pitch);
+	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.resource.Get(), 0, &row_pitch);
     if (!upload_ptr) {
         SPDLOG_ERROR("Not enough space on the upload buffer to allocate image.");
         stbi_image_free(image);

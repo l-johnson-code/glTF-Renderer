@@ -5,24 +5,22 @@
 
 #include <directx/d3dx12_core.h>
 
-#include "GpuResources.h"
 #include "Memory.h"
 
-HRESULT LinearBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, D3D12_RESOURCE_STATES initial_resource_state, const char* name)
+HRESULT LinearBuffer::Create(GpuAllocator* allocator, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, D3D12_RESOURCE_STATES initial_resource_state, const char* name)
 {
     this->capacity = capacity;
     this->size = 0;
 
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(capacity, resource_flags);
 	
-    HRESULT result = GpuResources::CreateCommittedResource(
-        device, 
+    HRESULT result = allocator->CreateCommittedResource(
         heap_properties,
         D3D12_HEAP_FLAG_NONE,
         &resource_desc,
         initial_resource_state,
         nullptr,
-        this->resource.ReleaseAndGetAddressOf(),
+        &this->resource,
         name
 	);
     if (FAILED(result)) {
@@ -64,40 +62,28 @@ D3D12_GPU_VIRTUAL_ADDRESS LinearBuffer::Allocate(uint64_t size, uint64_t alignme
 		return 0;
 	} else {
 		this->size = new_size;
-		return this->resource->GetGPUVirtualAddress() + aligned_address;
+		return this->resource.resource->GetGPUVirtualAddress() + aligned_address;
 	}
 }
 
-HRESULT CpuMappedLinearBuffer::Create(ID3D12Device* device, uint64_t capacity, bool use_gpu_upload_heap, const char* name)
+HRESULT CpuMappedLinearBuffer::Create(GpuAllocator* allocator, uint64_t capacity, bool use_gpu_upload_heap, const char* name)
 {
 	HRESULT result = S_OK;
 
     this->capacity = capacity;
     this->size = 0;
 
-	// Check if GPU upload heaps are supported.
-	if (use_gpu_upload_heap) {
-		D3D12_FEATURE_DATA_D3D12_OPTIONS16 options = {};
-		result = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS16, &options, sizeof(options));
-		if (SUCCEEDED(result)) {
-			use_gpu_upload_heap = options.GPUUploadHeapSupported;
-		} else {
-			use_gpu_upload_heap = false;
-		}
-	}
-
-	CD3DX12_HEAP_PROPERTIES heap_properties(use_gpu_upload_heap ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD);
+	CD3DX12_HEAP_PROPERTIES heap_properties((use_gpu_upload_heap && allocator->SupportsGpuUploadHeap()) ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD);
 
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(capacity);
 
-    result = GpuResources::CreateCommittedResource(
-        device, 
+    result = allocator->CreateCommittedResource(
         &heap_properties,
         D3D12_HEAP_FLAG_NONE,
         &resource_desc,
         D3D12_RESOURCE_STATE_COMMON,
         nullptr,
-        this->resource.ReleaseAndGetAddressOf(),
+        &this->resource,
         name
 	);
     if (FAILED(result)) {
@@ -105,7 +91,7 @@ HRESULT CpuMappedLinearBuffer::Create(ID3D12Device* device, uint64_t capacity, b
         return result;
     }
 
-	result = this->resource->Map(0, nullptr, &this->pointer);
+	result = this->resource.resource->Map(0, nullptr, &this->pointer);
 	if (FAILED(result)) {
         Destroy();
         return result;
@@ -129,7 +115,7 @@ void* CpuMappedLinearBuffer::Allocate(uint64_t size, uint64_t alignment, D3D12_G
 		*gpu_address = 0;
 		return nullptr;
 	} else {
-		*gpu_address = this->resource->GetGPUVirtualAddress() + aligned_address;
+		*gpu_address = this->resource.resource->GetGPUVirtualAddress() + aligned_address;
 		this->size = new_size;
 		return (char*)(this->pointer) + aligned_address;
 	}
@@ -145,21 +131,20 @@ D3D12_GPU_VIRTUAL_ADDRESS CpuMappedLinearBuffer::Copy(const void* data, uint64_t
     return gpu_ptr;
 }
 
-HRESULT CircularBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, const char* name)
+HRESULT CircularBuffer::Create(GpuAllocator* allocator, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, const char* name)
 {
     this->capacity = capacity;
     this->size = 0;
 
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(capacity, resource_flags);
 	
-    HRESULT result = GpuResources::CreateCommittedResource(
-        device, 
+    HRESULT result = allocator->CreateCommittedResource(
         heap_properties,
         D3D12_HEAP_FLAG_NONE,
         &resource_desc,
         D3D12_RESOURCE_STATE_COMMON,
         nullptr,
-        this->resource.ReleaseAndGetAddressOf(),
+        &this->resource,
         name
 	);
     if (FAILED(result)) {
@@ -169,7 +154,7 @@ HRESULT CircularBuffer::Create(ID3D12Device* device, uint64_t capacity, D3D12_HE
 
     // Map the resource for CPU access.
     this->ptr = nullptr;
-    result = this->resource->Map(0, nullptr, &this->ptr);
+    result = this->resource.resource->Map(0, nullptr, &this->ptr);
     if (FAILED(result)) {
         Destroy();
         return result;
@@ -239,7 +224,7 @@ uint64_t CircularBuffer::Capacity()
 
 ID3D12Resource* CircularBuffer::Resource()
 {
-    return this->resource.Get();
+    return this->resource.resource.Get();
 }
 
 void CircularBuffer::Destroy()

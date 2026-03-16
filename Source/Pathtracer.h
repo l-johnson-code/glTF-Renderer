@@ -101,7 +101,7 @@ class Pathtracer {
 
     static constexpr int MAX_BOUNCES = 5;
     
-    void Init(ID3D12Device5* device, UploadBuffer* upload_buffer);
+    void Init(ID3D12Device5* device, GpuAllocator* allocator, UploadBuffer* upload_buffer);
 	void PathtraceScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
     
@@ -143,7 +143,7 @@ class Pathtracer {
     ShaderTableCollection shader_tables;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12StateObject> state_object;
-    Microsoft::WRL::ComPtr<ID3D12Resource> shader_tables_resource;
+    GpuResource shader_tables_resource;
 
 	RaytracingAccelerationStructure acceleration_structure;
 

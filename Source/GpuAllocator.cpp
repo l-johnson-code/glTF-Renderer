@@ -2,6 +2,9 @@
 
 #include <bit>
 
+#include "Profiling.h"
+#include "DirectXHelpers.h"
+
 // TODO: Handle zeros
 static uint8_t MostSignificantBitIndex(uint64_t value)
 {
@@ -11,6 +14,17 @@ static uint8_t MostSignificantBitIndex(uint64_t value)
 static uint8_t LeastSignificantBitIndex(uint64_t value)
 {
     return std::countr_zero(value);
+}
+
+static Profiling::MemoryPool GetPoolFromHeapProperties(ID3D12Device* device, const D3D12_HEAP_PROPERTIES* heap_properties)
+{
+    D3D12_HEAP_PROPERTIES detailed_heap_properties;
+    if (heap_properties->Type == D3D12_HEAP_TYPE_CUSTOM) {
+        detailed_heap_properties = *heap_properties;
+    } else {
+        detailed_heap_properties = device->GetCustomHeapProperties(0, heap_properties->Type);
+    }
+    return detailed_heap_properties.MemoryPoolPreference == D3D12_MEMORY_POOL_L0 ? Profiling::MEMORY_POOL_CPU : Profiling::MEMORY_POOL_GPU;
 }
 
 void TlsfHeap::Init(ID3D12Device* device, uint64_t heap_size, uint32_t max_allocations)
@@ -245,9 +259,12 @@ void TlsfHeap::RemoveFreeBlock(Block* block)
 void GpuAllocator::Init(ID3D12Device* device)
 {
     this->device = device;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS16 options = {};
+    HRESULT result = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS16, &options, sizeof(options));
+    this->supports_gpu_upload_heap = SUCCEEDED(result) && options.GPUUploadHeapSupported;
 }
 
-HRESULT GpuAllocator::CreateResource(D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource)
+HRESULT GpuAllocator::CreateResource(const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource, const char* name)
 {
     // TODO: Support tight alignment.
     D3D12_RESOURCE_ALLOCATION_INFO allocation_info = device->GetResourceAllocationInfo(0, 1, desc);
@@ -265,7 +282,38 @@ HRESULT GpuAllocator::CreateResource(D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_S
         return result;
     }
 
+    if (name) {
+        SetName(resource->resource.Get(), name);
+    }
+
     resource->allocation = std::make_shared<GpuAllocation>(this, heap_index, heap_allocation.handle);
+
+    return S_OK;
+}
+
+HRESULT GpuAllocator::CreateCommittedResource(const D3D12_HEAP_PROPERTIES* heap_properties, D3D12_HEAP_FLAGS heap_flags, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource, const char* name)
+{
+    ProfileZoneScoped();
+
+	HRESULT result = device->CreateCommittedResource(heap_properties, heap_flags, desc, initial_state, optimized_clear_value, IID_PPV_ARGS(&resource->resource));
+	assert(SUCCEEDED(result));
+	if (FAILED(result)) {
+		return result;
+	}
+
+    if (name) {
+        SetName(resource->resource.Get(), name);
+    }
+
+	// Estimate the size of the resource. 
+	// This value may be lower or higher than the underlying heap size but there appears to be no way to directly query the size of the underlying heap.
+	D3D12_RESOURCE_ALLOCATION_INFO alloc_info = device->GetResourceAllocationInfo(0, 1, desc);
+
+    // Log the allocation in tracy.
+	Profiling::MemoryPool pool = GetPoolFromHeapProperties(this->device.Get(), heap_properties);
+	ProfileAllocP(resource->resource.Get(), alloc_info.SizeInBytes, pool);
+
+    resource->allocation = std::make_shared<GpuAllocation>(this, resource->resource.Get());
 
     return S_OK;
 }
@@ -296,8 +344,19 @@ HRESULT GpuAllocator::Allocate(uint64_t size, uint64_t alignment, int* heap_inde
 
 void GpuAllocator::Free(GpuAllocation* allocation)
 {
-    if (allocation->handle) {
-        TlsfHeap& heap = heaps[allocation->heap];
-        heap.Free(allocation->handle);
+    ProfileZoneScoped();
+    if (allocation->allocator) {
+        if (allocation->is_committed && allocation->resource) {
+            D3D12_HEAP_PROPERTIES heap_properties;
+            HRESULT result = allocation->resource->GetHeapProperties(&heap_properties, nullptr);
+            assert(SUCCEEDED(result));
+            Profiling::MemoryPool pool = GetPoolFromHeapProperties(this->device.Get(), &heap_properties);
+            ProfileFreeP(allocation->resource, pool);
+            allocation->resource->Release();
+            allocation->resource = nullptr;
+        } else if (allocation->handle){
+            TlsfHeap& heap = heaps[allocation->heap];
+            heap.Free(allocation->handle);
+        }
     }
 }

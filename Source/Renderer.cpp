@@ -147,10 +147,10 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	// Create the swapchain.
 	swapchain.Create(this->device.Get(), this->graphics_command_queue.Get(), &this->resources.rtv_allocator, window, display_width, display_height);
 	
-	upload_buffer.Create(this->device.Get(), ::Config::UPLOAD_BUFFER_CAPACITY, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, ::Config::FRAME_COUNT);
+	upload_buffer.Create(this->device.Get(), &this->resources.allocator, ::Config::UPLOAD_BUFFER_CAPACITY, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, ::Config::FRAME_COUNT);
 
 	for (int i = 0; i < frame_allocators.Size(); i++) {
-		frame_allocators[i].Create(this->device.Get(), ::Config::FRAME_HEAP_CAPACITY, true, "Transient Resources");
+		frame_allocators[i].Create(&this->resources.allocator, ::Config::FRAME_HEAP_CAPACITY, true, "Transient Resources");
 	}
 
 	InitializeImGui();
@@ -160,13 +160,13 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	CreateRenderTargets();
 	gpu_skinner.Create(this->device.Get());
 	tone_mapper.Create(this->device.Get());
-	environment_map.Init(this->device.Get(), &this->resources.cbv_uav_srv_dynamic_allocator);
+	environment_map.Init(this->device.Get(), &this->resources.allocator, &this->resources.cbv_uav_srv_dynamic_allocator);
 	resources.LoadLookupTables(&this->upload_buffer);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
-		rasterizer.Init(this->device.Get(), &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, this->display_width, this->display_height);
+		rasterizer.Init(this->device.Get(), &this->resources.allocator, &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, this->display_width, this->display_height);
 	} else {
-		pathtracer.Init(this->device.Get(), &this->upload_buffer);
+		pathtracer.Init(this->device.Get(), &this->resources.allocator, &this->upload_buffer);
 	}
 
 	uint64_t submission_id = upload_buffer.Submit();
@@ -239,10 +239,10 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 			pathtracer.Shutdown();
 		}
 		if (new_settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
-			rasterizer.Init(this->device.Get(), &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, new_settings->width, new_settings->height);
+			rasterizer.Init(this->device.Get(), &this->resources.allocator, &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, new_settings->width, new_settings->height);
 		} else {
 			this->upload_buffer.Begin();
-			pathtracer.Init(this->device.Get(), &this->upload_buffer);
+			pathtracer.Init(this->device.Get(), &this->resources.allocator, &this->upload_buffer);
 			uint64_t submission = this->upload_buffer.Submit();
 			this->upload_buffer.WaitForSubmissionToComplete(submission);
 		}
@@ -301,9 +301,9 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	this->graphics_command_list->SetDescriptorHeaps(std::size(descriptor_heaps), descriptor_heaps);
 
 	// Generate environment map.
-	if (environment_map.equirectangular_image.Get()) {
+	if (environment_map.equirectangular_image.resource.Get()) {
 		command_context.BeginEvent("Environment Map");
-		environment_map.CreateEnvironmentMap(&command_context, environment_map.equirectangular_image.Get(), &map);
+		environment_map.CreateEnvironmentMap(&command_context, environment_map.equirectangular_image.resource.Get(), &map);
 		deferred_release.Current().push_back(environment_map.equirectangular_image);
 		environment_map.equirectangular_image.Reset();
 		environment_map_loaded = true;
@@ -328,7 +328,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.light_count = (int)this->lights.size(),
         	.environment_map = environment_map_loaded ? &map : nullptr,
         	.output_rtv= this->display_rtv,
-        	.output_resource = this->display.Get(),
+        	.output_resource = this->display.resource.Get(),
 		};
 		rasterizer.DrawScene(&command_context, &settings->raster, &params);
 	} else {
@@ -344,7 +344,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.light_count = (int)this->lights.size(),
         	.environment_map = environment_map_loaded ? &map : nullptr,
         	.output_descriptor = this->display_uav,
-        	.output_resource = this->display.Get(),
+        	.output_resource = this->display.resource.Get(),
 		};
 		pathtracer.PathtraceScene(&command_context, &settings->pathtracer, &params);
 	}
@@ -388,11 +388,11 @@ void Renderer::CreateRenderTargets()
 		float clear_color[4] = {0.0, 0.0, 0.0, 0.0};
 		CD3DX12_CLEAR_VALUE clear_value(display_format, clear_color);
 		
-		result = GpuResources::CreateCommittedResource(device.Get(), &render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, this->display.ReleaseAndGetAddressOf(), "Display");
+		result = this->resources.allocator.CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, &this->display, "Display");
 		assert(result == S_OK);
 
-		this->display_rtv = resources.rtv_allocator.AllocateAndCreateRtv(this->display.Get(), nullptr);
-		this->display_uav = resources.cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(this->display.Get(), nullptr, nullptr);
+		this->display_rtv = resources.rtv_allocator.AllocateAndCreateRtv(this->display.resource.Get(), nullptr);
+		this->display_uav = resources.cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(this->display.resource.Get(), nullptr, nullptr);
 	}
 }
 

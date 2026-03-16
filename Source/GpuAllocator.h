@@ -72,13 +72,20 @@ class GpuAllocator {
     public:
 
     void Init(ID3D12Device* device);
-    HRESULT CreateResource(D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource);
+    bool SupportsGpuUploadHeap() const
+    {
+        return supports_gpu_upload_heap;
+    }
+    HRESULT CreateResource(const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource, const char* name = nullptr);
+    HRESULT CreateCommittedResource(const D3D12_HEAP_PROPERTIES* heap_properties, D3D12_HEAP_FLAGS heap_flags, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource, const char* name = nullptr);
     HRESULT Allocate(uint64_t size, uint64_t alignment, int* heap_index, TlsfHeap::Allocation* allocation);
     void Free(GpuAllocation* allocation);
 
     private:
 
     static constexpr uint64_t heap_size = Mebibytes(256);
+
+    bool supports_gpu_upload_heap = false;
 
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     std::vector<TlsfHeap> heaps;
@@ -88,36 +95,20 @@ class GpuAllocation {
     public:
 
     GpuAllocation() = default;
+    GpuAllocation(GpuAllocator* allocator, ID3D12Resource* resource)
+    {
+        this->is_committed = true;
+        this->allocator = allocator;
+        this->resource = resource;
+        this->resource->AddRef();
+    }
+
     GpuAllocation(GpuAllocator* allocator, int heap, void* handle)
     {
+        this->is_committed = false;
         this->allocator = allocator;
         this->heap = heap;
         this->handle = handle;
-    }
-
-    GpuAllocation(const GpuAllocation&) = delete;
-    GpuAllocation operator=(const GpuAllocation&) = delete;
-
-    GpuAllocation(GpuAllocation&& allocation) noexcept
-    {
-        this->allocator = allocation.allocator;
-        this->heap = allocation.heap;
-        this->handle = allocation.handle;
-        allocation.allocator = nullptr;
-        allocation.heap = 0;
-        allocation.handle = nullptr;
-    }
-
-    GpuAllocation& operator=(GpuAllocation&& allocation) noexcept
-    {
-        Free();
-        this->allocator = allocation.allocator;
-        this->heap = allocation.heap;
-        this->handle = allocation.handle;
-        allocation.allocator = nullptr;
-        allocation.heap = 0;
-        allocation.handle = nullptr;
-        return *this;
     }
 
     ~GpuAllocation()
@@ -133,6 +124,8 @@ class GpuAllocation {
     }
 
     GpuAllocator* allocator = nullptr;
+    ID3D12Resource* resource = nullptr;
+    bool is_committed = false;
     int heap = 0;
     void* handle = nullptr;
 };

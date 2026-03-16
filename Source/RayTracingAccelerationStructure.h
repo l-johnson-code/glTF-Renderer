@@ -13,15 +13,15 @@ class RaytracingAccelerationStructure {
     public:
 
     struct Blas {
-        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        GpuResource resource;
     };
 
     struct DynamicBlas {
-        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        GpuResource resource;
         uint64_t update_scratch_size;
     };
     
-    void Init(ID3D12Device5* device, uint32_t max_blas_vertices, uint32_t max_tlas_instances);
+    void Init(ID3D12Device5* device, GpuAllocator* allocator, uint32_t max_blas_vertices, uint32_t max_tlas_instances);
     
     void BuildStaticBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Blas* blas);
     void BuildDynamicBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, DynamicBlas* blas);
@@ -38,6 +38,7 @@ class RaytracingAccelerationStructure {
     private:
     
     Microsoft::WRL::ComPtr<ID3D12Device5> device;
+    GpuAllocator* allocator;
 
     uint64_t max_blas_scratch_size = 0;
     LinearBuffer blas_scratch;
@@ -45,9 +46,9 @@ class RaytracingAccelerationStructure {
     uint32_t instance_count = 0;
     uint32_t max_tlas_instances = 0;
     MultiBuffer<CpuMappedLinearBuffer, Config::FRAME_COUNT> tlas_staging;
-    Microsoft::WRL::ComPtr<ID3D12Resource> tlas_scratch;
-    Microsoft::WRL::ComPtr<ID3D12Resource> tlas;
+    GpuResource tlas_scratch;
+    GpuResource tlas;
 
-    void BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, ID3D12Resource** resource, uint64_t* update_scratch_size = nullptr);
+    void BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, GpuResource* resource, uint64_t* update_scratch_size = nullptr);
     bool AddTlasInstance(D3D12_GPU_VIRTUAL_ADDRESS blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags);
 };

@@ -17,16 +17,16 @@ class EnvironmentMap {
         int ggx_srv_descriptor = -1;
         int diffuse_srv_descriptor = -1;
         int importance_srv_descriptor = -1;
-        Microsoft::WRL::ComPtr<ID3D12Resource> cube;
-        Microsoft::WRL::ComPtr<ID3D12Resource> ggx;
-        Microsoft::WRL::ComPtr<ID3D12Resource> diffuse;
-        Microsoft::WRL::ComPtr<ID3D12Resource> importance;
+        GpuResource cube;
+        GpuResource ggx;
+        GpuResource diffuse;
+        GpuResource importance;
     };
     
-    Microsoft::WRL::ComPtr<ID3D12Resource> equirectangular_image;
+    GpuResource equirectangular_image;
     
     static float MipToRoughness(int mip_level, int mip_count);
-    void Init(ID3D12Device* device, CbvSrvUavPool* descriptor_allocator);
+    void Init(ID3D12Device* device, GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator);
     // Note: Loading the initial image and processing the image into cubemaps are separated so that they can happen at different times.
     void LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const char* filepath);
     void CreateEnvironmentMap(CommandContext* context, ID3D12Resource* equirectangular_image, Map* map);
@@ -39,8 +39,9 @@ class EnvironmentMap {
         BSDF_GGX,
     };
     
-    ID3D12Device* device;
-    CbvSrvUavPool* descriptor_allocator;
+    ID3D12Device* device = nullptr;
+    GpuAllocator* allocator = nullptr;
+    CbvSrvUavPool* descriptor_allocator = nullptr;
     
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> generate_cubemap_pipeline_state;
