@@ -72,7 +72,8 @@ class TlsfHeap {
 class GpuAllocator {
     public:
 
-    void Init(ID3D12Device* device);
+    HRESULT Init(ID3D12Device* device);
+    void DeInit();
     bool SupportsGpuUploadHeap() const
     {
         return supports_gpu_upload_heap;
@@ -87,6 +88,12 @@ class GpuAllocator {
     static constexpr uint64_t heap_size = Mebibytes(256);
 
     bool supports_gpu_upload_heap = false;
+
+    size_t local_capacity = 0;
+    size_t non_local_capacity = 0;
+
+    size_t local_budget = 0;
+    size_t non_local_budget = 0;
 
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     std::vector<TlsfHeap> heaps;
