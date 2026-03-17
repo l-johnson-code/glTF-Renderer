@@ -164,6 +164,8 @@ target_sources(glTF PRIVATE
     "Source/Timer.cpp"
     "Source/Timer.h"
     "Source/TinyGltfTools.h"
+    "Source/TlsfHeap.cpp"
+    "Source/TlsfHeap.h"
     "Source/ToneMapper.cpp"
     "Source/ToneMapper.h"
     "Source/UploadBuffer.cpp"
