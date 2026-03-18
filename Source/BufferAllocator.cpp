@@ -168,20 +168,23 @@ uint64_t CircularBuffer::Allocate(uint64_t size, uint64_t alignment)
     // Try to allocate at the end of the buffer.
     uint64_t aligned_write = Align(this->write, alignment);
     uint64_t new_write = aligned_write + size;
-    uint64_t new_size = this->size + (new_write - this->write);
+    uint64_t new_size = this->size + new_write - this->write;
     if (new_size <= capacity && new_write <= capacity) {
         this->size = new_size;
         this->write = new_write % capacity;
         return aligned_write;
-    } else if ((size + (this->capacity - this->write)) < this->capacity){
-        // Try to allocate at the beginning of the buffer.
-        this->size += size + (this->capacity - this->write);
+    }
+    
+    // Try to allocate at the beginning of the buffer.
+    new_size = this->size + size + this->capacity - this->write;
+    if (new_size <= capacity) {
+        this->size = new_size;
         this->write = size;
         return 0;
-    } else {
-        // Buffer is full.
-        return std::numeric_limits<uint64_t>::max();
     }
+
+    // Buffer is full.
+    return std::numeric_limits<uint64_t>::max();
 }
 
 void* CircularBuffer::GetCpuAddress(uint64_t offset)
@@ -196,13 +199,14 @@ uint64_t CircularBuffer::GetMarker()
 
 void CircularBuffer::Free(uint64_t marker)
 {
+    assert(marker < capacity);
     uint64_t new_size;
     if (marker <= this->write) {
         new_size = this->write - marker;
     } else {
-        new_size = this->write + (this->capacity - marker);
+        new_size = this->write + this->capacity - marker;
     }
-    assert(new_size <= this->size); // Check we haven't freed in the incorrect order.
+    assert(new_size <= this->size);  // Check we haven't freed in the incorrect order.
     this->size = new_size;
 }
 
