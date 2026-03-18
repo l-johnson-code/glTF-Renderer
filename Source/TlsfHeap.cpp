@@ -210,9 +210,9 @@ TlsfHeap::Block* TlsfHeap::GetGoodFitBlock(uint64_t size)
     }
 
     first_level_index = LeastSignificantBitIndex(first_level_bitmap & (-1 << (first_level_index + 1)));
-    if (first_level_index != -1) {
+    if (first_level_index != 64) {
         second_level_index = LeastSignificantBitIndex(second_level_bitmaps[first_level_index]);
-        if (second_level_index != -1) {
+        if (second_level_index != 64) {
             return free_lists[first_level_index][second_level_index];
         }
     }
