@@ -849,7 +849,6 @@ void Gltf::CreateDynamicMesh(GpuAllocator* gpu_allocator)
 		DynamicPrimitives& dynamic = dynamic_primitives.emplace_back();
 		dynamic.dynamic_meshes.resize(primitives.size());
 		for (int j = 0; j < primitives.size(); j++) {
-        	DynamicMesh dynamic_mesh;
 			DynamicMesh::Desc desc = {};
 			desc.num_of_vertices = primitives[j].mesh.num_of_vertices;
 			desc.flags = DynamicMesh::FLAG_POSITION;
