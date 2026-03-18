@@ -596,14 +596,13 @@ void Gltf::LoadAnimations(tinygltf::Model* gltf)
 	ProfileZoneScoped();
 	for (int i = 0; i < gltf->animations.size(); i++) {
 		tinygltf::Animation& tiny_gltf_animation = gltf->animations[i];
-		Animation animation;
+		Animation& animation = animations.emplace_back();
 		animation.name = tiny_gltf_animation.name;
 		for (int j = 0; j < tiny_gltf_animation.channels.size(); j++) {
 			tinygltf::AnimationChannel* gltf_channel = &tiny_gltf_animation.channels[j];
 			tinygltf::AnimationSampler* sampler = &tiny_gltf_animation.samplers[gltf_channel->sampler];
 			LoadAnimationChannel(gltf, gltf_channel, sampler, &animation);
 		}
-		animations.push_back(animation);
 	}
 }
 
@@ -611,7 +610,7 @@ void Gltf::LoadAnimationChannel(tinygltf::Model* gltf, tinygltf::AnimationChanne
 {	
 	ProfileZoneScoped();
 	// Get path.
-	Animation::Channel channel;
+	Animation::Channel& channel = animation->channels.emplace_back();
 	channel.node_id = gltf_channel->target_node;
 	if (gltf_channel->target_path == "rotation") {
 		channel.path = Animation::Channel::PATH_ROTATION;
@@ -692,7 +691,6 @@ void Gltf::LoadAnimationChannel(tinygltf::Model* gltf, tinygltf::AnimationChanne
 	channel.transforms.resize(num_of_values * component_size);
 	tinygltf::tools::Copy(channel.transforms.data(), gltf, output_accessor);
 
-	animation->channels.push_back(channel);
 	animation->length = std::max(animation->length, end_time);
 }
 
