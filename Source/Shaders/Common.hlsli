@@ -82,7 +82,7 @@ float2 SignNotZero(float2 xy)
 float2 EncodeOctahedralMap(float3 normal) 
 {
 	// Project onto the octahedron.
-	float3 octahedral = normal.xyz / (abs(normal.x) + abs(normal.y) + abs(normal.z));
+	float3 octahedral = normal / (abs(normal.x) + abs(normal.y) + abs(normal.z));
 	// Flatten onto square with coordinates in range [-1, 1].
 	float2 result;
 	if (octahedral.z >= 0.) {

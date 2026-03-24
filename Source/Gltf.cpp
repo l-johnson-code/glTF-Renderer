@@ -20,6 +20,66 @@
 #include "UploadBuffer.h"
 #include "TinyGltfTools.h"
 
+static glm::vec2 EncodeOctahedralMap(glm::vec3 normal)
+{
+	// Project onto the octahedron.
+	glm::vec3 octahedral = normal / (glm::abs(normal.x) + glm::abs(normal.y) + glm::abs(normal.z));
+	// Flatten onto square with coordinates in range [-1, 1].
+	glm::vec2 result;
+	if (octahedral.z >= 0.) {
+		result = glm::vec2(octahedral.x, octahedral.y);
+	} else {
+		result = glm::vec2(octahedral.x >= 0 ? 1 : -1, octahedral.y >= 0 ? 1 : -1) * (glm::vec2(1) - glm::abs(glm::vec2(octahedral.y, octahedral.x)));
+	}
+	return result;
+}
+
+// From the paper "Building an Orthonormal Basis, Revisited".
+static void CreateBasis(glm::vec3 normal, glm::vec3* tangent, glm::vec3* bitangent)
+{
+	const float sign = normal.z >= 0.0f ? 1.0f : -1.0f;
+	const float a = -1.0f / (sign + normal.z);
+	const float b = normal.x * normal.y * a;
+	*tangent = glm::vec3(1.0f + sign * normal.x * normal.x * a, sign * b, -sign * normal.x);
+	*bitangent = glm::vec3(b, sign + normal.y * normal.y * a, -normal.y);
+}
+
+static uint32_t EncodeNormal(glm::vec3 normal)
+{
+	glm::vec4 encoded;
+
+    // Encode normal.
+    glm::vec2 encoded_normal = 0.5f * EncodeOctahedralMap(normal) + 0.5f;
+
+    // Encode tangent.
+    float encoded_tangent = 0;
+
+    // Encode winding.
+    float encoded_winding = 1;
+
+    return glm::packUnorm3x10_1x2(glm::vec4(encoded_normal, encoded_tangent, encoded_winding));
+}
+
+static uint32_t EncodeTangentSpace(glm::vec3 normal, glm::vec4 tangent)
+{
+	glm::vec4 encoded;
+
+    // Encode normal.
+    glm::vec2 encoded_normal = 0.5f * EncodeOctahedralMap(normal) + 0.5f;
+
+    // Encode tangent. 
+    glm::vec3 canonical_tangent;
+    glm::vec3 canonical_bitangent;
+    CreateBasis(normal, &canonical_tangent, &canonical_bitangent);
+    float angle = std::atan2(glm::dot(glm::vec3(tangent), canonical_bitangent), glm::dot(glm::vec3(tangent), canonical_tangent));
+    float encoded_tangent = angle / glm::two_pi<float>();
+
+    // Encode winding.
+    float encoded_winding = tangent.w == 1 ? 1 : 0;
+
+    return glm::packUnorm3x10_1x2(glm::vec4(encoded_normal, encoded_tangent, encoded_winding));
+}
+
 void Gltf::TraverseScene(int scene, const std::function<void(Gltf*, int)>& lambda)
 {
 	ProfileZoneScoped();
@@ -169,16 +229,30 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 	glm::vec3* dest = (glm::vec3*)primitive->mesh.QueuePositionUpdate(upload_buffer);
 	tinygltf::tools::Copy(dest, gltf, position_accessor);
 
-	if (desc.flags & ::Mesh::FLAG_NORMAL) {
+	if ((desc.flags & ::Mesh::FLAG_NORMAL) && (desc.flags & ::Mesh::FLAG_TANGENT)) {
 		tinygltf::Accessor* normal_accessor = &gltf->accessors[gltf_primitive->attributes["NORMAL"]];
-		glm::vec3* dest = (glm::vec3*)primitive->mesh.QueueNormalUpdate(upload_buffer);
-		tinygltf::tools::Copy(dest, gltf, normal_accessor);
-	}
-
-	if (desc.flags & ::Mesh::FLAG_TANGENT) {
+		auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
 		tinygltf::Accessor* tangent_accessor = &gltf->accessors[gltf_primitive->attributes["TANGENT"]];
-		glm::vec4* dest = (glm::vec4*)primitive->mesh.QueueTangentUpdate(upload_buffer);
-		tinygltf::tools::Copy(dest, gltf, tangent_accessor);
+		auto tangent_it = tinygltf::tools::Iterator<4, float>(gltf, tangent_accessor);
+		uint32_t* dest = (uint32_t*)primitive->mesh.QueueTangentSpaceUpdate(upload_buffer);
+		while (!normal_it.AtEnd() && !tangent_it.AtEnd()) {
+			glm::vec3 normal = normal_it.Get();
+			glm::vec4 tangent = tangent_it.Get();
+			*dest = EncodeTangentSpace(normal, tangent);
+			normal_it.Next();
+			tangent_it.Next();
+			dest++;
+		}
+	} else if (desc.flags & ::Mesh::FLAG_NORMAL) {
+		tinygltf::Accessor* normal_accessor = &gltf->accessors[gltf_primitive->attributes["NORMAL"]];
+		auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
+		uint32_t* dest = (uint32_t*)primitive->mesh.QueueTangentSpaceUpdate(upload_buffer);
+		while (!normal_it.AtEnd()) {
+			glm::vec3 normal = normal_it.Get();
+			*dest = EncodeNormal(normal);
+			normal_it.Next();
+			dest++;
+		}
 	}
 
 	if (desc.flags & ::Mesh::FLAG_TEXCOORD_0) {
@@ -240,16 +314,30 @@ void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* 
 		tinygltf::tools::Copy(dest, gltf, accessor);
 	}
 
-	if (desc.flags & MorphTarget::FLAG_NORMAL) {
-		glm::vec3* dest = (glm::vec3*)morph_target->QueueNormalUpdate(upload_buffer);
-		tinygltf::Accessor* accessor = &gltf->accessors[target->at("NORMAL")];
-		tinygltf::tools::Copy(dest, gltf, accessor);
-	}
-
-	if (desc.flags & MorphTarget::FLAG_TANGENT) {
-		glm::vec3* dest = (glm::vec3*)morph_target->QueueTangentUpdate(upload_buffer);
-		tinygltf::Accessor* accessor = &gltf->accessors[target->at("TANGENT")];
-		tinygltf::tools::Copy(dest, gltf, accessor);
+	if ((desc.flags & MorphTarget::FLAG_NORMAL) && (desc.flags & MorphTarget::FLAG_TANGENT)) {
+		tinygltf::Accessor* normal_accessor =  &gltf->accessors[target->at("NORMAL")];
+		auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
+		tinygltf::Accessor* tangent_accessor =  &gltf->accessors[target->at("TANGENT")];
+		auto tangent_it = tinygltf::tools::Iterator<4, float>(gltf, tangent_accessor);
+		uint32_t* dest = (uint32_t*)morph_target->QueueTangentSpaceUpdate(upload_buffer);
+		while (!normal_it.AtEnd() && !tangent_it.AtEnd()) {
+			glm::vec3 normal = normal_it.Get();
+			glm::vec4 tangent = tangent_it.Get();
+			*dest = EncodeTangentSpace(normal, tangent);
+			normal_it.Next();
+			tangent_it.Next();
+			dest++;
+		}
+	} else if (desc.flags & MorphTarget::FLAG_NORMAL) {
+		tinygltf::Accessor* normal_accessor =  &gltf->accessors[target->at("NORMAL")];
+		auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
+		uint32_t* dest = (uint32_t*)morph_target->QueueTangentSpaceUpdate(upload_buffer);
+		while (!normal_it.AtEnd()) {
+			glm::vec3 normal = normal_it.Get();
+			*dest = EncodeNormal(normal);
+			normal_it.Next();
+			dest++;
+		}
 	}
 }
 

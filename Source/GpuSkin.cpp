@@ -19,13 +19,11 @@ void GpuSkin::Create(ID3D12Device* device)
 	
     root_parameters[ROOT_PARAMETER_CONSTANT_BUFFER].InitAsConstantBufferView(0);
 	root_parameters[ROOT_PARAMETER_VERTEX_INPUT].InitAsShaderResourceView(0);
-	root_parameters[ROOT_PARAMETER_NORMAL_INPUT].InitAsShaderResourceView(1);
-	root_parameters[ROOT_PARAMETER_TANGENT_INPUT].InitAsShaderResourceView(2);
+	root_parameters[ROOT_PARAMETER_TANGENT_SPACE_INPUT].InitAsShaderResourceView(1);
 	root_parameters[ROOT_PARAMETER_SKIN].InitAsShaderResourceView(3);
     root_parameters[ROOT_PARAMETER_BONES].InitAsShaderResourceView(4);
     root_parameters[ROOT_PARAMETER_VERTEX_OUTPUT].InitAsUnorderedAccessView(0);
-    root_parameters[ROOT_PARAMETER_NORMAL_OUTPUT].InitAsUnorderedAccessView(1);
-    root_parameters[ROOT_PARAMETER_TANGENT_OUTPUT].InitAsUnorderedAccessView(2);
+    root_parameters[ROOT_PARAMETER_TANGENT_SPACE_OUTPUT].InitAsUnorderedAccessView(1);
 
     D3D12_ROOT_SIGNATURE_DESC root_signature_desc = {
 		.NumParameters = ROOT_PARAMETER_COUNT,
@@ -73,8 +71,7 @@ void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D
 		struct {
 			float weight;
 			int position_descriptor;
-			int normal_descriptor;
-			int tangent_descriptor;
+			int tangent_space_descriptor;
 		} morph_targets[Config::MAX_SIMULTANEOUS_MORPH_TARGETS];
 	} constant_buffer = {};
 
@@ -88,8 +85,7 @@ void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D
 		constant_buffer.morph_targets[i] = {
 			.weight = morph_weights[i],
 			.position_descriptor = morph_targets[i]->position.descriptor,
-			.normal_descriptor = morph_targets[i]->normal.descriptor,
-			.tangent_descriptor = morph_targets[i]->tangent.descriptor,
+			.tangent_space_descriptor = morph_targets[i]->tangent_space.descriptor,
 		};
 	}
 
@@ -101,12 +97,10 @@ void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D
     context->command_list->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
 
     context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_VERTEX_INPUT, input->position.view.BufferLocation);
-    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_NORMAL_INPUT, input->normal.view.BufferLocation);
-    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_TANGENT_INPUT, input->tangent.view.BufferLocation);
+    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_TANGENT_SPACE_INPUT, input->tangent_space.view.BufferLocation);
 	
     context->command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_VERTEX_OUTPUT, output->GetCurrentPositionBuffer()->view.BufferLocation);
-    context->command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_NORMAL_OUTPUT, output->normal.view.BufferLocation);
-    context->command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_TANGENT_OUTPUT, output->tangent.view.BufferLocation);
+    context->command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_TANGENT_SPACE_OUTPUT, output->tangent_space.view.BufferLocation);
 
     context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_SKIN, input->joint_weight.view.BufferLocation);
     context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_BONES, bones);

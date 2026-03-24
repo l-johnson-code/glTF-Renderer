@@ -5,6 +5,7 @@
 #include "Transforms.hlsli"
 #include "Color.hlsli"
 #include "Sampling.hlsli"
+#include "Vertex.hlsli"
 
 struct SceneConstants {
     float4x4 clip_to_world;
@@ -33,8 +34,7 @@ struct Instance {
 	float4x4 normal_transform;
 	int index_descriptor;
 	int position_descriptor;
-	int normal_descriptor;
-	int tangent_descriptor;
+	int tangent_space_descriptor;
 	int texcoord_descriptors[2];
 	int color_descriptor;
 	int material_id;
@@ -198,36 +198,27 @@ float3 GetGeometricNormal(float3 pos_0, float3 pos_1, float3 pos_2)
     return cross(pos_1 - pos_0, pos_2 - pos_0);
 }
 
-float3 GetVertexNormal(int normal_descriptor, uint3 vertex, float3 barycentric_weights, float3 geometric_normal)
+void GetVertexNormalAndTangent(int tangent_space_descriptor, uint3 vertex, float3 barycentric_weights, float3 geometric_normal, out float3 normal, out float4 tangent)
 {
-    float3 normal;
-    if (normal_descriptor != -1) {
-        Buffer<float3> normal_buffer = ResourceDescriptorHeap[NonUniformResourceIndex(normal_descriptor)];
-        float3 normal_0 = normal_buffer[vertex.x];
-        float3 normal_1 = normal_buffer[vertex.y];
-        float3 normal_2 = normal_buffer[vertex.z];
+    if (tangent_space_descriptor != -1) {
+        Buffer<float4> tangent_space_buffer = ResourceDescriptorHeap[NonUniformResourceIndex(tangent_space_descriptor)];
+        float3 normal_0;
+        float4 tangent_0;
+        DecodeTangentSpace(tangent_space_buffer[vertex.x], normal_0, tangent_0);
+        float3 normal_1;
+        float4 tangent_1;
+        DecodeTangentSpace(tangent_space_buffer[vertex.y], normal_1, tangent_1);
+        float3 normal_2;
+        float4 tangent_2;
+        DecodeTangentSpace(tangent_space_buffer[vertex.z], normal_2, tangent_2);
         normal = BarycentricInterpolate(normal_0, normal_1, normal_2, barycentric_weights);
-    } else {
-        normal = geometric_normal;
-    }
-    return normal;
-}
-
-float4 GetTangent(int tangent_descriptor, uint3 vertex, float3 barycentric_weights, float3 normal)
-{
-    float4 tangent;
-    if (tangent_descriptor != -1) {
-        Buffer<float4> tangent_buffer = ResourceDescriptorHeap[NonUniformResourceIndex(tangent_descriptor)];
-        float4 tangent_0 = tangent_buffer[vertex.x];
-        float4 tangent_1 = tangent_buffer[vertex.y];
-        float4 tangent_2 = tangent_buffer[vertex.z];
         tangent.xyz = BarycentricInterpolate(tangent_0.xyz, tangent_1.xyz, tangent_2.xyz, barycentric_weights);
         tangent.w = tangent_0.w;
     } else {
-        tangent.xyz = GenerateTangent(normal);
+        normal = geometric_normal;
+        tangent.xyz = GenerateTangent(geometric_normal);
         tangent.w = 1;
     }
-    return tangent;
 }
 
 float3 CalculateBitangent(float3 normal, float4 tangent)
@@ -294,8 +285,7 @@ VertexAttributes GetVertexAttributes(Instance instance, uint primitive_index, fl
     float3 pos_0, pos_1, pos_2;
     attributes.position = GetPositions(instance.position_descriptor, v, barycentric_weights, pos_0, pos_1, pos_2);
     attributes.geometric_normal = GetGeometricNormal(pos_0, pos_1, pos_2);
-    attributes.normal = GetVertexNormal(instance.normal_descriptor, v, barycentric_weights, attributes.geometric_normal);
-    attributes.tangent = GetTangent(instance.tangent_descriptor, v, barycentric_weights, attributes.normal);
+    GetVertexNormalAndTangent(instance.tangent_space_descriptor, v, barycentric_weights, attributes.geometric_normal, attributes.normal, attributes.tangent);
 
     // Transform into world space.
     attributes.position = mul(instance.transform, float4(attributes.position, 1)).xyz;

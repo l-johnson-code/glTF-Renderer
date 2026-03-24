@@ -71,8 +71,7 @@ struct Mesh {
 
     IndexBuffer index;
     VertexBuffer position;
-    VertexBuffer normal;
-    VertexBuffer tangent;
+    VertexBuffer tangent_space;
     VertexBuffer texcoords[MAX_TEXCOORDS];
     VertexBuffer color;
     VertexBuffer joint_weight;
@@ -80,8 +79,7 @@ struct Mesh {
     HRESULT Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void* QueueIndexUpdate(UploadBuffer* upload_buffer);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
-    void* QueueNormalUpdate(UploadBuffer* upload_buffer);
-    void* QueueTangentUpdate(UploadBuffer* upload_buffer);
+    void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
     void* QueueTexcoord0Update(UploadBuffer* upload_buffer);
     void* QueueTexcoord1Update(UploadBuffer* upload_buffer);
     void* QueueColorUpdate(UploadBuffer* upload_buffer);
@@ -109,8 +107,7 @@ struct DynamicMesh {
     GpuResource resource;
 
     VertexBuffer position[2];
-    VertexBuffer normal;
-    VertexBuffer tangent;
+    VertexBuffer tangent_space;
 
     HRESULT Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void Flip();
@@ -138,12 +135,10 @@ struct MorphTarget {
     GpuResource resource;
     
     VertexBuffer position;
-    VertexBuffer normal;
-    VertexBuffer tangent;
+    VertexBuffer tangent_space;
 
     HRESULT Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
-    void* QueueNormalUpdate(UploadBuffer* upload_buffer);
-    void* QueueTangentUpdate(UploadBuffer* upload_buffer);
+    void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
     void Destroy(CbvSrvUavPool* descriptor_allocator);
 };

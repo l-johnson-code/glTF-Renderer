@@ -199,6 +199,7 @@ set(SHADER_SOURCE_FILES
     "Source/Shaders/ToneMapper.ps.hlsl"
     "Source/Shaders/Transforms.hlsli"
     "Source/Shaders/TransmissionDownsample.cs.hlsl"
+    "Source/Shaders/Vertex.hlsli"
 )
 
 set(SHADER_HEADER_FILES ${SHADER_SOURCE_FILES})

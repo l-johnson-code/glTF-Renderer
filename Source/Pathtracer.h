@@ -133,8 +133,7 @@ class Pathtracer {
 		glm::mat4x4 normal_transform;
 		int index_descriptor = -1;
 		int position_descriptor = -1;
-		int normal_descriptor = -1;
-		int tangent_descriptor = -1;
+		int tangent_space_descriptor = -1;
 		int texcoord_descriptors[2] = {-1, -1};
 		int color_descriptor = -1;
 		int material_id = 0;

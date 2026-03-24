@@ -124,8 +124,7 @@ HRESULT Mesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocato
 	VertexAllocation allocations[] = {
 		desc->flags & FLAG_INDEX ? IndexBuffer::GetAllocationSize(num_of_indices, desc->index_format) : null_allocation,
 		VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT),
-		desc->flags & FLAG_NORMAL ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_TANGENT ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT) : null_allocation,
+		desc->flags & FLAG_NORMAL ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
 		desc->flags & FLAG_TEXCOORD_0 ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32_FLOAT) : null_allocation,
 		desc->flags & FLAG_TEXCOORD_1 ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32_FLOAT) : null_allocation,
 		desc->flags & FLAG_COLOR ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT) : null_allocation,
@@ -149,22 +148,19 @@ HRESULT Mesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocato
 	}
 	position.Create(resource.resource.Get(), base_address + offsets[1], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
     if (desc->flags & FLAG_NORMAL) {
-		normal.Create(resource.resource.Get(), base_address + offsets[2], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-	}
-    if (desc->flags & FLAG_TANGENT) {
-		tangent.Create(resource.resource.Get(), base_address + offsets[3], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT);
+		tangent_space.Create(resource.resource.Get(), base_address + offsets[2], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
     if (desc->flags & FLAG_TEXCOORD_0) {
-		texcoords[0].Create(resource.resource.Get(), base_address + offsets[4], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
+		texcoords[0].Create(resource.resource.Get(), base_address + offsets[3], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
 	}
     if (desc->flags & FLAG_TEXCOORD_1) {
-		texcoords[1].Create(resource.resource.Get(), base_address + offsets[5], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
+		texcoords[1].Create(resource.resource.Get(), base_address + offsets[4], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
 	}
     if (desc->flags & FLAG_COLOR) {
-		color.Create(resource.resource.Get(), base_address + offsets[6], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT);
+		color.Create(resource.resource.Get(), base_address + offsets[5], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT);
 	}
     if (desc->flags & FLAG_JOINT_WEIGHT) {
-		joint_weight.Create(resource.resource.Get(), base_address + offsets[7], descriptor_allocator, num_of_vertices, sizeof(JointWeight));
+		joint_weight.Create(resource.resource.Get(), base_address + offsets[6], descriptor_allocator, num_of_vertices, sizeof(JointWeight));
 	}
 
 	return S_OK;
@@ -181,16 +177,10 @@ void* Mesh::QueuePositionUpdate(UploadBuffer* upload_buffer)
 	return position.QueueUpdate(upload_buffer, resource.resource.Get());
 }
 
-void* Mesh::QueueNormalUpdate(UploadBuffer* upload_buffer)
+void* Mesh::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
 {
 	assert(flags & FLAG_NORMAL);
-	return normal.QueueUpdate(upload_buffer, resource.resource.Get());
-}
-
-void* Mesh::QueueTangentUpdate(UploadBuffer* upload_buffer)
-{
-	assert(flags & FLAG_TANGENT);
-	return tangent.QueueUpdate(upload_buffer, resource.resource.Get());
+	return tangent_space.QueueUpdate(upload_buffer, resource.resource.Get());
 }
 
 void* Mesh::QueueTexcoord0Update(UploadBuffer* upload_buffer)
@@ -221,8 +211,7 @@ void Mesh::Destroy(CbvSrvUavPool* descriptor_allocator)
 {
 	index.Destroy(descriptor_allocator);
 	position.Destroy(descriptor_allocator);
-	normal.Destroy(descriptor_allocator);
-	tangent.Destroy(descriptor_allocator);
+	tangent_space.Destroy(descriptor_allocator);
 	texcoords[0].Destroy(descriptor_allocator);
 	texcoords[1].Destroy(descriptor_allocator);
 	color.Destroy(descriptor_allocator);
@@ -240,8 +229,7 @@ HRESULT DynamicMesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_a
 	VertexAllocation allocations[] = {
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_NORMAL ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_TANGENT ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT) : null_allocation
+		desc->flags & FLAG_NORMAL ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
 	};
 	uint64_t offsets[std::size(allocations)];
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
@@ -261,10 +249,7 @@ HRESULT DynamicMesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_a
 		position[1].Create(resource.resource.Get(), base_address + offsets[1], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
 	}
     if (desc->flags & FLAG_NORMAL) {
-		normal.Create(resource.resource.Get(), base_address + offsets[2], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-	}
-    if (desc->flags & FLAG_TANGENT) {
-		tangent.Create(resource.resource.Get(), base_address + offsets[3], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT);
+		tangent_space.Create(resource.resource.Get(), base_address + offsets[2], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
 
 	return S_OK;
@@ -275,8 +260,7 @@ void DynamicMesh::Destroy(CbvSrvUavPool* descriptor_allocator)
 	resource.Reset();
 	position[0].Destroy(descriptor_allocator);
 	position[1].Destroy(descriptor_allocator);
-	normal.Destroy(descriptor_allocator);
-	tangent.Destroy(descriptor_allocator);
+	tangent_space.Destroy(descriptor_allocator);
 }
 
 void DynamicMesh::Flip()
@@ -304,8 +288,7 @@ HRESULT MorphTarget::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_a
 	VertexAllocation allocations[] = {
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_NORMAL ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_TANGENT ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation
+		desc->flags & FLAG_NORMAL ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
 	};
 	uint64_t offsets[std::size(allocations)];
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
@@ -324,10 +307,7 @@ HRESULT MorphTarget::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_a
 		position.Create(resource.resource.Get(), base_address + offsets[0], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
 	}
     if (desc->flags & FLAG_NORMAL) {
-		normal.Create(resource.resource.Get(), base_address + offsets[1], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-	}
-    if (desc->flags & FLAG_TANGENT) {
-		tangent.Create(resource.resource.Get(), base_address + offsets[2], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
+		tangent_space.Create(resource.resource.Get(), base_address + offsets[1], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
 
 	return S_OK;
@@ -338,22 +318,15 @@ void* MorphTarget::QueuePositionUpdate(UploadBuffer* upload_buffer)
 	return position.QueueUpdate(upload_buffer, resource.resource.Get());
 }
 
-void* MorphTarget::QueueNormalUpdate(UploadBuffer* upload_buffer)
+void* MorphTarget::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
 {
 	assert(flags & FLAG_NORMAL);
-	return normal.QueueUpdate(upload_buffer, resource.resource.Get());
-}
-
-void* MorphTarget::QueueTangentUpdate(UploadBuffer* upload_buffer)
-{
-	assert(flags & FLAG_TANGENT);
-	return tangent.QueueUpdate(upload_buffer, resource.resource.Get());
+	return tangent_space.QueueUpdate(upload_buffer, resource.resource.Get());
 }
 
 void MorphTarget::Destroy(CbvSrvUavPool* descriptor_allocator)
 {
 	resource.Reset();
 	position.Destroy(descriptor_allocator);
-	normal.Destroy(descriptor_allocator);
-	tangent.Destroy(descriptor_allocator);
+	tangent_space.Destroy(descriptor_allocator);
 }

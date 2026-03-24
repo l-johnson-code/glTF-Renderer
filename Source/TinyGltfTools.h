@@ -280,6 +280,68 @@ inline void Iterate(const tinygltf::Model* model, const tinygltf::Accessor* acce
     }
 }
 
+template<glm::length_t L, typename T>
+class Iterator {
+
+    public:
+
+    Iterator(tinygltf::Model* model, tinygltf::Accessor* accessor)
+    {
+        this->accessor = accessor;
+        sparse_i = 0;
+        data_i = 0;
+        data = GetBufferPtr(model, accessor);
+        data_stride = GetStride(model, accessor);
+        sparse_indices = GetSparseIndexPtr(model, accessor);
+        sparse_indices_stride = GetSparseIndexStride(model, accessor);
+        sparse_values = GetSparseValuePtr(model, accessor);
+        sparse_values_stride = GetSparseValueStride(model, accessor);
+        sparse_index = accessor->sparse.isSparse ? GetSparseIndex(sparse_indices, sparse_indices_stride, sparse_i, accessor->sparse.indices.componentType) : 0;
+    }
+
+    glm::vec<L,T> Get()
+    {
+        std::byte* raw = nullptr;
+        if (accessor->sparse.isSparse && sparse_index == data_i) {
+            // Get the sparse data.
+            raw = sparse_values + sparse_index * sparse_values_stride;
+        } else {
+            // Get the original data.
+            raw = data + data_i * data_stride;
+        }
+        return Convert<L, T>(raw, accessor->normalized, accessor->componentType, tinygltf::GetNumComponentsInType(accessor->type));
+    }
+
+    void Next()
+    {
+        if (accessor->sparse.isSparse && sparse_index == data_i) {
+            sparse_i++;
+            if (sparse_i < accessor->sparse.count) {
+                sparse_index = GetSparseIndex(sparse_indices, sparse_indices_stride, sparse_i, accessor->sparse.indices.componentType);
+            }
+        }
+        data_i++;
+    }
+
+    bool AtEnd()
+    {
+        return data_i >= accessor->count;
+    }
+
+    private:
+
+    tinygltf::Accessor* accessor = nullptr;
+    int sparse_i = 0;
+    int data_i = 0;
+    std::byte* data = nullptr;
+    int data_stride = 0;
+    std::byte* sparse_indices = nullptr;
+    int sparse_indices_stride = 0;
+    std::byte* sparse_values = nullptr;
+    int sparse_values_stride = 0;
+    int sparse_index = 0;
+};
+
 // Performs a raw copy with no conversion for data that is stored contiguously.
 inline void CopyContiguous(const tinygltf::Model* model, const tinygltf::Accessor* accessor, void* output)
 {

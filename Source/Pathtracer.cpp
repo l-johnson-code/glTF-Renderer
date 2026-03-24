@@ -205,8 +205,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 					.normal_transform = glm::inverseTranspose(node.global_transform),
 					.index_descriptor = mesh.index.descriptor,
 					.position_descriptor = mesh.position.descriptor,
-					.normal_descriptor = mesh.normal.descriptor,
-					.tangent_descriptor = mesh.tangent.descriptor,
+					.tangent_space_descriptor = mesh.tangent_space.descriptor,
 					.texcoord_descriptors = {
 						mesh.texcoords[0].descriptor,
 						mesh.texcoords[1].descriptor,
@@ -238,10 +237,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 							gpu_mesh_instance.position_descriptor = dynamic_mesh.GetCurrentPositionBuffer()->descriptor;
 						}
 						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_NORMAL) {
-							gpu_mesh_instance.normal_descriptor = dynamic_mesh.normal.descriptor;
-						}
-						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_TANGENT) {
-							gpu_mesh_instance.tangent_descriptor = dynamic_mesh.tangent.descriptor;
+							gpu_mesh_instance.tangent_space_descriptor = dynamic_mesh.tangent_space.descriptor;
 						}
 					}
 				} else {

@@ -91,12 +91,11 @@ void ForwardPass::CreatePipeline(ID3D12Device* device, D3D12_SHADER_BYTECODE ver
 
     D3D12_INPUT_ELEMENT_DESC input_layout[] = {
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 3, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 4, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 5, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"PREVIOUS_POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 6, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+		{"TANGENT_SPACE", 0, DXGI_FORMAT_R10G10B10A2_UNORM, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 3, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 4, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"PREVIOUS_POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 5, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
 	};
 	pipeline_desc.InputLayout = {
 		.pInputElementDescs = input_layout,
@@ -226,8 +225,7 @@ void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, gl
 	// Set the vertex buffer.
 	D3D12_VERTEX_BUFFER_VIEW vertex_buffers[] = {
 		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_POSITION) ? dynamic_mesh->GetCurrentPositionBuffer()->view : model->position.view, 
-		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_NORMAL) ? dynamic_mesh->normal.view : model->normal.view, 
-		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_TANGENT) ? dynamic_mesh->tangent.view : model->tangent.view, 
+		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_NORMAL) ? dynamic_mesh->tangent_space.view : model->tangent_space.view, 
 		model->texcoords[0].view,
 		model->texcoords[1].view,
 		model->color.view,

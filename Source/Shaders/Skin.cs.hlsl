@@ -1,4 +1,5 @@
 #include "Common.hlsli"
+#include "Vertex.hlsli"
 
 enum MeshFlags {
     MESH_FLAG_INDEX = 1 << 0,
@@ -35,8 +36,7 @@ struct PerModel {
     struct {
         float weight;
         int position_descriptor;
-        int normal_descriptor;
-        int tangent_descriptor;
+        int tangent_space_descriptor;
     } morph_targets[4];
 };
 
@@ -47,13 +47,11 @@ struct Bone {
 
 ConstantBuffer<PerModel> per_model : register(b0);
 StructuredBuffer<float3> input_positions : register(t0);
-StructuredBuffer<float3> input_normals : register(t1);
-StructuredBuffer<float4> input_tangents : register(t2);
+StructuredBuffer<uint> input_tangent_space : register(t1);
 StructuredBuffer<BoneWeights> skin : register(t3);
 StructuredBuffer<Bone> bones : register(t4);
 RWStructuredBuffer<float3> output_positions : register(u0);
-RWStructuredBuffer<float3> output_normals : register(u1);
-RWStructuredBuffer<float4> output_tangents : register(u2);
+RWStructuredBuffer<uint> output_tangent_space : register(u1);
 
 [numthreads(64, 1, 1)]
 void main(in uint3 thread_id: SV_DispatchThreadID)
@@ -66,8 +64,11 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
     
     // Get inputs.
     float3 position = input_positions[index];
-    float3 normal = per_model.input_mesh_flags & MESH_FLAG_NORMAL ? input_normals[index] : float3(0, 0, 0);
-    float4 tangent = per_model.input_mesh_flags & MESH_FLAG_TANGENT ? input_tangents[index] : float4(0, 0, 0, 0);
+    float3 normal = float3(0, 0, 0);
+    float4 tangent = float4(0, 0, 0, 0);
+    if (per_model.input_mesh_flags & MESH_FLAG_NORMAL) {
+        DecodeTangentSpace(UnpackTangentSpace(input_tangent_space[index]), normal, tangent);
+    }
 
     // Morph targets.
     for (int i = 0; i < per_model.num_of_morph_targets; i++) {
@@ -77,15 +78,10 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
             float3 morph_position = morph_positions[index];
             position += weight * morph_position;
         }
-        if (per_model.morph_targets[i].normal_descriptor != -1) {
-            StructuredBuffer<float3> morph_normals = ResourceDescriptorHeap[per_model.morph_targets[i].normal_descriptor];
+        if (per_model.morph_targets[i].tangent_space_descriptor != -1) {
+            StructuredBuffer<float3> morph_normals = ResourceDescriptorHeap[per_model.morph_targets[i].tangent_space_descriptor];
             float3 morph_normal = morph_normals[index];
             normal += weight * morph_normals[index];
-        }
-        if (per_model.morph_targets[i].tangent_descriptor != -1) {
-            StructuredBuffer<float3> morph_tangents = ResourceDescriptorHeap[per_model.morph_targets[i].tangent_descriptor];
-            float3 morph_tangent = morph_tangents[index];
-            tangent.xyz += weight * morph_tangents[index];
         }
     }
 
@@ -128,9 +124,6 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
         output_positions[index] = position;
     }
     if (per_model.output_mesh_flags & DYNAMIC_MESH_FLAG_NORMAL) {
-        output_normals[index] = normalize(normal);
-    }
-    if (per_model.output_mesh_flags & DYNAMIC_MESH_FLAG_TANGENT) {
-        output_tangents[index] = float4(normalize(tangent.xyz), tangent.w);
+        output_tangent_space[index] = PackTangentSpace(EncodeTangentSpace(normalize(normal), float4(normalize(tangent.xyz), tangent.w)));
     }
 }
