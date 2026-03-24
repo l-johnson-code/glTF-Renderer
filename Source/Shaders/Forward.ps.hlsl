@@ -4,12 +4,11 @@
 
 enum MeshFlags {
 	MESH_FLAG_INDEX = 1 << 0,
-	MESH_FLAG_NORMAL = 1 << 1,
-	MESH_FLAG_TANGENT = 1 << 2,
-	MESH_FLAG_TEXCOORD_0 = 1 << 3,
-	MESH_FLAG_TEXCOORD_1 = 1 << 4,
-	MESH_FLAG_COLOR = 1 << 5,
-	MESH_FLAG_JOINT_WEIGHT = 1 << 6,
+	MESH_FLAG_TANGENT_SPACE = 1 << 1,
+	MESH_FLAG_TEXCOORD_0 = 1 << 2,
+	MESH_FLAG_TEXCOORD_1 = 1 << 3,
+	MESH_FLAG_COLOR = 1 << 4,
+	MESH_FLAG_JOINT_WEIGHT = 1 << 5,
 };
 
 struct PSIn {
@@ -99,16 +98,21 @@ PSOut main(PSIn input)
 {
 	PSOut output;
 
-	// Normals.
+	// Normals and tangents.
 	float3 geometric_normal;
-	if (g_per_model.mesh_flags & MESH_FLAG_NORMAL) {
+	float4 geometric_tangent;
+	float3 geometric_bitangent;
+	if (g_per_model.mesh_flags & MESH_FLAG_TANGENT_SPACE) {
 		geometric_normal = normalize(input.normal.xyz);
+		geometric_tangent = float4(normalize(input.tangent.xyz), input.tangent.w);
 	} else {
 		float3 dpdx = ddx(input.world_pos.xyz);
 		float3 dpdy = ddy(input.world_pos.xyz);
 		geometric_normal = cross(dpdx, -dpdy);
 		geometric_normal = normalize(geometric_normal);
+		geometric_tangent = float4(GenerateTangent(geometric_normal), 1);
 	}
+	geometric_bitangent = input.tangent.w * normalize(cross(geometric_normal, geometric_tangent.xyz));
 
 	// Reverse normal for back facing triangles.
 	if (!input.is_front_face) {
@@ -116,14 +120,6 @@ PSOut main(PSIn input)
 	}
 
 	// Create tangent space to world space matrix.
-	float4 geometric_tangent;
-	float3 geometric_bitangent;
-	if (g_per_model.mesh_flags & MESH_FLAG_TANGENT) {
-		geometric_tangent = float4(normalize(input.tangent.xyz), input.tangent.w);
-	} else {
-		geometric_tangent = float4(GenerateTangent(geometric_normal), 1);
-	}
-	geometric_bitangent = input.tangent.w * normalize(cross(geometric_normal, geometric_tangent.xyz));
 	float3x3 tangent_to_world =	TangentToWorldMatrix(geometric_normal, geometric_tangent.xyz, geometric_bitangent);
 
 	SurfaceProperties surface_properties;

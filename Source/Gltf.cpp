@@ -188,8 +188,7 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 	}
 
 	desc.flags |= gltf_primitive->indices != -1 ? ::Mesh::FLAG_INDEX : 0;
-	desc.flags |= gltf_primitive->attributes.contains("NORMAL") ? ::Mesh::FLAG_NORMAL : 0;
-	desc.flags |= gltf_primitive->attributes.contains("TANGENT") ? ::Mesh::FLAG_TANGENT : 0;
+	desc.flags |= gltf_primitive->attributes.contains("NORMAL") ? ::Mesh::FLAG_TANGENT_SPACE : 0;
 	desc.flags |= gltf_primitive->attributes.contains("TEXCOORD_0") ? ::Mesh::FLAG_TEXCOORD_0 : 0;
 	desc.flags |= gltf_primitive->attributes.contains("TEXCOORD_1") ? ::Mesh::FLAG_TEXCOORD_1 : 0;
 	desc.flags |= gltf_primitive->attributes.contains("COLOR_0") ? ::Mesh::FLAG_COLOR : 0;
@@ -229,29 +228,31 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 	glm::vec3* dest = (glm::vec3*)primitive->mesh.QueuePositionUpdate(upload_buffer);
 	tinygltf::tools::Copy(dest, gltf, position_accessor);
 
-	if ((desc.flags & ::Mesh::FLAG_NORMAL) && (desc.flags & ::Mesh::FLAG_TANGENT)) {
-		tinygltf::Accessor* normal_accessor = &gltf->accessors[gltf_primitive->attributes["NORMAL"]];
-		auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
-		tinygltf::Accessor* tangent_accessor = &gltf->accessors[gltf_primitive->attributes["TANGENT"]];
-		auto tangent_it = tinygltf::tools::Iterator<4, float>(gltf, tangent_accessor);
-		uint32_t* dest = (uint32_t*)primitive->mesh.QueueTangentSpaceUpdate(upload_buffer);
-		while (!normal_it.AtEnd() && !tangent_it.AtEnd()) {
-			glm::vec3 normal = normal_it.Get();
-			glm::vec4 tangent = tangent_it.Get();
-			*dest = EncodeTangentSpace(normal, tangent);
-			normal_it.Next();
-			tangent_it.Next();
-			dest++;
-		}
-	} else if (desc.flags & ::Mesh::FLAG_NORMAL) {
-		tinygltf::Accessor* normal_accessor = &gltf->accessors[gltf_primitive->attributes["NORMAL"]];
-		auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
-		uint32_t* dest = (uint32_t*)primitive->mesh.QueueTangentSpaceUpdate(upload_buffer);
-		while (!normal_it.AtEnd()) {
-			glm::vec3 normal = normal_it.Get();
-			*dest = EncodeNormal(normal);
-			normal_it.Next();
-			dest++;
+	if (desc.flags & ::Mesh::FLAG_TANGENT_SPACE) {
+		if (gltf_primitive->attributes.contains("TANGENT")) {
+			tinygltf::Accessor* normal_accessor = &gltf->accessors[gltf_primitive->attributes["NORMAL"]];
+			auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
+			tinygltf::Accessor* tangent_accessor = &gltf->accessors[gltf_primitive->attributes["TANGENT"]];
+			auto tangent_it = tinygltf::tools::Iterator<4, float>(gltf, tangent_accessor);
+			uint32_t* dest = (uint32_t*)primitive->mesh.QueueTangentSpaceUpdate(upload_buffer);
+			while (!normal_it.AtEnd() && !tangent_it.AtEnd()) {
+				glm::vec3 normal = normal_it.Get();
+				glm::vec4 tangent = tangent_it.Get();
+				*dest = EncodeTangentSpace(normal, tangent);
+				normal_it.Next();
+				tangent_it.Next();
+				dest++;
+			}
+		} else {
+			tinygltf::Accessor* normal_accessor = &gltf->accessors[gltf_primitive->attributes["NORMAL"]];
+			auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
+			uint32_t* dest = (uint32_t*)primitive->mesh.QueueTangentSpaceUpdate(upload_buffer);
+			while (!normal_it.AtEnd()) {
+				glm::vec3 normal = normal_it.Get();
+				*dest = EncodeNormal(normal);
+				normal_it.Next();
+				dest++;
+			}
 		}
 	}
 
@@ -303,8 +304,7 @@ void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* 
 	MorphTarget::Desc desc = {};
 	desc.num_of_vertices = num_of_vertices;
 	desc.flags |= target->contains("POSITION") ? MorphTarget::FLAG_POSITION : 0;
-	desc.flags |= target->contains("NORMAL") ? MorphTarget::FLAG_NORMAL : 0;
-	desc.flags |= target->contains("TANGENT") ? MorphTarget::FLAG_TANGENT : 0;
+	desc.flags |= target->contains("NORMAL") ? MorphTarget::FLAG_TANGENT_SPACE : 0;
 
 	morph_target->Create(gpu_allocator, srv_uav_cbv_descriptors, &desc);
 
@@ -314,29 +314,31 @@ void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* 
 		tinygltf::tools::Copy(dest, gltf, accessor);
 	}
 
-	if ((desc.flags & MorphTarget::FLAG_NORMAL) && (desc.flags & MorphTarget::FLAG_TANGENT)) {
-		tinygltf::Accessor* normal_accessor =  &gltf->accessors[target->at("NORMAL")];
-		auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
-		tinygltf::Accessor* tangent_accessor =  &gltf->accessors[target->at("TANGENT")];
-		auto tangent_it = tinygltf::tools::Iterator<4, float>(gltf, tangent_accessor);
-		uint32_t* dest = (uint32_t*)morph_target->QueueTangentSpaceUpdate(upload_buffer);
-		while (!normal_it.AtEnd() && !tangent_it.AtEnd()) {
-			glm::vec3 normal = normal_it.Get();
-			glm::vec4 tangent = tangent_it.Get();
-			*dest = EncodeTangentSpace(normal, tangent);
-			normal_it.Next();
-			tangent_it.Next();
-			dest++;
-		}
-	} else if (desc.flags & MorphTarget::FLAG_NORMAL) {
-		tinygltf::Accessor* normal_accessor =  &gltf->accessors[target->at("NORMAL")];
-		auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
-		uint32_t* dest = (uint32_t*)morph_target->QueueTangentSpaceUpdate(upload_buffer);
-		while (!normal_it.AtEnd()) {
-			glm::vec3 normal = normal_it.Get();
-			*dest = EncodeNormal(normal);
-			normal_it.Next();
-			dest++;
+	if (desc.flags & MorphTarget::FLAG_TANGENT_SPACE) {
+		if (target->contains("TANGENT")) {
+			tinygltf::Accessor* normal_accessor =  &gltf->accessors[target->at("NORMAL")];
+			auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
+			tinygltf::Accessor* tangent_accessor =  &gltf->accessors[target->at("TANGENT")];
+			auto tangent_it = tinygltf::tools::Iterator<4, float>(gltf, tangent_accessor);
+			uint32_t* dest = (uint32_t*)morph_target->QueueTangentSpaceUpdate(upload_buffer);
+			while (!normal_it.AtEnd() && !tangent_it.AtEnd()) {
+				glm::vec3 normal = normal_it.Get();
+				glm::vec4 tangent = tangent_it.Get();
+				*dest = EncodeTangentSpace(normal, tangent);
+				normal_it.Next();
+				tangent_it.Next();
+				dest++;
+			}
+		} else {
+			tinygltf::Accessor* normal_accessor =  &gltf->accessors[target->at("NORMAL")];
+			auto normal_it = tinygltf::tools::Iterator<3, float>(gltf, normal_accessor);
+			uint32_t* dest = (uint32_t*)morph_target->QueueTangentSpaceUpdate(upload_buffer);
+			while (!normal_it.AtEnd()) {
+				glm::vec3 normal = normal_it.Get();
+				*dest = EncodeNormal(normal);
+				normal_it.Next();
+				dest++;
+			}
 		}
 	}
 }
@@ -940,11 +942,8 @@ void Gltf::CreateDynamicMesh(GpuAllocator* gpu_allocator)
 			DynamicMesh::Desc desc = {};
 			desc.num_of_vertices = primitives[j].mesh.num_of_vertices;
 			desc.flags = DynamicMesh::FLAG_POSITION;
-			if (primitives[j].mesh.flags & ::Mesh::FLAG_NORMAL) {
-				desc.flags |= DynamicMesh::FLAG_NORMAL;
-			}
-			if (primitives[j].mesh.flags & ::Mesh::FLAG_TANGENT) {
-				desc.flags |= DynamicMesh::FLAG_TANGENT;
+			if (primitives[j].mesh.flags & ::Mesh::FLAG_TANGENT_SPACE) {
+				desc.flags |= DynamicMesh::FLAG_TANGENT_SPACE;
 			}
         	dynamic.dynamic_meshes[j].Create(gpu_allocator, srv_uav_cbv_descriptors, &desc);
 		}

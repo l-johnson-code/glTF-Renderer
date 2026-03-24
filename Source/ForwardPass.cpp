@@ -225,7 +225,7 @@ void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, gl
 	// Set the vertex buffer.
 	D3D12_VERTEX_BUFFER_VIEW vertex_buffers[] = {
 		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_POSITION) ? dynamic_mesh->GetCurrentPositionBuffer()->view : model->position.view, 
-		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_NORMAL) ? dynamic_mesh->tangent_space.view : model->tangent_space.view, 
+		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_TANGENT_SPACE) ? dynamic_mesh->tangent_space.view : model->tangent_space.view, 
 		model->texcoords[0].view,
 		model->texcoords[1].view,
 		model->color.view,

@@ -124,7 +124,7 @@ HRESULT Mesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocato
 	VertexAllocation allocations[] = {
 		desc->flags & FLAG_INDEX ? IndexBuffer::GetAllocationSize(num_of_indices, desc->index_format) : null_allocation,
 		VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT),
-		desc->flags & FLAG_NORMAL ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
+		desc->flags & FLAG_TANGENT_SPACE ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
 		desc->flags & FLAG_TEXCOORD_0 ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32_FLOAT) : null_allocation,
 		desc->flags & FLAG_TEXCOORD_1 ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32_FLOAT) : null_allocation,
 		desc->flags & FLAG_COLOR ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT) : null_allocation,
@@ -147,7 +147,7 @@ HRESULT Mesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocato
     	index.Create(resource.resource.Get(), base_address + offsets[0], descriptor_allocator, num_of_indices, desc->index_format);
 	}
 	position.Create(resource.resource.Get(), base_address + offsets[1], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-    if (desc->flags & FLAG_NORMAL) {
+    if (desc->flags & FLAG_TANGENT_SPACE) {
 		tangent_space.Create(resource.resource.Get(), base_address + offsets[2], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
     if (desc->flags & FLAG_TEXCOORD_0) {
@@ -179,7 +179,7 @@ void* Mesh::QueuePositionUpdate(UploadBuffer* upload_buffer)
 
 void* Mesh::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
 {
-	assert(flags & FLAG_NORMAL);
+	assert(flags & FLAG_TANGENT_SPACE);
 	return tangent_space.QueueUpdate(upload_buffer, resource.resource.Get());
 }
 
@@ -229,7 +229,7 @@ HRESULT DynamicMesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_a
 	VertexAllocation allocations[] = {
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_NORMAL ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
+		desc->flags & FLAG_TANGENT_SPACE ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
 	};
 	uint64_t offsets[std::size(allocations)];
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
@@ -248,7 +248,7 @@ HRESULT DynamicMesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_a
 		position[0].Create(resource.resource.Get(), base_address + offsets[0], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
 		position[1].Create(resource.resource.Get(), base_address + offsets[1], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
 	}
-    if (desc->flags & FLAG_NORMAL) {
+    if (desc->flags & FLAG_TANGENT_SPACE) {
 		tangent_space.Create(resource.resource.Get(), base_address + offsets[2], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
 
@@ -288,7 +288,7 @@ HRESULT MorphTarget::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_a
 	VertexAllocation allocations[] = {
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_NORMAL ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
+		desc->flags & FLAG_TANGENT_SPACE ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
 	};
 	uint64_t offsets[std::size(allocations)];
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
@@ -306,7 +306,7 @@ HRESULT MorphTarget::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_a
 	if (desc->flags & FLAG_POSITION) {
 		position.Create(resource.resource.Get(), base_address + offsets[0], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
 	}
-    if (desc->flags & FLAG_NORMAL) {
+    if (desc->flags & FLAG_TANGENT_SPACE) {
 		tangent_space.Create(resource.resource.Get(), base_address + offsets[1], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
 
@@ -320,7 +320,7 @@ void* MorphTarget::QueuePositionUpdate(UploadBuffer* upload_buffer)
 
 void* MorphTarget::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
 {
-	assert(flags & FLAG_NORMAL);
+	assert(flags & FLAG_TANGENT_SPACE);
 	return tangent_space.QueueUpdate(upload_buffer, resource.resource.Get());
 }
 

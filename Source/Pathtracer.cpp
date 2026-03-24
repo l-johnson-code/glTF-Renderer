@@ -236,7 +236,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_POSITION) {
 							gpu_mesh_instance.position_descriptor = dynamic_mesh.GetCurrentPositionBuffer()->descriptor;
 						}
-						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_NORMAL) {
+						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_TANGENT_SPACE) {
 							gpu_mesh_instance.tangent_space_descriptor = dynamic_mesh.tangent_space.descriptor;
 						}
 					}

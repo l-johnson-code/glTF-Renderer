@@ -54,12 +54,11 @@ struct Mesh {
 
     enum Flags {
         FLAG_INDEX = 1 << 0,
-        FLAG_NORMAL = 1 << 1,
-        FLAG_TANGENT = 1 << 2,
-        FLAG_TEXCOORD_0 = 1 << 3,
-        FLAG_TEXCOORD_1 = 1 << 4,
-        FLAG_COLOR = 1 << 5,
-        FLAG_JOINT_WEIGHT = 1 << 6,
+        FLAG_TANGENT_SPACE = 1 << 1,
+        FLAG_TEXCOORD_0 = 1 << 2,
+        FLAG_TEXCOORD_1 = 1 << 3,
+        FLAG_COLOR = 1 << 4,
+        FLAG_JOINT_WEIGHT = 1 << 5,
     };
 
     D3D12_PRIMITIVE_TOPOLOGY topology;
@@ -96,8 +95,7 @@ struct DynamicMesh {
 
     enum Flags {
         FLAG_POSITION = 1 << 0,
-        FLAG_NORMAL = 1 << 1,
-        FLAG_TANGENT = 1 << 2,
+        FLAG_TANGENT_SPACE = 1 << 1,
     };
 
     uint8_t flags = 0;
@@ -120,8 +118,7 @@ struct MorphTarget {
 
     enum Flags {
         FLAG_POSITION = 1 << 0,
-        FLAG_NORMAL = 1 << 1,
-        FLAG_TANGENT = 1 << 2,
+        FLAG_TANGENT_SPACE = 1 << 1,
     };
 
     struct Desc {
