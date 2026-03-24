@@ -72,7 +72,7 @@ static uint32_t EncodeTangentSpace(glm::vec3 normal, glm::vec4 tangent)
     glm::vec3 canonical_bitangent;
     CreateBasis(normal, &canonical_tangent, &canonical_bitangent);
     float angle = std::atan2(glm::dot(glm::vec3(tangent), canonical_bitangent), glm::dot(glm::vec3(tangent), canonical_tangent));
-    float encoded_tangent = angle / glm::two_pi<float>();
+    float encoded_tangent = (angle / glm::two_pi<float>()) + 0.5f;
 
     // Encode winding.
     float encoded_winding = tangent.w == 1 ? 1 : 0;

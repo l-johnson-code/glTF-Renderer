@@ -30,7 +30,7 @@ float4 EncodeTangentSpace(float3 normal, float4 tangent)
     float3 canonical_bitangent;
     CreateBasisAccurate(normal, canonical_tangent, canonical_bitangent);
     float angle = atan2(dot(tangent.xyz, canonical_bitangent), dot(tangent.xyz, canonical_tangent));
-    encoded.z = angle / TAU;
+    encoded.z = (angle / TAU) + 0.5;
 
     // Encode winding.
     encoded.w = tangent.w == 1 ? 1 : 0;
