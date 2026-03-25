@@ -26,11 +26,29 @@ static glm::vec2 EncodeOctahedralMap(glm::vec3 normal)
 	glm::vec3 octahedral = normal / (glm::abs(normal.x) + glm::abs(normal.y) + glm::abs(normal.z));
 	// Flatten onto square with coordinates in range [-1, 1].
 	glm::vec2 result;
-	if (octahedral.z >= 0.) {
+	if (octahedral.z >= 0.f) {
 		result = glm::vec2(octahedral.x, octahedral.y);
 	} else {
-		result = glm::vec2(octahedral.x >= 0 ? 1 : -1, octahedral.y >= 0 ? 1 : -1) * (glm::vec2(1) - glm::abs(glm::vec2(octahedral.y, octahedral.x)));
+		result.x = (octahedral.x >= 0.f ? 1.f : -1.f) * (1.f - glm::abs(octahedral.y));
+		result.y = (octahedral.y >= 0.f ? 1.f : -1.f) * (1.f - glm::abs(octahedral.x));
 	}
+	return result;
+}
+
+static glm::vec3 DecodeOctahedralMap(glm::vec2 encoded)
+{
+	glm::vec3 result;
+	// Find point on octahedron.
+	result.z = 1. - glm::abs(encoded.x) - glm::abs(encoded.y);
+	if (result.z >= 0.) {
+		result.x = encoded.x;
+		result.y = encoded.y;
+	} else {
+		result.x = (encoded.x >= 0.f ? 1.f : -1.f) * (1.f - glm::abs(encoded.y));
+		result.y = (encoded.y >= 0.f ? 1.f : -1.f) * (1.f - glm::abs(encoded.x));
+	}
+	// Project onto sphere.
+	result = glm::normalize(result);
 	return result;
 }
 
@@ -50,34 +68,39 @@ static uint32_t EncodeNormal(glm::vec3 normal)
 
     // Encode normal.
     glm::vec2 encoded_normal = 0.5f * EncodeOctahedralMap(normal) + 0.5f;
-
-    // Encode tangent.
-    float encoded_tangent = 0;
+	glm::u32vec2 quantized_normal = glm::clamp(encoded_normal, 0.0f, 1.0f) * 1023.0f + 0.5f;
 
     // Encode winding.
-    float encoded_winding = 1;
+    uint32_t quantized_winding = 3;
 
-    return glm::packUnorm3x10_1x2(glm::vec4(encoded_normal, encoded_tangent, encoded_winding));
+    return quantized_normal.x | (quantized_normal.y << 10) | (quantized_winding << 30);
 }
 
 static uint32_t EncodeTangentSpace(glm::vec3 normal, glm::vec4 tangent)
 {
 	glm::vec4 encoded;
 
-    // Encode normal.
+    // Encode and quantize normal.
     glm::vec2 encoded_normal = 0.5f * EncodeOctahedralMap(normal) + 0.5f;
+	glm::u32vec2 quantized_normal = glm::clamp(encoded_normal, 0.0f, 1.0f) * 1023.0f + 0.5f;
 
-    // Encode tangent. 
+	// Decode normal to use in basis calculation.
+	// This is to prevent numerical issues due to quantization.
+	glm::vec2 unpacked_encoded_normal = glm::vec2(quantized_normal) / 1023.0f;
+	normal = DecodeOctahedralMap(2.0f * unpacked_encoded_normal - 1.0f);
+
+    // Encode tangent.
     glm::vec3 canonical_tangent;
     glm::vec3 canonical_bitangent;
     CreateBasis(normal, &canonical_tangent, &canonical_bitangent);
     float angle = std::atan2(glm::dot(glm::vec3(tangent), canonical_bitangent), glm::dot(glm::vec3(tangent), canonical_tangent));
     float encoded_tangent = (angle / glm::two_pi<float>()) + 0.5f;
+	uint32_t quantized_tangent = glm::clamp(encoded_tangent, 0.0f, 1.0f) * 1023.0f + 0.5f;
 
     // Encode winding.
-    float encoded_winding = tangent.w == 1 ? 1 : 0;
+    uint32_t quantized_winding = tangent.w == 1.0f ? 3 : 0;
 
-    return glm::packUnorm3x10_1x2(glm::vec4(encoded_normal, encoded_tangent, encoded_winding));
+    return quantized_normal.x | (quantized_normal.y << 10) | (quantized_tangent << 20) | (quantized_winding << 30);
 }
 
 void Gltf::TraverseScene(int scene, const std::function<void(Gltf*, int)>& lambda)

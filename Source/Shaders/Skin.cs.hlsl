@@ -64,7 +64,7 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
     float3 normal = float3(0, 0, 0);
     float4 tangent = float4(0, 0, 0, 1);
     if (per_model.input_mesh_flags & MESH_FLAG_TANGENT_SPACE) {
-        DecodeTangentSpace(UnpackTangentSpace(input_tangent_space[index]), normal, tangent);
+        DecodeTangentSpace(UnpackR10G10B10A2(input_tangent_space[index]), normal, tangent);
     }
 
     // Morph targets.
@@ -121,6 +121,6 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
         output_positions[index] = position;
     }
     if (per_model.output_mesh_flags & DYNAMIC_MESH_FLAG_TANGENT_SPACE) {
-        output_tangent_space[index] = PackTangentSpace(EncodeTangentSpace(normalize(normal), float4(normalize(tangent.xyz), tangent.w)));
+        output_tangent_space[index] = EncodeTangentSpace(normalize(normal), float4(normalize(tangent.xyz), tangent.w));
     }
 }
