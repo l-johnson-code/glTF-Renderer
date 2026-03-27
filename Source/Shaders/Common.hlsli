@@ -45,17 +45,11 @@ void CreateBasis(float3 n, out float3 t, out float3 b)
 // https://jcgt.org/published/0006/01/01/
 void CreateBasisAccurate(float3 n, out float3 b1, out float3 b2)
 {
-    if (n.z < 0) {
-        const float a = 1.0f / (1.0f - n.z);
-        const float b = n.x * n.y * a;
-        b1 = float3(1.0f - n.x * n.x * a, -b, n.x);
-        b2 = float3(b, n.y * n.y*a - 1.0f, -n.y);
-    } else {
-        const float a = 1.0f / (1.0f + n.z);
-        const float b = -n.x * n.y * a;
-        b1 = float3(1.0f - n.x * n.x * a, b, -n.x);
-        b2 = float3(b, 1.0f - n.y * n.y * a, -n.y);
-    }
+    float sign = n.z >= 0.0f ? 1.0f : -1.0f;
+    const float a = -1.0f / (sign + n.z);
+    const float b = n.x * n.y * a;
+    b1 = float3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
+    b2 = float3(b, sign + n.y * n.y * a, -n.y);
 }
 
 // Takes a depth value from a depth buffer and returns its world position.
