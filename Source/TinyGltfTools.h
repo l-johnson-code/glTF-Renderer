@@ -216,42 +216,11 @@ inline glm::vec<L, T> Convert(const std::byte* data, bool normalized, uint32_t i
     return result;
 }
 
-inline void IterateRaw(const tinygltf::Model* model, const tinygltf::Accessor* accessor, const std::function<void(int, std::byte*)>& lambda)
-{
-    int sparse_i = 0;
-    int data_i = 0;
-
-    std::byte* data = GetBufferPtr(model, accessor);
-    int data_stride = GetStride(model, accessor);
-
-    std::byte* sparse_indices = GetSparseIndexPtr(model, accessor);
-    int sparse_indices_stride = GetSparseIndexStride(model, accessor);
-
-    std::byte* sparse_values = GetSparseValuePtr(model, accessor);
-    int sparse_values_stride = GetSparseValueStride(model, accessor);
-
-    int sparse_index = accessor->sparse.isSparse ? GetSparseIndex(sparse_indices, sparse_indices_stride, sparse_i, accessor->sparse.indices.componentType) : 0;
-    
-    while (data_i < accessor->count) {
-        if (accessor->sparse.isSparse && sparse_index == data_i) { // Get the sparse data.
-            lambda(data_i, sparse_values + sparse_index * sparse_values_stride);
-            sparse_i++;
-            if (sparse_i < accessor->sparse.count) {
-                sparse_index = GetSparseIndex(sparse_indices, sparse_indices_stride, sparse_i, accessor->sparse.indices.componentType);
-            }
-        } else { // Get the original data.
-            lambda(data_i, data + data_i * data_stride);
-        }
-        data_i++;
-    }
-}
-
-template<glm::length_t L, typename T>
-class Iterator {
+class RawIterator {
 
     public:
 
-    Iterator(const tinygltf::Model* model, tinygltf::Accessor* accessor)
+    RawIterator(const tinygltf::Model* model, tinygltf::Accessor* accessor)
     {
         this->accessor = accessor;
         sparse_i = 0;
@@ -265,7 +234,7 @@ class Iterator {
         sparse_index = accessor->sparse.isSparse ? GetSparseIndex(sparse_indices, sparse_indices_stride, sparse_i, accessor->sparse.indices.componentType) : 0;
     }
 
-    glm::vec<L,T> Get()
+    std::byte* Get()
     {
         std::byte* raw = nullptr;
         if (accessor->sparse.isSparse && sparse_index == data_i) {
@@ -275,7 +244,7 @@ class Iterator {
             // Get the original data.
             raw = data + data_i * data_stride;
         }
-        return Convert<L, T>(raw, accessor->normalized, accessor->componentType, tinygltf::GetNumComponentsInType(accessor->type));
+        return raw;
     }
 
     void Next()
@@ -294,7 +263,7 @@ class Iterator {
         return data_i >= accessor->count;
     }
 
-    private:
+    protected:
 
     tinygltf::Accessor* accessor = nullptr;
     int sparse_i = 0;
@@ -307,6 +276,36 @@ class Iterator {
     int sparse_values_stride = 0;
     int sparse_index = 0;
 };
+
+template<glm::length_t L, typename T>
+class Iterator: public RawIterator {
+
+    public:
+
+    Iterator(const tinygltf::Model* model, tinygltf::Accessor* accessor): RawIterator(model, accessor)
+    {
+
+    }
+
+    glm::vec<L,T> Get()
+    {
+        std::byte* raw = RawIterator::Get();
+        return Convert<L, T>(raw, accessor->normalized, accessor->componentType, tinygltf::GetNumComponentsInType(accessor->type));
+    }
+};
+
+inline void IterateRaw(const tinygltf::Model* model, tinygltf::Accessor* accessor, const std::function<void(int, std::byte*)>& lambda)
+{
+    int i = 0;
+    RawIterator iterator(model, accessor);
+
+    while(!iterator.AtEnd()) {
+        std::byte* value = iterator.Get();
+        lambda(i, value);
+        i++;
+        iterator.Next();
+    }
+}
 
 template<glm::length_t L, typename T>
 inline void Iterate(const tinygltf::Model* model, tinygltf::Accessor* accessor, const std::function<void(int, const glm::vec<L, T>&)>& lambda)
