@@ -749,7 +749,7 @@ void Gltf::LoadAnimationChannel(tinygltf::Model* gltf, tinygltf::AnimationChanne
 	}
 
 	// Get keyframe times.
-	const tinygltf::Accessor* input_accessor = &gltf->accessors[sampler->input];
+	tinygltf::Accessor* input_accessor = &gltf->accessors[sampler->input];
 	channel.times.resize(input_accessor->count);
 	tinygltf::tools::Copy((glm::vec<1, float>*)channel.times.data(), gltf, input_accessor);
 

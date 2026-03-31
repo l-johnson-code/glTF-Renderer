@@ -247,45 +247,11 @@ inline void IterateRaw(const tinygltf::Model* model, const tinygltf::Accessor* a
 }
 
 template<glm::length_t L, typename T>
-inline void Iterate(const tinygltf::Model* model, const tinygltf::Accessor* accessor, const std::function<void(int, const glm::vec<L, T>&)>& lambda)
-{
-    int sparse_i = 0;
-    int data_i = 0;
-
-    std::byte* data = GetBufferPtr(model, accessor);
-    int data_stride = GetStride(model, accessor);
-
-    std::byte* sparse_indices = GetSparseIndexPtr(model, accessor);
-    int sparse_indices_stride = GetSparseIndexStride(model, accessor);
-
-    std::byte* sparse_values = GetSparseValuePtr(model, accessor);
-    int sparse_values_stride = GetSparseValueStride(model, accessor);
-
-    int sparse_index = accessor->sparse.isSparse ? GetSparseIndex(sparse_indices, sparse_indices_stride, sparse_i, accessor->sparse.indices.componentType) : 0;
-    
-    while (data_i < accessor->count) {
-        std::byte* raw = nullptr;
-        if (accessor->sparse.isSparse && sparse_index == data_i) { // Get the sparse data.
-            raw = sparse_values + sparse_index * sparse_values_stride;
-            sparse_i++;
-            if (sparse_i < accessor->sparse.count) {
-                sparse_index = GetSparseIndex(sparse_indices, sparse_indices_stride, sparse_i, accessor->sparse.indices.componentType);
-            }
-        } else { // Get the original data.
-            raw = data + data_i * data_stride;
-        }
-        glm::vec<L,T> value = Convert<L, T>(raw, accessor->normalized, accessor->componentType, tinygltf::GetNumComponentsInType(accessor->type));
-        lambda(data_i, value);
-        data_i++;
-    }
-}
-
-template<glm::length_t L, typename T>
 class Iterator {
 
     public:
 
-    Iterator(tinygltf::Model* model, tinygltf::Accessor* accessor)
+    Iterator(const tinygltf::Model* model, tinygltf::Accessor* accessor)
     {
         this->accessor = accessor;
         sparse_i = 0;
@@ -342,6 +308,20 @@ class Iterator {
     int sparse_index = 0;
 };
 
+template<glm::length_t L, typename T>
+inline void Iterate(const tinygltf::Model* model, tinygltf::Accessor* accessor, const std::function<void(int, const glm::vec<L, T>&)>& lambda)
+{
+    int i = 0;
+    Iterator<L, T> iterator(model, accessor);
+
+    while(!iterator.AtEnd()) {
+        glm::vec<L, T> value = iterator.Get();
+        lambda(i, value);
+        i++;
+        iterator.Next();
+    }
+}
+
 // Performs a raw copy with no conversion for data that is stored contiguously.
 inline void CopyContiguous(const tinygltf::Model* model, const tinygltf::Accessor* accessor, void* output)
 {
@@ -351,7 +331,7 @@ inline void CopyContiguous(const tinygltf::Model* model, const tinygltf::Accesso
 }
 
 template<glm::length_t L, typename T>
-inline void Copy(glm::vec<L, T>* output, const tinygltf::Model* model, const tinygltf::Accessor* accessor)
+inline void Copy(glm::vec<L, T>* output, const tinygltf::Model* model, tinygltf::Accessor* accessor)
 {
     ProfileZoneScoped();
     // Check if conversion is required.
@@ -368,7 +348,7 @@ inline void Copy(glm::vec<L, T>* output, const tinygltf::Model* model, const tin
 }
 
 // Copy without conversion.
-inline void Copy(std::byte* out, const tinygltf::Model* model, const tinygltf::Accessor* accessor)
+inline void Copy(std::byte* out, const tinygltf::Model* model, tinygltf::Accessor* accessor)
 {
     ProfileZoneScoped();
     int element_size = GetTypeSize(accessor);
