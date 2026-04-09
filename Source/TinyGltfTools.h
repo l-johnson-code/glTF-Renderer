@@ -149,6 +149,8 @@ inline float UnpackNormalizedValue(const std::byte* data, uint32_t input_type)
             return glm::unpackUnorm<float, 1, uint32_t, glm::defaultp>(glm::u32vec1(*(uint32_t*)data)).x;
         case TINYGLTF_COMPONENT_TYPE_INT:
             return glm::unpackSnorm<float, 1, int32_t, glm::defaultp>(glm::i32vec1(*(int32_t*)data)).x;
+        case TINYGLTF_COMPONENT_TYPE_FLOAT:
+            return *(float*)data;
         default:
             return 0.0f;
     }
@@ -189,7 +191,7 @@ inline T Convert(const std::byte* data, uint32_t input_type)
     }
 }
 
-template<typename T>
+template<typename T, bool NORMALIZE = false>
 inline T Convert(const std::byte* data, bool normalized, uint32_t input_type)
 {
     if (!data) {
@@ -198,17 +200,19 @@ inline T Convert(const std::byte* data, bool normalized, uint32_t input_type)
         return *(T*)data;
     } else if (normalized) {
         return PackNormalizedValue<T>(UnpackNormalizedValue(data, input_type));
+    } else if constexpr (NORMALIZE) {
+        return PackNormalizedValue<T>(UnpackNormalizedValue(data, input_type));
     } else {
         return Convert<T>(data, input_type);
     }
 }
 
-template<glm::length_t L, typename T>
+template<glm::length_t L, typename T, bool NORMALIZE = false>
 inline glm::vec<L, T> Convert(const std::byte* data, bool normalized, uint32_t input_type, uint32_t input_components)
 {
     glm::vec<L, T> result;
     for (int i = 0; i < std::min((uint32_t)L, input_components); i++) {
-        result[i] = Convert<T>(data + tinygltf::GetComponentSizeInBytes(input_type) * i, normalized, input_type);
+        result[i] = Convert<T, NORMALIZE>(data + tinygltf::GetComponentSizeInBytes(input_type) * i, normalized, input_type);
     }
     for (int i = input_components; i < L; i++) {
         result[i] = (T)1;
@@ -277,7 +281,7 @@ class RawIterator {
     int sparse_index = 0;
 };
 
-template<glm::length_t L, typename T>
+template<glm::length_t L, typename T, bool NORMALIZE = false>
 class Iterator: public RawIterator {
 
     public:
@@ -290,7 +294,7 @@ class Iterator: public RawIterator {
     glm::vec<L,T> Get()
     {
         std::byte* raw = RawIterator::Get();
-        return Convert<L, T>(raw, accessor->normalized, accessor->componentType, tinygltf::GetNumComponentsInType(accessor->type));
+        return Convert<L, T, NORMALIZE>(raw, accessor->normalized, accessor->componentType, tinygltf::GetNumComponentsInType(accessor->type));
     }
 };
 
@@ -307,11 +311,11 @@ inline void IterateRaw(const tinygltf::Model* model, tinygltf::Accessor* accesso
     }
 }
 
-template<glm::length_t L, typename T>
+template<glm::length_t L, typename T, bool NORMALIZE = false>
 inline void Iterate(const tinygltf::Model* model, tinygltf::Accessor* accessor, const std::function<void(int, const glm::vec<L, T>&)>& lambda)
 {
     int i = 0;
-    Iterator<L, T> iterator(model, accessor);
+    Iterator<L, T, NORMALIZE> iterator(model, accessor);
 
     while(!iterator.AtEnd()) {
         glm::vec<L, T> value = iterator.Get();
@@ -329,7 +333,7 @@ inline void CopyContiguous(const tinygltf::Model* model, const tinygltf::Accesso
     std::memcpy(output, GetBufferPtr(model, accessor), accessor->count * GetTypeSize(accessor));
 }
 
-template<glm::length_t L, typename T>
+template<glm::length_t L, typename T, bool NORMALIZE = false>
 inline void Copy(glm::vec<L, T>* output, const tinygltf::Model* model, tinygltf::Accessor* accessor)
 {
     ProfileZoneScoped();
@@ -340,7 +344,7 @@ inline void Copy(glm::vec<L, T>* output, const tinygltf::Model* model, tinygltf:
     if (same_dimension && same_component && contiguous && !accessor->sparse.isSparse) {
         CopyContiguous(model, accessor, output);
     } else {
-        Iterate<L, T>(model, accessor, [&](int i, const glm::vec<L, T>& data) {
+        Iterate<L, T, NORMALIZE>(model, accessor, [&](int i, const glm::vec<L, T>& data) {
             output[i] = data;
         });
     }

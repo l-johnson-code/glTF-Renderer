@@ -293,8 +293,8 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 
 	if (desc.flags & ::Mesh::FLAG_COLOR) {
 		tinygltf::Accessor* color_accessor = &gltf->accessors[gltf_primitive->attributes["COLOR_0"]];
-		glm::vec4* dest = (glm::vec4*)primitive->mesh.QueueColorUpdate(upload_buffer);
-		tinygltf::tools::Copy(dest, gltf, color_accessor);
+		glm::u16vec4* dest = (glm::u16vec4*)primitive->mesh.QueueColorUpdate(upload_buffer);
+		tinygltf::tools::Copy<4, uint16_t, true>(dest, gltf, color_accessor);
 	}
 
 	// Create bone weights.

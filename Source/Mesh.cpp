@@ -127,7 +127,7 @@ HRESULT Mesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocato
 		desc->flags & FLAG_TANGENT_SPACE ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
 		desc->flags & FLAG_TEXCOORD_0 ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32_FLOAT) : null_allocation,
 		desc->flags & FLAG_TEXCOORD_1 ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32_FLOAT) : null_allocation,
-		desc->flags & FLAG_COLOR ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT) : null_allocation,
+		desc->flags & FLAG_COLOR ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM) : null_allocation,
 		desc->flags & FLAG_JOINT_WEIGHT ? VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(JointWeight)) : null_allocation,
 	};
 	uint64_t offsets[std::size(allocations)];
@@ -157,7 +157,7 @@ HRESULT Mesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocato
 		texcoords[1].Create(resource.resource.Get(), base_address + offsets[4], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
 	}
     if (desc->flags & FLAG_COLOR) {
-		color.Create(resource.resource.Get(), base_address + offsets[5], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32A32_FLOAT);
+		color.Create(resource.resource.Get(), base_address + offsets[5], descriptor_allocator, num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM);
 	}
     if (desc->flags & FLAG_JOINT_WEIGHT) {
 		joint_weight.Create(resource.resource.Get(), base_address + offsets[6], descriptor_allocator, num_of_vertices, sizeof(JointWeight));
