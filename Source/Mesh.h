@@ -40,8 +40,8 @@ struct Mesh {
     static constexpr int MAX_TEXCOORDS = 2;
 
     struct JointWeight {
-        glm::u32vec4 joints;
-        glm::vec4 weights;
+        glm::u16vec4 joints;
+        glm::u16vec4 weights;
     };
 
     struct Desc {

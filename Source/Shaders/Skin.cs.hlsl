@@ -21,8 +21,8 @@ enum MorphFlags {
 };
 
 struct BoneWeights {
-    uint32_t bones[4];
-    float weights[4];
+    uint32_t bones[2];
+    uint32_t weights[2];
 };
 
 struct PerModel {
@@ -90,12 +90,22 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
     if (per_model.input_mesh_flags & MESH_FLAG_JOINT_WEIGHT) {
         BoneWeights bone_weights;
         bone_weights = skin[index];
+
+        // Unpack the bone weights.
+        uint32_t bone_ids[4];
+        float weights[4];
+        for (int i = 0; i < 2; i++) {
+            bone_ids[2 * i] = bone_weights.bones[i] & 0xffff;
+            bone_ids[2 * i + 1] = bone_weights.bones[i] >> 16;
+            weights[2 * i] = (float)(bone_weights.weights[i] & 0xffff) / 65535.0f;
+            weights[2 * i + 1] = (float)(bone_weights.weights[i] >> 16) / 65535.0f;
+        }
         
         // Positions.
         float3 skinned_position = float3(0., 0., 0.);
         for (int i = 0; i < 4; i++) {
-            float4x4 transform = bones[bone_weights.bones[i]].transform;
-            skinned_position += bone_weights.weights[i] * mul(transform, float4(position, 1.)).xyz;
+            float4x4 transform = bones[bone_ids[i]].transform;
+            skinned_position += weights[i] * mul(transform, float4(position, 1.)).xyz;
         }
         position = skinned_position;
         
@@ -103,15 +113,15 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
         if (per_model.input_mesh_flags & MESH_FLAG_TANGENT_SPACE) {
             float3 skinned_normal = float3(0., 0., 0.);
             for (int i = 0; i < 4; i++) {
-                float4x4 transform = bones[bone_weights.bones[i]].inverse_transpose;
-                skinned_normal += bone_weights.weights[i] * mul(transform, float4(normal, 0.)).xyz;
+                float4x4 transform = bones[bone_ids[i]].inverse_transpose;
+                skinned_normal += weights[i] * mul(transform, float4(normal, 0.)).xyz;
             }
             normal = skinned_normal;
             // Assume we don't change handedness.
             float3 skinned_tangent = float3(0., 0., 0.);
             for (int i = 0; i < 4; i++) {
-                float4x4 transform = bones[bone_weights.bones[i]].transform;
-                skinned_tangent += bone_weights.weights[i] * mul(transform, float4(tangent.xyz, 0.)).xyz;
+                float4x4 transform = bones[bone_ids[i]].transform;
+                skinned_tangent += weights[i] * mul(transform, float4(tangent.xyz, 0.)).xyz;
             }
             tangent.xyz = skinned_tangent;
         }

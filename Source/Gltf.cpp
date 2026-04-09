@@ -301,11 +301,11 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 	if (desc.flags & ::Mesh::FLAG_JOINT_WEIGHT) {
 		::Mesh::JointWeight* dest = (::Mesh::JointWeight*)primitive->mesh.QueueJointWeightUpdate(upload_buffer);
 		tinygltf::Accessor* joint_accessor = &gltf->accessors[gltf_primitive->attributes["JOINTS_0"]];
-		tinygltf::tools::Iterate<4, uint32_t>(gltf, joint_accessor, [&](int i, const glm::u32vec4& data) {
+		tinygltf::tools::Iterate<4, uint16_t>(gltf, joint_accessor, [&](int i, const glm::u32vec4& data) {
 			dest[i].joints = data;
 		});
 		tinygltf::Accessor* weight_accessor = &gltf->accessors[gltf_primitive->attributes["WEIGHTS_0"]];
-		tinygltf::tools::Iterate<4, float>(gltf, weight_accessor, [&](int i, const glm::vec4& data) {
+		tinygltf::tools::Iterate<4, uint16_t, true>(gltf, weight_accessor, [&](int i, const glm::vec4& data) {
 			dest[i].weights = data;
 		});
 	}
