@@ -10,8 +10,11 @@
 #include <spdlog/spdlog.h>
 #include <stb/stb_image.h>
 #include <tinyexr/tinyexr.h>
+#include <glm/glm.hpp>
 
 #include "GpuResources.h"
+#include "glm/ext/scalar_constants.hpp"
+#include "glm/gtc/constants.hpp"
 
 // Note: This is not perceptual roughness.
 float EnvironmentMap::MipToRoughness(int mip_level, int mip_count)
@@ -71,13 +74,13 @@ void EnvironmentMap::Init(ID3D12Device* device, GpuAllocator* allocator, CbvSrvU
     GpuResources::FreeShader(pipeline_desc.CS);
 }
 
-void EnvironmentMap::LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const char* filepath)
+void EnvironmentMap::LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const char* filepath, Map* map)
 {
     std::filesystem::path path(filepath);
     if (path.extension() == ".exr") {
-        LoadEnvironmentMapImageExr(upload_buffer, filepath);
+        LoadEnvironmentMapImageExr(upload_buffer, filepath, map);
     } else if (path.extension() == ".hdr") {
-        LoadEnvironmentMapImageHdr(upload_buffer, filepath);
+        LoadEnvironmentMapImageHdr(upload_buffer, filepath, map);
     }
 }
 
@@ -139,13 +142,16 @@ void EnvironmentMap::DestroyEnvironmentMap(Map* map)
     map->diffuse_srv_descriptor = -1;
     descriptor_allocator->Free(map->importance_srv_descriptor);
     map->importance_srv_descriptor = -1;
+    descriptor_allocator->Free(map->alias_srv_descriptor);
+    map->alias_srv_descriptor = -1;
     map->cube.Reset();
     map->ggx.Reset();
     map->diffuse.Reset();
     map->importance.Reset();
+    map->alias.Reset();
 }
 
-void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, const char* filepath)
+void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, const char* filepath, Map* map)
 {
 	HRESULT result = S_OK;
 
@@ -250,7 +256,7 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
 	FreeEXRHeader(&exr_header);
 }
 
-void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, const char* filepath)
+void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, const char* filepath, Map* map)
 {
 	HRESULT result = S_OK;
 
@@ -286,6 +292,10 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
 	for (int i = 0; i < y; i++) {
 		memcpy(upload_ptr + i * row_pitch, image + i * x * channels, sizeof(float) * x * channels);
 	}
+
+    GenerateAliasTable(upload_buffer, map, x, y, image);
+
+    stbi_image_free(image);
 }
 
 void EnvironmentMap::GenerateCubemap(CommandContext* context, ID3D12Resource* equirectangular_image, ID3D12Resource* cubemap)
@@ -452,4 +462,134 @@ void EnvironmentMap::GenerateImportanceMap(CommandContext* context, int cubemap_
 
     context->PushTransitionBarrier(importance_map, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	context->SubmitBarriers();
+}
+
+static float Luminance(glm::vec3 color)
+{
+    return glm::dot(color, glm::vec3(0.2126f, 0.7152f, 0.0722f));
+}
+
+static glm::vec2 PixelToUv(glm::ivec2 pixel, glm::ivec2 size)
+{
+    return (glm::vec2(pixel) + 0.5f) / glm::vec2(size);
+}
+
+glm::vec2 UvToUnitSquare(glm::vec2 uv)
+{
+    return uv * glm::vec2(2, -2) + glm::vec2(-1, 1);
+}
+
+glm::vec3 SquareToSphere(glm::vec2 square)
+{
+    float d = 1.0f - (glm::abs(square.x) + glm::abs(square.y));
+    float r = 1.0f - glm::abs(d);
+    float phi = (r == 0.0f) ? 0.0f : (glm::pi<float>() / 4.0f) * ((glm::abs(square.y) - glm::abs(square.x)) / r + 1.0f);
+    float f = r * glm::sqrt(2.0f - r * r);
+    glm::vec3 sphere;
+    sphere.x = f * glm::sign(square.x) * glm::cos(phi);
+    sphere.y = f * glm::sign(square.y) * glm::sin(phi);
+    sphere.z = glm::sign(d) * (1 - r * r);
+    return sphere;
+}
+
+static glm::vec2 DirectionToEquirectangular(glm::vec3 direction)
+{
+    glm::vec2 equirectangular_coordinates = glm::vec2(glm::atan(direction.y, direction.x) / glm::two_pi<float>(), 1.0f - ((direction.z + 1.0f) / 2.0f));
+    return equirectangular_coordinates;
+}
+
+static int WrapAddress(int value, int max)
+{
+    return value >= 0 ? value % max : max + (value % max);
+}
+
+static float SampleImageLuminance(int width, int height, glm::vec3* data, glm::vec2 uv)
+{
+    glm::vec3 rgb;
+    glm::vec2 weight = glm::vec2(uv.x * width - 0.5f, uv.y * height - 0.5);
+    int x = floor(weight.x);
+    int y = floor(weight.y);
+    weight.x -= (float)x;
+    weight.y -= (float)y;
+
+    int y_coords[2] = {std::clamp(y, 0, height), std::clamp(y + 1, 0, height - 1)};
+    int x_coords[2] = { WrapAddress(x, width), WrapAddress(x + 1, width) };
+    rgb = glm::mix(
+        glm::mix(data[y_coords[0] * width + x_coords[0]], data[y_coords[0] * width + x_coords[1]], weight.x),
+        glm::mix(data[y_coords[1] * width + x_coords[0]], data[y_coords[1] * width + x_coords[1]], weight.x),
+        weight.y
+    );
+    return Luminance(rgb);
+}
+
+void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int width, int height, float* data)
+{
+    const int alias_size = 1024;
+
+    std::vector<AliasMap> alias_table(alias_size * alias_size);
+
+    // Convert to equal area map and calculate total as we do.
+    float total = 0.0f;
+    for (int i = 0; i < alias_size; i++) {
+        for (int j = 0; j < alias_size; j++) {
+            glm::vec2 uv = PixelToUv(glm::ivec2(j, i), glm::ivec2(alias_size));
+            glm::vec2 square = UvToUnitSquare(uv);
+            glm::vec3 direction = SquareToSphere(square);
+            glm::vec2 equirectangular = DirectionToEquirectangular(direction);
+            float luminance = SampleImageLuminance(width, height, (glm::vec3*)data, equirectangular);
+            alias_table[i * alias_size + j].total_prob = luminance;
+            alias_table[i * alias_size + j].alias = 0;
+            total += luminance;
+        }
+    }
+
+    // Sort all bins into smaller and larger than average lists.
+    std::vector<int> smaller;
+    std::vector<int> larger;
+    for (int i = 0; i < (alias_size * alias_size); i++) {
+        alias_table[i].total_prob /= total;
+        alias_table[i].prob = alias_table[i].total_prob * alias_size * alias_size;
+        if (alias_table[i].prob < 1.0) {
+            smaller.push_back(i);
+        } else {
+            larger.push_back(i);
+        }
+    }
+
+    while (!smaller.empty() && !larger.empty()) {
+        int smaller_i = smaller.back();
+        smaller.pop_back();
+        int larger_i = larger.back(); 
+        larger.pop_back();
+        alias_table[smaller_i].alias = larger_i;
+        alias_table[larger_i].prob = (alias_table[larger_i].prob + alias_table[smaller_i].prob) - 1.0f;
+        if (alias_table[larger_i].prob < 1.0f) {
+            smaller.push_back(larger_i);
+        } else {
+            larger.push_back(larger_i);
+        }
+    }
+    while (!larger.empty()) {
+        int larger_i = larger.back();
+        larger.pop_back();
+        alias_table[larger_i].prob = 1.0f;
+    }
+    while (!smaller.empty()) {
+        int smaller_i = smaller.back();
+        smaller.pop_back();
+        alias_table[smaller_i].prob = 1.0f;
+    }
+
+    // Create the GPU resource.
+	int alias_table_size = 1024 * 1024;
+    CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
+	CD3DX12_RESOURCE_DESC alias_table_desc = CD3DX12_RESOURCE_DESC::Buffer(alias_table_size * sizeof(AliasMap));
+	HRESULT result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &alias_table_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &map->alias, "Alias Table");
+	assert(result == S_OK);
+    CD3DX12_SHADER_RESOURCE_VIEW_DESC view_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::StructuredBuffer(alias_table_size, sizeof(AliasMap));
+    map->alias_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->alias.resource.Get(), &view_desc);
+
+    // Upload to GPU.
+    void* ptr = upload->QueueBufferUpload(alias_table_size * sizeof(AliasMap), map->alias.resource.Get(), 0);
+    memcpy(ptr, alias_table.data(), alias_table_size * sizeof(AliasMap));
 }

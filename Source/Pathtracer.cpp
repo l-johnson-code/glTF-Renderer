@@ -302,6 +302,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             int output_descriptor;
             int environment_map_descriptor_id;
             int environment_importance_map_descriptor_id;
+            int environment_alias_table_id;
             float luminance_clamp;
             float min_russian_roulette_continue_prob;
             float max_russian_roulette_continue_prob;
@@ -325,6 +326,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .output_descriptor = execute_params->output_descriptor,
             .environment_map_descriptor_id = execute_params->environment_map ? execute_params->environment_map->cube_srv_descriptor : -1,
             .environment_importance_map_descriptor_id = execute_params->environment_map ? execute_params->environment_map->importance_srv_descriptor : -1,
+            .environment_alias_table_id = execute_params->environment_map ? execute_params->environment_map->alias_srv_descriptor : -1,
             .luminance_clamp = settings->luminance_clamp,
             .min_russian_roulette_continue_prob = settings->min_russian_roulette_continue_prob,
             .max_russian_roulette_continue_prob = settings->max_russian_roulette_continue_prob,

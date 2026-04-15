@@ -42,6 +42,7 @@ public:
 	GpuResources resources;
 	UploadBuffer upload_buffer;
 	EnvironmentMap environment_map;
+    EnvironmentMap::Map map;
 
 	bool Init(HWND window, RenderSettings* settings);
 	void DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* render_settings);
@@ -212,7 +213,6 @@ private:
 
 	// Pipelines.
 	ToneMapper tone_mapper;
-	EnvironmentMap::Map map;
 	bool environment_map_loaded = false;
 
 	void CreateRenderTargets();

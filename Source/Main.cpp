@@ -67,7 +67,7 @@ void LoadEnvironmentMap(const char* filepath)
 {
 	renderer.WaitForOutstandingWork();
 	renderer.upload_buffer.Begin();
-	renderer.environment_map.LoadEnvironmentMapImage(&renderer.upload_buffer, filepath);
+	renderer.environment_map.LoadEnvironmentMapImage(&renderer.upload_buffer, filepath, &renderer.map);
 	renderer.upload_buffer.WaitForSubmissionToComplete(renderer.upload_buffer.Submit());
 	g_render_settings.pathtracer.reset = true;
 }
@@ -335,6 +335,8 @@ void DrawGraphicsTab()
 			g_render_settings.pathtracer.reset |= BitflagCheckbox("Show INF", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHOW_INF);
 
 			g_render_settings.pathtracer.reset |= BitflagCheckbox("Shading Normal Adaptation", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHADING_NORMAL_ADAPTATION);
+
+			g_render_settings.pathtracer.reset |= BitflagCheckbox("Environment Alias Table", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ENVIRONMENT_ALIAS_TABLE);
 		}
 	}
 }

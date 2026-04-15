@@ -65,6 +65,7 @@ class Pathtracer {
         FLAG_SHOW_NAN = 1 << 13,
         FLAG_SHOW_INF = 1 << 14,
         FLAG_SHADING_NORMAL_ADAPTATION = 1 << 15,
+        FLAG_ENVIRONMENT_ALIAS_TABLE = 1 << 16,
     };
 
     struct Settings {

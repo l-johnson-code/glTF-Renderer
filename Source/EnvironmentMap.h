@@ -17,10 +17,12 @@ class EnvironmentMap {
         int ggx_srv_descriptor = -1;
         int diffuse_srv_descriptor = -1;
         int importance_srv_descriptor = -1;
+        int alias_srv_descriptor = -1;
         GpuResource cube;
         GpuResource ggx;
         GpuResource diffuse;
         GpuResource importance;
+        GpuResource alias;
     };
     
     GpuResource equirectangular_image;
@@ -28,7 +30,7 @@ class EnvironmentMap {
     static float MipToRoughness(int mip_level, int mip_count);
     void Init(ID3D12Device* device, GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator);
     // Note: Loading the initial image and processing the image into cubemaps are separated so that they can happen at different times.
-    void LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const char* filepath);
+    void LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const char* filepath, Map* map);
     void CreateEnvironmentMap(CommandContext* context, ID3D12Resource* equirectangular_image, Map* map);
     void DestroyEnvironmentMap(Map* map);
     
@@ -37,6 +39,12 @@ class EnvironmentMap {
     enum Bsdf {
         BSDF_DIFFUSE,
         BSDF_GGX,
+    };
+
+    struct AliasMap {
+        float total_prob;
+        float prob;
+        uint32_t alias;
     };
     
     ID3D12Device* device = nullptr;
@@ -50,11 +58,12 @@ class EnvironmentMap {
     Microsoft::WRL::ComPtr<ID3D12PipelineState> generate_importance_map_level_pipeline_state;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> filter_cube_map_pipeline_state;
     
-    void LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, const char* filepath);
-    void LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, const char* filepath);
+    void LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, const char* filepath, Map* map);
+    void LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, const char* filepath, Map* map);
     void GenerateCubemap(CommandContext* context, ID3D12Resource* equirectangular_image, ID3D12Resource* cubemap);
     void FilterCube(CommandContext* context, int cubemap_srv_descriptor, Bsdf bsdf, float mip_bias, int num_of_samples, ID3D12Resource* filtered_cube_map);
     void GenerateGgxCube(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* ggx_cube_map);
     void GenerateDiffuseCube(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* diffuse_cube_map);
     void GenerateImportanceMap(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* importance_map);
+    void GenerateAliasTable(UploadBuffer* upload, Map* map, int width, int height, float* data);
 };

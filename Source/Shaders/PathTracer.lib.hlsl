@@ -24,6 +24,7 @@ struct SceneConstants {
     int output_descriptor;
     int environment_map_descriptor_id;
     int environment_importance_map_descriptor_id;
+    int environment_alias_table;
     float luminance_clamp;
     float min_russian_roulette_continue_prob;
     float max_russian_roulette_continue_prob;
@@ -88,6 +89,7 @@ enum Flags {
     FLAG_SHOW_NAN = 1 << 13,
     FLAG_SHOW_INF = 1 << 14,
     FLAG_SHADING_NORMAL_ADAPTATION = 1 << 15,
+    FLAG_ENVIRONMENT_ALIAS_TABLE = 1 << 16,
 };
 
 enum InstanceMask {
@@ -685,13 +687,23 @@ LightRay SamplePointLight(float3 surface_pos, float u, out float pdf)
     return GetLightRay(light, surface_pos);
 }
 
-LightRay SampleEnvironmentMap(float2 u, out float pdf)
+LightRay SampleEnvironmentMap(float3 u, out float pdf)
 {
-    
-    TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
-    Texture2D<float> environment_importance_map = ResourceDescriptorHeap[g_scene_constants.environment_importance_map_descriptor_id];
+    float2 uv;
+    if (g_scene_constants.flags & FLAG_ENVIRONMENT_ALIAS_TABLE) {
+        StructuredBuffer<AliasMap> alias_table = ResourceDescriptorHeap[g_scene_constants.environment_alias_table];
+        uint bin = SampleAliasMap(alias_table, u.x);
+        pdf = AliasMapPdf(alias_table, bin);
+        // TODO: Get rid of hardcoded size.
+        uint2 pixel = uint2(bin % 1024, bin / 1024);
+        uv = ((float2)pixel + u.yz) / 1024.0f;
+        pdf *= 1024 * 1024;
+    } else {
+        Texture2D<float> environment_importance_map = ResourceDescriptorHeap[g_scene_constants.environment_importance_map_descriptor_id];
+        uv = SampleImportanceMap(environment_importance_map, u.xy, pdf);
+    }
 
-    float2 uv = SampleImportanceMap(environment_importance_map, u, pdf);
+    TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
     float3 direction = SquareToSphere(UvToUnitSquare(uv));
     pdf /= 4 * PI; // Jacobian of transformation to sphere.
 
@@ -704,9 +716,17 @@ LightRay SampleEnvironmentMap(float2 u, out float pdf)
 
 float EnvironmentMapPdf(float3 l)
 {
-    Texture2D<float> environment_importance_map = ResourceDescriptorHeap[g_scene_constants.environment_importance_map_descriptor_id];
-    float2 uv = UnitSquareToUv(SphereToSquare(l));
-    return ImportanceMapPdf(environment_importance_map, uv) / (4 * PI);
+    if (g_scene_constants.flags & FLAG_ENVIRONMENT_ALIAS_TABLE) {
+        StructuredBuffer<AliasMap> alias_table = ResourceDescriptorHeap[g_scene_constants.environment_alias_table];
+        float2 uv = UnitSquareToUv(SphereToSquare(l));
+        uint2 pixel = UVToPixel(uv, int2(1024, 1024)); // TODO: Remove hardcoded size.
+        uint bin = pixel.y * 1024 + pixel.x;
+        return (AliasMapPdf(alias_table, bin) * 1024 * 1024) / (4 * PI);
+    } else {
+        Texture2D<float> environment_importance_map = ResourceDescriptorHeap[g_scene_constants.environment_importance_map_descriptor_id];
+        float2 uv = UnitSquareToUv(SphereToSquare(l));
+        return ImportanceMapPdf(environment_importance_map, uv) / (4 * PI);
+    }
 }
 
 bool RussianRoulette(float min_continue_prob, float max_continue_prob, float u, in out float3 throughput, in out float3 weight) 
@@ -929,7 +949,7 @@ void ClosestHit(inout Payload payload, in BuiltInTriangleIntersectionAttributes 
     if (payload.bounce < g_scene_constants.max_bounces) {
         if (g_scene_constants.flags & FLAG_ENVIRONMENT_MAP && g_scene_constants.flags & FLAG_ENVIRONMENT_MIS) {
             float light_pdf;
-            LightRay light_ray = SampleEnvironmentMap(GenerateNextRandom(payload.random_count).xy, light_pdf);
+            LightRay light_ray = SampleEnvironmentMap(GenerateNextRandom(payload.random_count).xyz, light_pdf);
             light_ray.color *= TraceShadowRay(ray_origin, light_ray.direction, false);
 
             if (any(light_ray.color > 0.0)) {
