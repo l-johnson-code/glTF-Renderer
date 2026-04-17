@@ -7,13 +7,14 @@
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
 #include <directx/d3dx12_root_signature.h>
+#include <glm/ext/scalar_constants.hpp>
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/packing.hpp>
 #include <spdlog/spdlog.h>
 #include <stb/stb_image.h>
 #include <tinyexr/tinyexr.h>
 
 #include "GpuResources.h"
-#include "glm/ext/scalar_constants.hpp"
-#include "glm/gtc/constants.hpp"
 
 // Note: This is not perceptual roughness.
 float EnvironmentMap::MipToRoughness(int mip_level, int mip_count)
@@ -609,7 +610,7 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
     map->alias_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->alias.resource.Get(), &view_desc);
 
     // Create the PDF texture.
-	CD3DX12_RESOURCE_DESC pdf_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT, pdf_size, pdf_size, 1, 1);
+	CD3DX12_RESOURCE_DESC pdf_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT, pdf_size, pdf_size, 1, 1);
 	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &pdf_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &map->pdf, "PDF");
 	assert(result == S_OK);
     map->pdf_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->pdf.resource.Get(), nullptr);
@@ -619,8 +620,10 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
     memcpy(ptr, alias_table.data(), alias_table_size * sizeof(AliasMap));
 
     uint32_t row_pitch = 0;
-    ptr = upload->QueueTextureUpload(DXGI_FORMAT_R32_FLOAT, pdf_size, pdf_size, 1, map->pdf.resource.Get(), 0, &row_pitch);
+    ptr = upload->QueueTextureUpload(DXGI_FORMAT_R16_FLOAT, pdf_size, pdf_size, 1, map->pdf.resource.Get(), 0, &row_pitch);
     for (int i = 0; i < pdf_size; i++) {
-        memcpy((std::byte*)ptr + i * row_pitch, pdf.data() + i * pdf_size, pdf_size * sizeof(float));
+        for (int j = 0; j < pdf_size; j++) {
+            *((uint16_t*)((std::byte*)ptr + i * row_pitch) + j) = glm::packHalf1x16(pdf[i * pdf_size + j]); 
+        }
     }
 }
