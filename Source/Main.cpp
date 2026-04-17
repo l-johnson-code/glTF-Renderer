@@ -295,7 +295,10 @@ void DrawGraphicsTab()
     			"Bounce PDF",
     			"Bounce Weight",
     			"Bounce Is Transmission",
-				"Hemisphere View Side"
+				"Hemisphere View Side",
+				"Environment Map Direction",
+        		"Environment Map Color",
+        		"Environment Map PDF",
 			};
 			g_render_settings.pathtracer.reset |= EnumWidget("Debug Output", &g_render_settings.pathtracer.debug_output, debug_output_strings, Pathtracer::DEBUG_OUTPUT_COUNT);
 

@@ -70,6 +70,9 @@ enum DebugOutput {
     DEBUG_OUTPUT_BOUNCE_WEIGHT,
     DEBUG_BOUNCE_IS_TRANSMISSION,
     DEBUG_OUTPUT_HEMISPHERE_VIEW_SIDE,
+    DEBUG_OUTPUT_ENVIRONMENT_MAP_DIRECTION,
+    DEBUG_OUTPUT_ENVIRONMENT_MAP_COLOR,
+    DEBUG_OUTPUT_ENVIRONMENT_MAP_PDF,
 };
 
 enum Flags {
@@ -950,6 +953,20 @@ void ClosestHit(inout Payload payload, in BuiltInTriangleIntersectionAttributes 
         if (g_scene_constants.flags & FLAG_ENVIRONMENT_MAP && g_scene_constants.flags & FLAG_ENVIRONMENT_MIS) {
             float light_pdf;
             LightRay light_ray = SampleEnvironmentMap(GenerateNextRandom(payload.random_count).xyz, light_pdf);
+            switch (g_scene_constants.debug_output) {
+                case DEBUG_OUTPUT_ENVIRONMENT_MAP_DIRECTION: {
+                    payload.color = (light_ray.direction + 1) / 2;
+                    return;
+                } break;
+                case DEBUG_OUTPUT_ENVIRONMENT_MAP_COLOR: {
+                    payload.color = light_ray.color;
+                    return;
+                } break;
+                case DEBUG_OUTPUT_ENVIRONMENT_MAP_PDF: {
+                    payload.color = light_pdf;
+                    return;
+                } break;
+            }
             light_ray.color *= TraceShadowRay(ray_origin, light_ray.direction, false);
 
             if (any(light_ray.color > 0.0)) {
