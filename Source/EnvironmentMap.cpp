@@ -543,6 +543,14 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
         }
     }
 
+    // Use MIS compensation.
+    float average = total / (float)(alias_size * alias_size);
+    total = 0.0f;
+    for (auto& alias_map: alias_table) {
+        alias_map.total_prob = glm::max(alias_map.total_prob - average, 0.0f);
+        total += alias_map.total_prob;
+    }
+
     // Sort all bins into smaller and larger than average lists.
     std::vector<int> smaller;
     std::vector<int> larger;
