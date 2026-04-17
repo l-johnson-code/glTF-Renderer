@@ -5,25 +5,20 @@
 #include "Transforms.hlsli"
 
 struct AliasMap {
-    float total_prob;
     float prob;
+    uint pixel;
     uint alias;
 };
 
-uint SampleAliasMap(StructuredBuffer<AliasMap> alias_map, float u)
+uint2 SampleAliasMap(StructuredBuffer<AliasMap> alias_map, float u)
 {
     uint num_structs, stride;
     alias_map.GetDimensions(num_structs, stride);
     u *= num_structs;
     float remainder = frac(u);
     uint bin = clamp((uint)(u), 0, num_structs - 1);
-    bin = remainder <= alias_map[bin].prob ? bin : alias_map[bin].alias;
-    return bin;
-}
-
-float AliasMapPdf(StructuredBuffer<AliasMap> alias_map, uint index)
-{
-    return alias_map[index].total_prob;
+    uint pixel = remainder <= alias_map[bin].prob ? alias_map[bin].pixel : alias_map[bin].alias;
+    return uint2(pixel & 0xffff, pixel >> 16);
 }
 
 float3 SampleHemisphere(float2 u) 

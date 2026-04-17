@@ -25,6 +25,7 @@ struct SceneConstants {
     int environment_map_descriptor_id;
     int environment_importance_map_descriptor_id;
     int environment_alias_table;
+    int environment_pdf;
     float luminance_clamp;
     float min_russian_roulette_continue_prob;
     float max_russian_roulette_continue_prob;
@@ -695,12 +696,11 @@ LightRay SampleEnvironmentMap(float3 u, out float pdf)
     float2 uv;
     if (g_scene_constants.flags & FLAG_ENVIRONMENT_ALIAS_TABLE) {
         StructuredBuffer<AliasMap> alias_table = ResourceDescriptorHeap[g_scene_constants.environment_alias_table];
-        uint bin = SampleAliasMap(alias_table, u.x);
-        pdf = AliasMapPdf(alias_table, bin);
-        // TODO: Get rid of hardcoded size.
-        uint2 pixel = uint2(bin % 1024, bin / 1024);
+        Texture2D<float> pdf_texture = ResourceDescriptorHeap[g_scene_constants.environment_pdf];
+        uint2 pixel = SampleAliasMap(alias_table, u.x);
+        pdf = pdf_texture[pixel];
         uv = ((float2)pixel + u.yz) / 1024.0f;
-        pdf *= 1024 * 1024;
+        pdf *= 1024.0f * 1024.0f;
     } else {
         Texture2D<float> environment_importance_map = ResourceDescriptorHeap[g_scene_constants.environment_importance_map_descriptor_id];
         uv = SampleImportanceMap(environment_importance_map, u.xy, pdf);
@@ -720,11 +720,11 @@ LightRay SampleEnvironmentMap(float3 u, out float pdf)
 float EnvironmentMapPdf(float3 l)
 {
     if (g_scene_constants.flags & FLAG_ENVIRONMENT_ALIAS_TABLE) {
-        StructuredBuffer<AliasMap> alias_table = ResourceDescriptorHeap[g_scene_constants.environment_alias_table];
+        Texture2D<float> pdf_texture = ResourceDescriptorHeap[g_scene_constants.environment_pdf];
         float2 uv = UnitSquareToUv(SphereToSquare(l));
         uint2 pixel = UVToPixel(uv, int2(1024, 1024)); // TODO: Remove hardcoded size.
-        uint bin = pixel.y * 1024 + pixel.x;
-        return (AliasMapPdf(alias_table, bin) * 1024 * 1024) / (4 * PI);
+        float pdf = pdf_texture[pixel];
+        return (pdf * 1024 * 1024) / (4 * PI);
     } else {
         Texture2D<float> environment_importance_map = ResourceDescriptorHeap[g_scene_constants.environment_importance_map_descriptor_id];
         float2 uv = UnitSquareToUv(SphereToSquare(l));

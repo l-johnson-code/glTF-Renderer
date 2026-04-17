@@ -10,7 +10,6 @@
 #include <spdlog/spdlog.h>
 #include <stb/stb_image.h>
 #include <tinyexr/tinyexr.h>
-#include <glm/glm.hpp>
 
 #include "GpuResources.h"
 #include "glm/ext/scalar_constants.hpp"
@@ -524,43 +523,56 @@ static float SampleImageLuminance(int width, int height, glm::vec3* data, glm::v
 
 void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int width, int height, float* data)
 {
-    const int alias_size = 1024;
+    const int pdf_size = 1024;
 
-    std::vector<AliasMap> alias_table(alias_size * alias_size);
+    std::vector<float> pdf(pdf_size * pdf_size);
 
     // Convert to equal area map and calculate total as we do.
     float total = 0.0f;
-    for (int i = 0; i < alias_size; i++) {
-        for (int j = 0; j < alias_size; j++) {
-            glm::vec2 uv = PixelToUv(glm::ivec2(j, i), glm::ivec2(alias_size));
+    for (int i = 0; i < pdf_size; i++) {
+        for (int j = 0; j < pdf_size; j++) {
+            glm::vec2 uv = PixelToUv(glm::ivec2(j, i), glm::ivec2(pdf_size));
             glm::vec2 square = UvToUnitSquare(uv);
             glm::vec3 direction = SquareToSphere(square);
             glm::vec2 equirectangular = DirectionToEquirectangular(direction);
             float luminance = SampleImageLuminance(width, height, (glm::vec3*)data, equirectangular);
-            alias_table[i * alias_size + j].total_prob = luminance;
-            alias_table[i * alias_size + j].alias = 0;
+            pdf[i * pdf_size + j] = luminance;
             total += luminance;
         }
     }
 
     // Use MIS compensation.
-    float average = total / (float)(alias_size * alias_size);
+    float average = total / (float)(pdf_size * pdf_size);
     total = 0.0f;
-    for (auto& alias_map: alias_table) {
-        alias_map.total_prob = glm::max(alias_map.total_prob - average, 0.0f);
-        total += alias_map.total_prob;
+    int alias_table_size = 0;
+    for (auto& p: pdf) {
+        p = glm::max(p - average, 0.0f);
+        if (p > 0.0f) {
+            alias_table_size++;
+        }
+        total += p;
     }
-
-    // Sort all bins into smaller and larger than average lists.
+    
+    std::vector<AliasMap> alias_table;
+    alias_table.reserve(alias_table_size);
     std::vector<int> smaller;
     std::vector<int> larger;
-    for (int i = 0; i < (alias_size * alias_size); i++) {
-        alias_table[i].total_prob /= total;
-        alias_table[i].prob = alias_table[i].total_prob * alias_size * alias_size;
-        if (alias_table[i].prob < 1.0) {
-            smaller.push_back(i);
-        } else {
-            larger.push_back(i);
+
+    // Normalize PDF and begin construction of the alias table.
+    for (int i = 0; i < (pdf_size * pdf_size); i++) {
+        if (pdf[i] > 0.0) {
+            pdf[i] /= total;
+            float p = pdf[i] * alias_table_size;
+            alias_table.push_back({
+                .prob = p,
+                .pixel = glm::u16vec2(i % pdf_size, i / pdf_size),
+                .alias = glm::u16vec2(i % pdf_size, i / pdf_size),
+            });
+            if (p < 1.0f) {
+                smaller.push_back(alias_table.size() - 1);
+            } else {
+                larger.push_back(alias_table.size() - 1);
+            }
         }
     }
 
@@ -569,7 +581,7 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
         smaller.pop_back();
         int larger_i = larger.back(); 
         larger.pop_back();
-        alias_table[smaller_i].alias = larger_i;
+        alias_table[smaller_i].alias = alias_table[larger_i].pixel;
         alias_table[larger_i].prob = (alias_table[larger_i].prob + alias_table[smaller_i].prob) - 1.0f;
         if (alias_table[larger_i].prob < 1.0f) {
             smaller.push_back(larger_i);
@@ -588,8 +600,7 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
         alias_table[smaller_i].prob = 1.0f;
     }
 
-    // Create the GPU resource.
-	int alias_table_size = 1024 * 1024;
+    // Create the alias table resource.
     CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC alias_table_desc = CD3DX12_RESOURCE_DESC::Buffer(alias_table_size * sizeof(AliasMap));
 	HRESULT result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &alias_table_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &map->alias, "Alias Table");
@@ -597,7 +608,19 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
     CD3DX12_SHADER_RESOURCE_VIEW_DESC view_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::StructuredBuffer(alias_table_size, sizeof(AliasMap));
     map->alias_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->alias.resource.Get(), &view_desc);
 
+    // Create the PDF texture.
+	CD3DX12_RESOURCE_DESC pdf_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT, pdf_size, pdf_size, 1, 1);
+	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &pdf_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &map->pdf, "PDF");
+	assert(result == S_OK);
+    map->pdf_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->pdf.resource.Get(), nullptr);
+
     // Upload to GPU.
     void* ptr = upload->QueueBufferUpload(alias_table_size * sizeof(AliasMap), map->alias.resource.Get(), 0);
     memcpy(ptr, alias_table.data(), alias_table_size * sizeof(AliasMap));
+
+    uint32_t row_pitch = 0;
+    ptr = upload->QueueTextureUpload(DXGI_FORMAT_R32_FLOAT, pdf_size, pdf_size, 1, map->pdf.resource.Get(), 0, &row_pitch);
+    for (int i = 0; i < pdf_size; i++) {
+        memcpy((std::byte*)ptr + i * row_pitch, pdf.data() + i * pdf_size, pdf_size * sizeof(float));
+    }
 }

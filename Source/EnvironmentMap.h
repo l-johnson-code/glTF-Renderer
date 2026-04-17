@@ -3,6 +3,7 @@
 #include <wrl.h>
 
 #include <directx/d3d12.h>
+#include <glm/glm.hpp>
 
 #include "CommandContext.h"
 #include "DescriptorAllocator.h"
@@ -18,11 +19,13 @@ class EnvironmentMap {
         int diffuse_srv_descriptor = -1;
         int importance_srv_descriptor = -1;
         int alias_srv_descriptor = -1;
+        int pdf_descriptor = -1;
         GpuResource cube;
         GpuResource ggx;
         GpuResource diffuse;
         GpuResource importance;
         GpuResource alias;
+        GpuResource pdf;
     };
     
     GpuResource equirectangular_image;
@@ -42,9 +45,9 @@ class EnvironmentMap {
     };
 
     struct AliasMap {
-        float total_prob;
         float prob;
-        uint32_t alias;
+        glm::u16vec2 pixel;
+        glm::u16vec2 alias;
     };
     
     ID3D12Device* device = nullptr;
