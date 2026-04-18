@@ -98,13 +98,6 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, ID3D12Resourc
 	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &cubemap_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->cube, "Environment Cube Map");
 	assert(result == S_OK);
 
-	// Create the importance map.
-	int importance_map_resolution = 1024;
-	CD3DX12_RESOURCE_DESC importance_map_resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT, importance_map_resolution, importance_map_resolution);
-	importance_map_resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &importance_map_resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, &map->importance, "Environment Importance Map");
-	assert(result == S_OK);
-
 	// Create the ggx map.
 	const int smallest_mip = 4;
 	int ggx_mips = std::max((int)std::floorf(std::log2f(cube_map_resolution)) + 1 - smallest_mip, 1);
@@ -124,12 +117,10 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, ID3D12Resourc
 	map->cube_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->cube.resource.Get(), &cube_desc);
 	map->diffuse_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->diffuse.resource.Get(), &cube_desc);
 	map->ggx_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->ggx.resource.Get(), &cube_desc);
-	map->importance_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->importance.resource.Get(), nullptr);
 
     GenerateCubemap(context, equirectangular_image, map->cube.resource.Get());
     GenerateGgxCube(context, map->cube_srv_descriptor, map->ggx.resource.Get());
     GenerateDiffuseCube(context, map->cube_srv_descriptor, map->diffuse.resource.Get());
-    GenerateImportanceMap(context, map->cube_srv_descriptor, map->importance.resource.Get());
 }
 
 void EnvironmentMap::DestroyEnvironmentMap(Map* map)
@@ -140,14 +131,11 @@ void EnvironmentMap::DestroyEnvironmentMap(Map* map)
     map->ggx_srv_descriptor = -1;
     descriptor_allocator->Free(map->diffuse_srv_descriptor);
     map->diffuse_srv_descriptor = -1;
-    descriptor_allocator->Free(map->importance_srv_descriptor);
-    map->importance_srv_descriptor = -1;
     descriptor_allocator->Free(map->alias_srv_descriptor);
     map->alias_srv_descriptor = -1;
     map->cube.Reset();
     map->ggx.Reset();
     map->diffuse.Reset();
-    map->importance.Reset();
     map->alias.Reset();
 }
 
@@ -410,60 +398,6 @@ void EnvironmentMap::GenerateDiffuseCube(CommandContext* context, int cubemap_sr
     FilterCube(context, cubemap_srv_descriptor, BSDF_DIFFUSE, 3, 512, diffuse_cube_map);
 }
 
-void EnvironmentMap::GenerateImportanceMap(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* importance_map)
-{
-    D3D12_RESOURCE_DESC importance_map_desc = importance_map->GetDesc();
-
-	// Create descriptors for each mip.
-    int mip_count = importance_map_desc.MipLevels;
-	DescriptorSpan mip_descriptors = context->AllocateDescriptors(mip_count);
-	for (int i = 0; i < mip_count; i++) {
-		CD3DX12_UNORDERED_ACCESS_VIEW_DESC desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT, i);
-		context->CreateUav(mip_descriptors[i], importance_map, nullptr, &desc);
-	}
-
-    // Generate first mip level.
-    context->command_list->SetComputeRootSignature(this->root_signature.Get());
-    context->command_list->SetPipelineState(this->generate_importance_map_pipeline_state.Get());
-    struct {
-        int environment_cube_map_srv;
-        int environment_importance_map_uav;
-    } constant_buffer;
-    constant_buffer = {
-        .environment_cube_map_srv = cubemap_srv_descriptor,
-        .environment_importance_map_uav = mip_descriptors[0],
-    };
-    context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
-    uint32_t thread_groups = (importance_map_desc.Width + 7) / 8;
-    context->command_list->Dispatch(thread_groups, thread_groups, 1);
-    
-    context->PushUavBarrier(importance_map);
-    context->SubmitBarriers();
-
-    // Generate all mip levels.
-    context->command_list->SetPipelineState(this->generate_importance_map_level_pipeline_state.Get());
-    for (int i = 1; i < importance_map_desc.MipLevels; i++) {
-        int output_resolution = importance_map_desc.Width >> i;
-        struct {
-            int input_uav;
-            int output_uav;
-        } constant_buffer;
-        constant_buffer = {
-            .input_uav = mip_descriptors[i - 1],
-            .output_uav = mip_descriptors[i],
-        };
-        context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
-        uint32_t thread_groups = (output_resolution + 7) / 8;
-        context->command_list->Dispatch(thread_groups, thread_groups, 1);
-
-        context->PushUavBarrier(importance_map);
-        context->SubmitBarriers();
-    }
-
-    context->PushTransitionBarrier(importance_map, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	context->SubmitBarriers();
-}
-
 static float Luminance(glm::vec3 color)
 {
     return glm::dot(color, glm::vec3(0.2126f, 0.7152f, 0.0722f));
@@ -613,7 +547,7 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
 	CD3DX12_RESOURCE_DESC pdf_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT, pdf_size, pdf_size, 1, 1);
 	result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &pdf_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &map->pdf, "PDF");
 	assert(result == S_OK);
-    map->pdf_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->pdf.resource.Get(), nullptr);
+    map->pdf_srv_descriptor = descriptor_allocator->AllocateAndCreateSrv(map->pdf.resource.Get(), nullptr);
 
     // Upload to GPU.
     void* ptr = upload->QueueBufferUpload(alias_table_size * sizeof(AliasMap), map->alias.resource.Get(), 0);

@@ -17,13 +17,11 @@ class EnvironmentMap {
         int cube_srv_descriptor = -1;
         int ggx_srv_descriptor = -1;
         int diffuse_srv_descriptor = -1;
-        int importance_srv_descriptor = -1;
         int alias_srv_descriptor = -1;
-        int pdf_descriptor = -1;
+        int pdf_srv_descriptor = -1;
         GpuResource cube;
         GpuResource ggx;
         GpuResource diffuse;
-        GpuResource importance;
         GpuResource alias;
         GpuResource pdf;
     };
@@ -67,6 +65,5 @@ class EnvironmentMap {
     void FilterCube(CommandContext* context, int cubemap_srv_descriptor, Bsdf bsdf, float mip_bias, int num_of_samples, ID3D12Resource* filtered_cube_map);
     void GenerateGgxCube(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* ggx_cube_map);
     void GenerateDiffuseCube(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* diffuse_cube_map);
-    void GenerateImportanceMap(CommandContext* context, int cubemap_srv_descriptor, ID3D12Resource* importance_map);
     void GenerateAliasTable(UploadBuffer* upload, Map* map, int width, int height, float* data);
 };

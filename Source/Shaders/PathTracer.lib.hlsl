@@ -23,7 +23,6 @@ struct SceneConstants {
     int max_bounces;
     int output_descriptor;
     int environment_map_descriptor_id;
-    int environment_importance_map_descriptor_id;
     int environment_alias_table;
     int environment_pdf;
     float luminance_clamp;
@@ -93,7 +92,6 @@ enum Flags {
     FLAG_SHOW_NAN = 1 << 13,
     FLAG_SHOW_INF = 1 << 14,
     FLAG_SHADING_NORMAL_ADAPTATION = 1 << 15,
-    FLAG_ENVIRONMENT_ALIAS_TABLE = 1 << 16,
 };
 
 enum InstanceMask {
@@ -693,23 +691,22 @@ LightRay SamplePointLight(float3 surface_pos, float u, out float pdf)
 
 LightRay SampleEnvironmentMap(float3 u, out float pdf)
 {
-    float2 uv;
-    if (g_scene_constants.flags & FLAG_ENVIRONMENT_ALIAS_TABLE) {
-        StructuredBuffer<AliasMap> alias_table = ResourceDescriptorHeap[g_scene_constants.environment_alias_table];
-        Texture2D<float> pdf_texture = ResourceDescriptorHeap[g_scene_constants.environment_pdf];
-        uint2 pixel = SampleAliasMap(alias_table, u.x);
-        pdf = pdf_texture[pixel];
-        uv = ((float2)pixel + u.yz) / 1024.0f;
-        pdf *= 1024.0f * 1024.0f;
-    } else {
-        Texture2D<float> environment_importance_map = ResourceDescriptorHeap[g_scene_constants.environment_importance_map_descriptor_id];
-        uv = SampleImportanceMap(environment_importance_map, u.xy, pdf);
-    }
-
+    StructuredBuffer<AliasMap> alias_table = ResourceDescriptorHeap[g_scene_constants.environment_alias_table];
+    Texture2D<float> pdf_texture = ResourceDescriptorHeap[g_scene_constants.environment_pdf];
     TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
-    float3 direction = SquareToSphere(UvToUnitSquare(uv));
-    pdf /= 4 * PI; // Jacobian of transformation to sphere.
 
+    uint pdf_width, pdf_height, pdf_levels;
+    pdf_texture.GetDimensions(0, pdf_width, pdf_height, pdf_levels);
+
+    // Importance sample the environment map texture.
+    uint2 pixel = SampleAliasMap(alias_table, u.x);
+    float2 uv = ((float2)pixel + u.yz) / float2(pdf_width, pdf_height);
+
+    pdf = (pdf_texture[pixel] * (float)pdf_width * (float)pdf_height) / (4 * PI);
+    
+    float3 direction = SquareToSphere(UvToUnitSquare(uv));
+
+    // Create the light ray.
     LightRay light_ray;
     light_ray.direction = direction;
     light_ray.color = g_scene_constants.environment_intensity * environment_map.SampleLevel(g_sampler_linear_wrap, direction, 0).rgb;
@@ -719,17 +716,13 @@ LightRay SampleEnvironmentMap(float3 u, out float pdf)
 
 float EnvironmentMapPdf(float3 l)
 {
-    if (g_scene_constants.flags & FLAG_ENVIRONMENT_ALIAS_TABLE) {
-        Texture2D<float> pdf_texture = ResourceDescriptorHeap[g_scene_constants.environment_pdf];
-        float2 uv = UnitSquareToUv(SphereToSquare(l));
-        uint2 pixel = UVToPixel(uv, int2(1024, 1024)); // TODO: Remove hardcoded size.
-        float pdf = pdf_texture[pixel];
-        return (pdf * 1024 * 1024) / (4 * PI);
-    } else {
-        Texture2D<float> environment_importance_map = ResourceDescriptorHeap[g_scene_constants.environment_importance_map_descriptor_id];
-        float2 uv = UnitSquareToUv(SphereToSquare(l));
-        return ImportanceMapPdf(environment_importance_map, uv) / (4 * PI);
-    }
+    Texture2D<float> pdf_texture = ResourceDescriptorHeap[g_scene_constants.environment_pdf];
+    uint pdf_width, pdf_height, pdf_levels;
+    pdf_texture.GetDimensions(0, pdf_width, pdf_height, pdf_levels);
+    float2 uv = UnitSquareToUv(SphereToSquare(l));
+    uint2 pixel = UVToPixel(uv, int2(pdf_width, pdf_height)); // TODO: Remove hardcoded size.
+    float pdf = pdf_texture[pixel];
+    return (pdf * (float)pdf_width * (float)pdf_height) / (4 * PI);
 }
 
 bool RussianRoulette(float min_continue_prob, float max_continue_prob, float u, in out float3 throughput, in out float3 weight) 

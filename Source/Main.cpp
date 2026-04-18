@@ -338,8 +338,6 @@ void DrawGraphicsTab()
 			g_render_settings.pathtracer.reset |= BitflagCheckbox("Show INF", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHOW_INF);
 
 			g_render_settings.pathtracer.reset |= BitflagCheckbox("Shading Normal Adaptation", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHADING_NORMAL_ADAPTATION);
-
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Environment Alias Table", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ENVIRONMENT_ALIAS_TABLE);
 		}
 	}
 }

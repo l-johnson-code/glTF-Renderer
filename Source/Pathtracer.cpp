@@ -301,7 +301,6 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             int max_bounces;
             int output_descriptor;
             int environment_map_descriptor_id;
-            int environment_importance_map_descriptor_id;
             int environment_alias_table_id;
             int environment_pdf;
             float luminance_clamp;
@@ -326,9 +325,8 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .max_bounces = std::clamp(settings->max_bounces, 0, MAX_BOUNCES),
             .output_descriptor = execute_params->output_descriptor,
             .environment_map_descriptor_id = execute_params->environment_map ? execute_params->environment_map->cube_srv_descriptor : -1,
-            .environment_importance_map_descriptor_id = execute_params->environment_map ? execute_params->environment_map->importance_srv_descriptor : -1,
             .environment_alias_table_id = execute_params->environment_map ? execute_params->environment_map->alias_srv_descriptor : -1,
-            .environment_pdf = execute_params->environment_map ? execute_params->environment_map->pdf_descriptor : -1,
+            .environment_pdf = execute_params->environment_map ? execute_params->environment_map->pdf_srv_descriptor : -1,
             .luminance_clamp = settings->luminance_clamp,
             .min_russian_roulette_continue_prob = settings->min_russian_roulette_continue_prob,
             .max_russian_roulette_continue_prob = settings->max_russian_roulette_continue_prob,
