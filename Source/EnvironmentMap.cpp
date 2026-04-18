@@ -240,6 +240,26 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
 		}
 	}
 
+    std::vector<float> unpacked(x * y * 3);
+    if (pixel_size == 2) {
+        for (int i = 0; i < y; i++) {
+            for (int j = 0; j < x; j++) {
+                unpacked[(i * x + j) * 3] = glm::unpackHalf1x16(*(uint16_t*)(exr_image.images[red_channel] + (i * x + j) * pixel_size));
+                unpacked[(i * x + j) * 3 + 1] = glm::unpackHalf1x16(*(uint16_t*)(exr_image.images[green_channel] + (i * x + j) * pixel_size));
+                unpacked[(i * x + j) * 3 + 2] = glm::unpackHalf1x16(*(uint16_t*)(exr_image.images[blue_channel] + (i * x + j) * pixel_size));
+            }
+        }
+    } else {
+        for (int i = 0; i < y; i++) {
+            for (int j = 0; j < x; j++) {
+                unpacked[(i * x + j) * 3] = *(float*)(exr_image.images[red_channel] + (i * x + j) * pixel_size);
+                unpacked[(i * x + j) * 3 + 1] = *(float*)(exr_image.images[green_channel] + (i * x + j) * pixel_size);
+                unpacked[(i * x + j) * 3 + 2] = *(float*)(exr_image.images[blue_channel] + (i * x + j) * pixel_size);
+            }
+        }
+    }
+    GenerateAliasTable(upload_buffer, map, x, y, unpacked.data());
+
 	FreeEXRImage(&exr_image);
 	FreeEXRHeader(&exr_header);
 }
