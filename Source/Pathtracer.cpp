@@ -70,12 +70,12 @@ void Pathtracer::Init(ID3D12Device5* device, GpuAllocator* allocator, UploadBuff
     };
 
     D3D12_RAYTRACING_SHADER_CONFIG raytracing_shader_config = {
-        .MaxPayloadSizeInBytes = sizeof(float) * 10,
+        .MaxPayloadSizeInBytes = sizeof(float) * 5,
         .MaxAttributeSizeInBytes = sizeof(float) * 2, // Size of BuiltInTriangleIntersectionAttributes.
     };
 
     D3D12_RAYTRACING_PIPELINE_CONFIG raytracing_pipeline_config = {
-        .MaxTraceRecursionDepth = MAX_BOUNCES + 2,
+        .MaxTraceRecursionDepth = 1,
     };
 
     D3D12_STATE_SUBOBJECT subobjects[] = {
@@ -110,13 +110,11 @@ void Pathtracer::Init(ID3D12Device5* device, GpuAllocator* allocator, UploadBuff
     void* ray_generation_identifier = state_object_properties->GetShaderIdentifier(L"RayGeneration");
     void* hit_group_identifier = state_object_properties->GetShaderIdentifier(L"HitGroup");
     void* shadow_hit_group_identifier = state_object_properties->GetShaderIdentifier(L"ShadowHitGroup");
-    void* miss_identifier = state_object_properties->GetShaderIdentifier(L"Miss");
     void* shadow_miss_identifier = state_object_properties->GetShaderIdentifier(L"ShadowMiss");
 
     ShaderTableCollectionBuilder collection_builder;
     collection_builder.Create(shader_tables_data, MISS_SHADER_COUNT, HIT_GROUP_COUNT, 0);
     collection_builder.ray_generation_record.SetShader(ray_generation_identifier);
-    collection_builder.miss_table.SetShader(MISS_SHADER_BOUNCE, miss_identifier);
     collection_builder.miss_table.SetShader(MISS_SHADER_SHADOW, shadow_miss_identifier);
     collection_builder.hit_group_table.SetShader(HIT_GROUP_BOUNCE, hit_group_identifier);
     collection_builder.hit_group_table.SetShader(HIT_GROUP_SHADOW, shadow_hit_group_identifier);

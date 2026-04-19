@@ -126,7 +126,6 @@ class Pathtracer {
     };
 
     enum MissShader {
-        MISS_SHADER_BOUNCE,
         MISS_SHADER_SHADOW,
         MISS_SHADER_COUNT,
     };
