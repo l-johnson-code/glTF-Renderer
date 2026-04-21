@@ -201,6 +201,8 @@ set(SHADER_SOURCE_FILES
     "Source/Shaders/Transforms.hlsli"
     "Source/Shaders/TransmissionDownsample.cs.hlsl"
     "Source/Shaders/Vertex.hlsli"
+    "Source/Shaders/Visibility.ps.hlsl"
+    "Source/Shaders/Visibility.vs.hlsl"
 )
 
 set(SHADER_HEADER_FILES ${SHADER_SOURCE_FILES})

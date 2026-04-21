@@ -9,7 +9,7 @@
 
 #include "GpuResources.h"
 
-void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBuffer* upload_buffer)
+void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBuffer* upload_buffer, uint32_t width, uint32_t height)
 {
     HRESULT result = S_OK;
 
@@ -127,8 +127,60 @@ void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBu
 
     acceleration_structure.Init(device, resources, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
 
+    Resize(width, height);
+    CreateVBufferPipeline(device);
+
     // Cleanup.
     Gpu::Resources::FreeShader(dxil_library_desc.DXILLibrary);
+}
+
+void Pathtracer::Resize(uint32_t width, uint32_t height)
+{
+    // Release visibility buffer.
+    this->resources->FreeTexture(&v_buffer_primitive);
+    this->resources->FreeTexture(&v_buffer_instance);
+    this->resources->FreeTexture(&v_buffer_depth);
+
+    // Create visibility buffer.
+    HRESULT result = S_OK;
+    Gpu::TextureDesc primitive_id_desc = {
+        .format = DXGI_FORMAT_R32_UINT,
+        .width = (uint16_t)width,
+        .height = (uint16_t)height,
+        .mip_levels = 1,
+        .clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
+        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_RENDER_TARGET | Gpu::TEXTURE_FLAG_SRV),
+        .name = "V Buffer Primitive ID",
+    };
+    result = resources->CreateTexture(&primitive_id_desc, &this->v_buffer_primitive);
+    assert(SUCCEEDED(result));
+
+    Gpu::TextureDesc instance_desc = {
+        .format = DXGI_FORMAT_R32_UINT,
+        .width = (uint16_t)width,
+        .height = (uint16_t)height,
+        .mip_levels = 1,
+        .clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
+        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_RENDER_TARGET | Gpu::TEXTURE_FLAG_SRV),
+        .name = "V Buffer Instance",
+    };
+    result = resources->CreateTexture(&instance_desc, &this->v_buffer_instance);
+    assert(SUCCEEDED(result));
+
+    Gpu::TextureDesc depth_desc = {
+        .format = DXGI_FORMAT_D32_FLOAT,
+        .width = (uint16_t)width,
+        .height = (uint16_t)height,
+        .mip_levels = 1,
+        .clear_depth = 0.0f,
+        .flags = Gpu::TEXTURE_FLAG_DEPTH_TARGET,
+        .name = "V Buffer Depth",
+    };
+    result = resources->CreateTexture(&depth_desc, &this->v_buffer_depth);
+    assert(SUCCEEDED(result));
+
+    this->width = width;
+    this->height = height;
 }
 
 void Pathtracer::Shutdown()
@@ -138,6 +190,76 @@ void Pathtracer::Shutdown()
     if (resources) {
         resources->FreeBuffer(&shader_tables_buffer);
     }
+}
+
+void Pathtracer::CreateVBufferPipeline(ID3D12Device* device)
+{
+    HRESULT result = S_OK;
+
+	// Create the root signature.
+	CD3DX12_ROOT_PARAMETER root_parameters[VISIBILITY_ROOT_PARAMETER_COUNT] = {};
+	root_parameters[VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	root_parameters[VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	root_parameters[VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+
+	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(VISIBILITY_ROOT_PARAMETER_COUNT, root_parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED | D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
+	result = this->resources->CreateRootSignature(&root_signature_desc, &this->v_buffer_root_signature, "Visibility Signature");
+	assert(result == S_OK);
+
+	// Load shaders.
+	D3D12_SHADER_BYTECODE vertex_shader = Gpu::Resources::LoadShader("Shaders/Visibility.vs.bin");
+	D3D12_SHADER_BYTECODE pixel_shader = Gpu::Resources::LoadShader("Shaders/Visibility.ps.bin");
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
+
+	// Shaders.
+	pipeline_desc.VS = vertex_shader;
+	pipeline_desc.PS = pixel_shader;
+
+	// Blend state.
+	pipeline_desc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
+	pipeline_desc.SampleMask = UINT_MAX;
+
+	pipeline_desc.RasterizerState = {
+		.FillMode = D3D12_FILL_MODE_SOLID,
+		.CullMode = D3D12_CULL_MODE_NONE,
+		.FrontCounterClockwise = TRUE,
+		.DepthClipEnable = TRUE,
+		.MultisampleEnable = FALSE,
+		.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+	};
+
+	pipeline_desc.DepthStencilState = {
+		.DepthEnable = TRUE,
+		.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+		.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
+		.StencilEnable = FALSE,
+	};
+
+    D3D12_INPUT_ELEMENT_DESC input_layout[] = {
+		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+	};
+	pipeline_desc.InputLayout = {
+		.pInputElementDescs = input_layout,
+		.NumElements = std::size(input_layout),
+	};
+	pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+	// Render target formats.
+	pipeline_desc.NumRenderTargets = 2;
+	pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R32_UINT;
+	pipeline_desc.RTVFormats[1] = DXGI_FORMAT_R32_UINT;
+	pipeline_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+	pipeline_desc.SampleDesc.Count = 1;
+	pipeline_desc.SampleDesc.Quality = 0;
+
+	// Root signature.
+	pipeline_desc.pRootSignature = this->v_buffer_root_signature.Get();
+	result = this->resources->CreateGraphicsPipelineState(&pipeline_desc, &this->v_buffer_pipeline, "Visibility Pipeline");
+	assert(result == S_OK);
+
+    Gpu::Resources::FreeShader(vertex_shader);
+	Gpu::Resources::FreeShader(pixel_shader);
 }
 
 void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
@@ -190,6 +312,7 @@ void Pathtracer::UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAc
 void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure)
 {
 	mesh_instances.clear();
+    vertex_buffers.clear();
     acceleration_structure->BeginTlasBuild();
 
 	// TODO: Define this somewhere else?
@@ -244,11 +367,27 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_TANGENT_SPACE) {
 							gpu_mesh_instance.tangent_space_descriptor = dynamic_mesh.tangent_space.descriptor;
 						}
+                        if (tlas_added) {
+                            vertex_buffers.push_back({
+                                .index_count = mesh.num_of_indices,
+                                .vertex_count = mesh.num_of_vertices,
+                                .index = mesh.index.view,
+                                .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionBuffer()->view : mesh.position.view,
+                            });
+                        }
 					}
 				} else {
 					// Static.
 					RaytracingAccelerationStructure::Blas& blas = primitives[i].blas;
 					tlas_added = acceleration_structure->AddTlasInstance(&blas, node.global_transform, instance_mask, flags);
+                    if (tlas_added) {
+                        vertex_buffers.push_back({
+                            .index_count = mesh.num_of_indices,
+                            .vertex_count = mesh.num_of_vertices,
+                            .index = mesh.index.view,
+                            .vertices = mesh.position.view,
+                        });
+                    }
 				}
 				if (tlas_added) {
 					mesh_instances.push_back(gpu_mesh_instance);
@@ -287,10 +426,66 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
 		BuildTlas(context, execute_params->gltf, execute_params->scene, &this->acceleration_structure);
         context->EndEvent();
         context->EndEvent();
+
+        // Rasterize camera rays.
+        context->PushTransitionBarrier(this->v_buffer_instance.Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        context->PushTransitionBarrier(this->v_buffer_primitive.Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        context->SubmitBarriers();
         
+        CD3DX12_VIEWPORT viewport(0.0f, 0.0f, this->width, this->height);
+        context->SetViewports(1, &viewport);
+        CD3DX12_RECT scissor_rect(0, 0, this->width, this->height);
+        context->SetScissorRects(1, &scissor_rect);
+        
+        D3D12_CPU_DESCRIPTOR_HANDLE render_targets[] = {
+            this->v_buffer_instance.Rtv(),
+            this->v_buffer_primitive.Rtv(),
+        };
+        D3D12_CPU_DESCRIPTOR_HANDLE dsv = this->v_buffer_depth.Dsv();
+        context->SetRenderTargets(std::size(render_targets), render_targets, &dsv);
+        context->ClearRenderTargetView(this->v_buffer_instance.Rtv(), this->v_buffer_instance.ClearColor());
+        context->ClearRenderTargetView(this->v_buffer_primitive.Rtv(), this->v_buffer_primitive.ClearColor());
+        context->ClearDepthStencilView(this->v_buffer_depth.Dsv(), this->v_buffer_depth.ClearDepth());
+        context->SetGraphicsRootSignature(this->v_buffer_root_signature.Get());
+        context->SetPipelineState(this->v_buffer_pipeline.Get());
+        context->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        struct {
+            glm::mat4x4 world_to_clip;
+        } cb_per_frame = {
+            .world_to_clip = world_to_clip,
+        };
+        context->SetGraphicsRootConstantBufferView(VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME, context->CreateConstantBuffer(&cb_per_frame));
+        
+        for (int i = 0; i < vertex_buffers.size(); i++) {
+            struct {
+                glm::mat4x4 model_to_world;
+            } cb_vertex;
+            cb_vertex.model_to_world = mesh_instances[i].transform;
+            context->SetGraphicsRootConstantBufferView(VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL, context->CreateConstantBuffer(&cb_vertex));
+            struct {
+                uint32_t instance;
+            } cb_pixel;
+            cb_pixel.instance = i;
+            context->SetGraphicsRootConstantBufferView(VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL, context->CreateConstantBuffer(&cb_pixel));
+            context->SetVertexBuffers(0, 1, &vertex_buffers[i].vertices);
+            if (vertex_buffers[i].index_count > 0) {
+                context->SetIndexBuffer(&vertex_buffers[i].index);
+                context->DrawIndexedInstanced(vertex_buffers[i].index_count, 1, 0, 0, 0);
+            } else {
+                context->DrawInstanced(vertex_buffers[i].vertex_count, 1, 0, 0);
+            }
+        }
+        // TODO: Do we need to set render targets to null before accessing them as an SRV in a shader?
+        context->PushTransitionBarrier(this->v_buffer_instance.Resource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        context->PushTransitionBarrier(this->v_buffer_primitive.Resource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        context->SubmitBarriers();
+
+        // Shade camera rays and trace light and bounce rays.
         context->BeginEvent("Path Trace Scene");
         struct {
             glm::mat4x4 clip_to_world;
+            glm::mat4x4 world_to_clip;
             glm::vec3 camera_pos;
             int num_of_lights;
             uint32_t width;
@@ -311,10 +506,13 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             float luminance_clamp;
             float min_russian_roulette_continue_prob;
             float max_russian_roulette_continue_prob;
+            int v_buffer_primitive_id;
+            int v_buffer_instance;
         } constants;
 
         constants = {
             .clip_to_world = clip_to_world,
+            .world_to_clip = world_to_clip,
             .camera_pos = camera_pos,
             .num_of_lights = execute_params->light_count,
             .width = execute_params->width,
@@ -335,6 +533,8 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .luminance_clamp = settings->luminance_clamp,
             .min_russian_roulette_continue_prob = settings->min_russian_roulette_continue_prob,
             .max_russian_roulette_continue_prob = settings->max_russian_roulette_continue_prob,
+            .v_buffer_primitive_id = this->v_buffer_primitive.Srv(),
+            .v_buffer_instance = this->v_buffer_instance.Srv(),
         };
 
         D3D12_GPU_VIRTUAL_ADDRESS constant_buffer = context->CreateConstantBuffer(&constants);
@@ -369,6 +569,6 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
 		context->SubmitBarriers();
         context->EndEvent();
 	}
-	
+
 	previous_world_to_clip = world_to_clip;
 }

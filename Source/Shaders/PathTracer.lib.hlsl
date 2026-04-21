@@ -9,6 +9,7 @@
 
 struct SceneConstants {
     float4x4 clip_to_world;
+    float4x4 world_to_clip;
     float3 camera_pos;
     int num_of_lights;
     uint2 resolution;
@@ -28,6 +29,8 @@ struct SceneConstants {
     float luminance_clamp;
     float min_russian_roulette_continue_prob;
     float max_russian_roulette_continue_prob;
+    int v_buffer_primitive_id;
+    int v_buffer_instance;
 };
 
 struct Instance {
@@ -131,23 +134,24 @@ StructuredBuffer<Light> g_lights: register(t3);
 SamplerState g_sampler_linear_clamp: register(s0);
 SamplerState g_sampler_linear_wrap: register(s1);
 
-void GenerateCameraRay(uint2 pixel, uint2 resolution, float4x4 clip_to_world, float2 jitter, out float3 origin, out float3 direction)
-{
-    float2 clip_space = (((float2)pixel + 0.5 + jitter) / (float2)resolution) * 2 - 1;
-    clip_space.y = -clip_space.y;
-    float4 clip_start = float4(clip_space, 1, 1);
-    float4 clip_end = float4(clip_space, 0, 1);
-    float4 start = mul(clip_to_world, clip_start);
-    float4 end = mul(clip_to_world, clip_end);
-    origin = start.xyz / start.w; 
-    float3 destination = end.xyz / end.w;
-    direction = destination - origin;
-}
-
 float4 GenerateNextRandom(in out int count)
 {
     uint4 random = pcg4d(uint4(DispatchRaysIndex().xy, g_scene_constants.seed, count++));
     return random / 4294967295.0.xxxx;
+}
+
+float3 CalculateBarycentrics(float2 tri_0, float2 tri_1, float2 tri_2, float2 pos)
+{
+    float2 v0 = tri_1 - tri_0;
+    float2 v1 = tri_2 - tri_0;
+    float2 v2 = pos - tri_0;
+    float det = v0.x * v1.y - v1.x * v0.y;
+    float3 barycentrics;
+    barycentrics.y = v2.x * v1.y - v1.x * v2.y;
+    barycentrics.z = v0.x * v2.y - v2.x * v0.y;
+    barycentrics /= det;
+    barycentrics.x = 1.0f - barycentrics.y - barycentrics.z;
+    return barycentrics;
 }
 
 float3 BarycentricWeights(float2 barycentrics)
@@ -280,15 +284,10 @@ struct VertexAttributes {
     float2 texcoords[2];
 };
 
-VertexAttributes GetVertexAttributes(Instance instance, uint primitive_index, float3 barycentric_weights)
+void GetRemainingVertexAttributes(Instance instance, float3 indices, float3 pos_0, float3 pos_1, float3 pos_2, float3 barycentric_weights, in out VertexAttributes attributes)
 {
-    VertexAttributes attributes;
-    uint3 v = GetIndices(instance.index_descriptor, primitive_index);
-
-    float3 pos_0, pos_1, pos_2;
-    attributes.position = GetPositions(instance.position_descriptor, v, barycentric_weights, pos_0, pos_1, pos_2);
     attributes.geometric_normal = GetGeometricNormal(pos_0, pos_1, pos_2);
-    GetVertexNormalAndTangent(instance.tangent_space_descriptor, v, barycentric_weights, attributes.geometric_normal, attributes.normal, attributes.tangent);
+    GetVertexNormalAndTangent(instance.tangent_space_descriptor, indices, barycentric_weights, attributes.geometric_normal, attributes.normal, attributes.tangent);
 
     // Transform into world space.
     attributes.position = mul(instance.transform, float4(attributes.position, 1)).xyz;
@@ -297,10 +296,56 @@ VertexAttributes GetVertexAttributes(Instance instance, uint primitive_index, fl
     attributes.tangent.xyz = normalize(mul(instance.transform, float4(attributes.tangent.xyz, 0)).xyz);
     
     attributes.bitangent = CalculateBitangent(attributes.normal, attributes.tangent); // TODO: Should bitangents be calculated per vertex, and then interpolated with barycentric weights instead?
-    attributes.color = GetVertexColor(instance.color_descriptor, v, barycentric_weights);
+    attributes.color = GetVertexColor(instance.color_descriptor, indices, barycentric_weights);
     for (int i = 0; i < 2; i++) {
-        attributes.texcoords[i] = GetTexcoord(instance.texcoord_descriptors[i], v, barycentric_weights);
+        attributes.texcoords[i] = GetTexcoord(instance.texcoord_descriptors[i], indices, barycentric_weights);
     }
+}
+
+VertexAttributes GetVertexAttributes(Instance instance, uint primitive_index, float3 barycentric_weights)
+{
+    VertexAttributes attributes;
+    uint3 indices = GetIndices(instance.index_descriptor, primitive_index);
+
+    float3 pos_0, pos_1, pos_2;
+    attributes.position = GetPositions(instance.position_descriptor, indices, barycentric_weights, pos_0, pos_1, pos_2);
+    
+    GetRemainingVertexAttributes(instance, indices, pos_0, pos_1, pos_2, barycentric_weights, attributes);
+
+    return attributes;
+}
+
+VertexAttributes GetVertexAttributesFromVisibilityBuffer(uint2 pixel, uint2 resolution, Instance instance, uint primitive_id, float4x4 world_to_clip)
+{
+    VertexAttributes attributes;
+
+    uint3 indices = GetIndices(instance.index_descriptor, primitive_id);
+
+    // Get positions and use them to calculate barycentrics.
+    Buffer<float3> positions = ResourceDescriptorHeap[NonUniformResourceIndex(instance.position_descriptor)];
+    float3 pos_0 = positions[indices.x];
+    float3 pos_1 = positions[indices.y];
+    float3 pos_2 = positions[indices.z];
+    float4x4 model_to_clip = mul(world_to_clip, instance.transform);
+
+    float4 clip_pos_0 = mul(model_to_clip, float4(pos_0, 1));
+    float4 clip_pos_1 = mul(model_to_clip, float4(pos_1, 1));
+    float4 clip_pos_2 = mul(model_to_clip, float4(pos_2, 1));
+
+    float2 clip_space = (((float2)pixel + 0.5) / (float2)resolution) * 2 - 1;
+    clip_space.y = -clip_space.y;
+
+    // Calculate barycentrics in normalized device coordinates.
+    float3 barycentric_weights = CalculateBarycentrics(clip_pos_0.xy / clip_pos_0.w, clip_pos_1.xy / clip_pos_1.w, clip_pos_2.xy / clip_pos_2.w, clip_space);
+
+    // Perspective correction.
+    barycentric_weights /= float3(clip_pos_0.w, clip_pos_1.w, clip_pos_2.w);
+    barycentric_weights /= barycentric_weights.x + barycentric_weights.y + barycentric_weights.z;
+
+    // Get vertex data.
+    attributes.position = barycentric_weights.x * pos_0 + barycentric_weights.y * pos_1 + barycentric_weights.z * pos_2;
+    GetRemainingVertexAttributes(instance, indices, pos_0, pos_1, pos_2, barycentric_weights, attributes);
+    
     return attributes;
 }
 
@@ -760,42 +805,29 @@ void RayGeneration()
     int random_count = 0;
     float4 u = 0.xxxx;
 
-    // Generate initial camera rays.
-    float2 jitter = GenerateNextRandom(random_count).xy - 0.5;
+    // Get data from visibility buffer.
     uint2 pixel = DispatchRaysIndex().xy;
-    GenerateCameraRay(pixel, g_scene_constants.resolution, g_scene_constants.clip_to_world, jitter, ray_origin, ray_direction);
-    RayDesc ray = {ray_origin, 0, normalize(ray_direction), length(ray_direction)};
+
+    Texture2D<uint> v_buffer_primitive_id = ResourceDescriptorHeap[g_scene_constants.v_buffer_primitive_id];
+    Texture2D<uint> v_buffer_instance = ResourceDescriptorHeap[g_scene_constants.v_buffer_instance];
+    uint primitive_id = v_buffer_primitive_id[pixel];
+    uint instance_index = v_buffer_instance[pixel];
+    if (primitive_id == 0 || instance_index == 0) {
+        return;
+    }
+    primitive_id--;
+    instance_index--;
+
+    Instance instance = g_instances[instance_index];
+    VertexAttributes vertex_attributes = GetVertexAttributesFromVisibilityBuffer(pixel, g_scene_constants.resolution, instance, primitive_id, g_scene_constants.world_to_clip);
+
+    RayDesc ray = {g_scene_constants.camera_pos, 0, normalize(vertex_attributes.position - g_scene_constants.camera_pos), 1.0f};
 
     while (true) {
 
-        // Get intersected geometry.
-        GeometryPayload geometry_payload = {0, 0, 0, 0.xx};
-        TraceRay(g_acceleration_structure, ray_flags, 0xff, 0, 0, 0, ray, geometry_payload);
-
-        // Sample the environment if we haven't hit any geometry.
-        if (!(geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_HIT)) {
-            if (g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) {
-                TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
-                float mis_weight = 1.0;
-                if ((g_scene_constants.flags & FLAG_ENVIRONMENT_MIS) && use_mis) {
-                    float environment_map_pdf = EnvironmentMapPdf(ray.Direction);
-                    mis_weight = BalanceHeuristic(bsdf_pdf, environment_map_pdf);
-                }
-                color += throughput * mis_weight * g_scene_constants.environment_intensity * environment_map.SampleLevel(g_sampler_linear_wrap, ray.Direction, 0).rgb;
-            } else {
-                color += throughput * g_scene_constants.environment_intensity * g_scene_constants.environment_color;
-            }
-            break;
-        }
-
-        // Get interpolated vertex attributes.
-        Instance instance = g_instances[geometry_payload.instance_index];
-        float3 barycentric_weights = BarycentricWeights(geometry_payload.barycentrics);
-        VertexAttributes vertex_attributes = GetVertexAttributes(instance, geometry_payload.primitive_index, barycentric_weights);
-
         // Vertex attribute debug outputs.
         if (g_scene_constants.debug_output == DEBUG_OUTPUT_HIT_KIND) {
-            color = geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_BACK_FACE ? float3(1, 0, 0) : float3(0, 1, 0);
+            //color = geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_BACK_FACE ? float3(1, 0, 0) : float3(0, 1, 0); TODO: Find a way to get this to work.
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_VERTEX_COLOR) {
             color = vertex_attributes.color.rgb;
@@ -818,13 +850,6 @@ void RayGeneration()
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_TEXCOORD_1) {
             color = float3(vertex_attributes.texcoords[1], 0);
             break;
-        }
-
-        // Flip normals if we hit the back side of the triangle.
-        if (geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_BACK_FACE) {
-            vertex_attributes.geometric_normal = -vertex_attributes.geometric_normal;
-            vertex_attributes.normal = -vertex_attributes.normal;
-            vertex_attributes.tangent = -vertex_attributes.tangent; // TODO: Is this neccessary? Only significant if winding order is important.
         }
 
         // Get location of the intersection.
@@ -981,6 +1006,38 @@ void RayGeneration()
         // Force bounces to miss all geometry and hit the environment.
         if (g_scene_constants.flags & FLAG_INDIRECT_ENVIRONMENT_ONLY) {
             instance_mask = 0;
+        }
+
+        // Trace bounce ray and get intersected geometry.
+        GeometryPayload geometry_payload = {0, 0, 0, 0.xx};
+        TraceRay(g_acceleration_structure, ray_flags, 0xff, 0, 0, 0, ray, geometry_payload);
+
+        // Sample the environment if we haven't hit any geometry.
+        if (!(geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_HIT)) {
+            if (g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) {
+                TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
+                float mis_weight = 1.0;
+                if ((g_scene_constants.flags & FLAG_ENVIRONMENT_MIS) && use_mis) {
+                    float environment_map_pdf = EnvironmentMapPdf(ray.Direction);
+                    mis_weight = BalanceHeuristic(bsdf_pdf, environment_map_pdf);
+                }
+                color += throughput * mis_weight * g_scene_constants.environment_intensity * environment_map.SampleLevel(g_sampler_linear_wrap, ray.Direction, 0).rgb;
+            } else {
+                color += throughput * g_scene_constants.environment_intensity * g_scene_constants.environment_color;
+            }
+            break;
+        }
+
+        // Get interpolated vertex attributes.
+        instance = g_instances[geometry_payload.instance_index];
+        float3 barycentric_weights = BarycentricWeights(geometry_payload.barycentrics);
+        vertex_attributes = GetVertexAttributes(instance, geometry_payload.primitive_index, barycentric_weights);
+
+        // Flip normals if we hit the back side of the triangle.
+        if (geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_BACK_FACE) {
+            vertex_attributes.geometric_normal = -vertex_attributes.geometric_normal;
+            vertex_attributes.normal = -vertex_attributes.normal;
+            vertex_attributes.tangent = -vertex_attributes.tangent; // TODO: Is this neccessary? Only significant if winding order is important.
         }
     }
 

@@ -1,0 +1,23 @@
+struct PSIn {
+	float4 pos: SV_POSITION;
+	uint primitive_id: SV_PrimitiveID;
+};
+
+struct PSOut {
+	uint instance_id: SV_TARGET0;
+	uint primitive_id: SV_TARGET1;
+};
+
+struct PerModel {
+	uint instance_id;
+};
+
+ConstantBuffer<PerModel> g_per_model: register(b0);
+
+PSOut main(PSIn input)
+{
+	PSOut output;
+	output.instance_id = g_per_model.instance_id + 1;
+	output.primitive_id = input.primitive_id + 1;
+	return output;
+}

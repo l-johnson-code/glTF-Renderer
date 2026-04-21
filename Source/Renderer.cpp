@@ -173,7 +173,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 		rasterizer.Init(&this->resources, this->display_width, this->display_height);
 	} else {
-		pathtracer.Init(this->device.Get(), &this->resources, &this->upload_buffer);
+		pathtracer.Init(this->device.Get(), &this->resources, &this->upload_buffer, this->display_width, this->display_height);
 	}
 
 	uint64_t submission_id = upload_buffer.Submit();
@@ -249,7 +249,7 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 			rasterizer.Init(&this->resources, new_settings->width, new_settings->height);
 		} else {
 			this->upload_buffer.Begin();
-			pathtracer.Init(this->device.Get(), &this->resources, &this->upload_buffer);
+			pathtracer.Init(this->device.Get(), &this->resources, &this->upload_buffer, new_settings->width, new_settings->height);
 			uint64_t submission = this->upload_buffer.Submit();
 			this->upload_buffer.WaitForSubmissionToComplete(submission);
 		}
@@ -273,6 +273,8 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 		if (new_settings->renderer_type == this->settings.renderer_type) {
 			if (this->settings.renderer_type == RENDERER_TYPE_RASTERIZER) {
 				rasterizer.Resize(this->display_width, this->display_height);
+			} else {
+				pathtracer.Resize(this->display_width, this->display_height);
 			}
 		}
 	}

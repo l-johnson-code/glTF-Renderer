@@ -9,6 +9,7 @@
 #include "CommandContext.h"
 #include "EnvironmentMap.h"
 #include "Gltf.h"
+#include "GpuResources.h"
 #include "ShaderTableBuilder.h"
 #include "UploadBuffer.h"
 
@@ -104,7 +105,8 @@ class Pathtracer {
 
     static constexpr int MAX_BOUNCES = 5;
     
-    void Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBuffer* upload_buffer);
+    void Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBuffer* upload_buffer, uint32_t width, uint32_t height);
+    void Resize(uint32_t width, uint32_t height);
 	void PathtraceScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
     
@@ -130,6 +132,13 @@ class Pathtracer {
         MISS_SHADER_COUNT,
     };
 
+    enum VisibilityRootParameter {
+        VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME,
+        VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL,
+        VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL,
+        VISIBILITY_ROOT_PARAMETER_COUNT,
+    };
+
     struct GpuMeshInstance {
 		glm::mat4x4 transform;
 		glm::mat4x4 normal_transform;
@@ -140,6 +149,15 @@ class Pathtracer {
 		int color_descriptor = -1;
 		int material_id = 0;
 	};
+
+    struct Vertices {
+        uint32_t index_count;
+        uint32_t vertex_count;
+        D3D12_INDEX_BUFFER_VIEW index;
+        D3D12_VERTEX_BUFFER_VIEW vertices;
+    };
+
+    std::vector<Vertices> vertex_buffers;
     
     Gpu::Resources* resources = nullptr;
 
@@ -152,10 +170,19 @@ class Pathtracer {
 
     std::vector<GpuMeshInstance> mesh_instances;
     D3D12_GPU_VIRTUAL_ADDRESS gpu_mesh_instances;
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> v_buffer_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> v_buffer_pipeline;
+    Gpu::Texture v_buffer_instance;
+    Gpu::Texture v_buffer_primitive;
+    Gpu::Texture v_buffer_depth;
+    uint16_t width;
+    uint16_t height;
     
     glm::mat4x4 previous_world_to_clip;
     int accumulated_frames = 0;
 
+    void CreateVBufferPipeline(ID3D12Device* device);
     void BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure);
