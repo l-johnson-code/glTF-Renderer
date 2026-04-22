@@ -17,6 +17,48 @@ class GpuResources {
 		STATIC_DESCRIPTOR_COUNT,
 	};
 
+	struct RenderTargetDesc {
+		DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+		uint16_t width = 0;
+		uint16_t height = 0;
+		float optimized_clear_value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+		const char* name = nullptr;
+	};
+
+	struct RenderTarget {
+		GpuResource resource;
+		int srv = -1;
+		D3D12_CPU_DESCRIPTOR_HANDLE rtv = {};
+		float optimized_clear_value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+	};
+
+	struct DepthTargetDesc {
+		uint16_t width = 0;
+		uint16_t height = 0;
+		float optimized_clear_value = 0.0f;
+		const char* name = nullptr;
+	};
+
+	struct DepthTarget {
+		GpuResource resource;
+		D3D12_CPU_DESCRIPTOR_HANDLE dsv = {};
+		float optimized_clear_value = 0.0f;
+	};
+
+	struct TextureDesc {
+		DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+		uint16_t width = 0;
+		uint16_t height = 0;
+		uint8_t mip_levels = 0;
+		bool uav = false;
+		const char* name;
+	};
+	
+	struct Texture {
+		GpuResource resource;
+		int srv = -1;
+	};
+
 	// Global GPU visible descriptor heaps. All other GPU visible descriptor heaps are suballocated from these.
 	CbvSrvUavStack cbv_uav_srv_allocator;
 	SamplerStack sampler_allocator;
@@ -36,6 +78,12 @@ class GpuResources {
 	
 	void Create(ID3D12Device* device);
 	void LoadLookupTables(UploadBuffer* upload_buffer);
+	HRESULT CreateTexture(const TextureDesc* desc, Texture* texture);
+	void FreeTexture(Texture* texture);
+	HRESULT CreateRenderTarget(const RenderTargetDesc* desc, RenderTarget* render_target);
+	void FreeRenderTarget(RenderTarget* render_target);
+	HRESULT CreateDepthTarget(const DepthTargetDesc* desc, DepthTarget* depth_target);
+	void FreeDepthTarget(DepthTarget* depth_target);
 	static HRESULT CreateComputePipelineState(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	static HRESULT CreateGraphicsPipelineState(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	static HRESULT CreateRootSignature(ID3D12Device* device, const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name = nullptr);

@@ -131,6 +131,136 @@ void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 	}
 }
 
+HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
+{
+	HRESULT result = S_OK;
+
+	// Create the resource.
+	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
+	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(desc->format, desc->width, desc->height, 1, desc->mip_levels);
+	if (desc->uav) {
+		resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	};
+	result = allocator.CreateCommittedResource(
+		&heap_properties, 
+		D3D12_HEAP_FLAG_NONE, 
+		&resource_desc, 
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
+		nullptr, 
+		&texture->resource, 
+		desc->name ? desc->name : "Texture"
+	);
+	if (FAILED(result)) {
+		FreeTexture(texture);
+		return result;
+	}
+
+	// Create a shader resource view.
+	texture->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(texture->resource.resource.Get(), nullptr);
+	if (texture->srv == -1) {
+		FreeTexture(texture);
+		return E_OUTOFMEMORY;
+	}
+
+	return S_OK;
+}
+
+void GpuResources::FreeTexture(Texture* texture)
+{
+	texture->resource.Reset();
+	cbv_uav_srv_dynamic_allocator.Free(texture->srv);
+}
+
+HRESULT GpuResources::CreateRenderTarget(const RenderTargetDesc* desc, RenderTarget* render_target)
+{
+	HRESULT result = S_OK;
+
+	for (int i = 0; i < 4; i++) {
+		render_target->optimized_clear_value[i] = desc->optimized_clear_value[i];
+	}
+
+	// Create the resource.
+	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
+	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(desc->format, desc->width, desc->height, 1, 1);
+	resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	CD3DX12_CLEAR_VALUE clear_value(desc->format, desc->optimized_clear_value);
+	result = allocator.CreateCommittedResource(
+		&heap_properties, 
+		D3D12_HEAP_FLAG_NONE, 
+		&resource_desc, 
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
+		&clear_value, 
+		&render_target->resource, 
+		desc->name ? desc->name : "Render Target"
+	);
+	if (FAILED(result)) {
+		FreeRenderTarget(render_target);
+		return result;
+	}
+
+	// Create the render target view.
+	render_target->rtv = rtv_allocator.AllocateAndCreateRtv(render_target->resource.resource.Get(), nullptr);
+	if (render_target->rtv.ptr == 0) {
+		FreeRenderTarget(render_target);
+		return E_OUTOFMEMORY;
+	}
+
+	// Create a shader resource view.
+	render_target->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(render_target->resource.resource.Get(), nullptr);
+	if (render_target->srv == -1) {
+		FreeRenderTarget(render_target);
+		return E_OUTOFMEMORY;
+	}
+
+	return S_OK;
+}
+
+void GpuResources::FreeRenderTarget(RenderTarget* render_target)
+{
+
+}
+
+HRESULT GpuResources::CreateDepthTarget(const DepthTargetDesc* desc, DepthTarget* depth_target)
+{
+	HRESULT result = S_OK;
+
+	depth_target->optimized_clear_value = desc->optimized_clear_value;
+
+	// Create the resource.
+	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
+	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, desc->width, desc->height, 1, 1);
+	resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, desc->optimized_clear_value, 0);
+	result = allocator.CreateCommittedResource(
+		&heap_properties, 
+		D3D12_HEAP_FLAG_NONE, 
+		&resource_desc, 
+		D3D12_RESOURCE_STATE_COMMON, 
+		&clear_value, 
+		&depth_target->resource, 
+		desc->name ? desc->name : "Depth Target"
+	);
+	if (FAILED(result)) {
+		FreeDepthTarget(depth_target);
+		return result;
+	}
+
+	// Create the depth stencil view.
+	depth_target->dsv = dsv_allocator.AllocateAndCreateDsv(depth_target->resource.resource.Get(), nullptr);
+	if (depth_target->dsv.ptr == 0) {
+		FreeDepthTarget(depth_target);
+		return E_OUTOFMEMORY;
+	}
+
+	return S_OK;
+}
+
+void GpuResources::FreeDepthTarget(DepthTarget* depth_target)
+{
+	depth_target->resource.Reset();
+	dsv_allocator.Free(depth_target->dsv);
+}
+
 HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name)
 {
 	ProfileZoneScoped();

@@ -164,7 +164,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	resources.LoadLookupTables(&this->upload_buffer);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
-		rasterizer.Init(this->device.Get(), &this->resources.allocator, &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, this->display_width, this->display_height);
+		rasterizer.Init(this->device.Get(), &resources, this->display_width, this->display_height);
 	} else {
 		pathtracer.Init(this->device.Get(), &this->resources.allocator, &this->upload_buffer);
 	}
@@ -239,7 +239,7 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 			pathtracer.Shutdown();
 		}
 		if (new_settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
-			rasterizer.Init(this->device.Get(), &this->resources.allocator, &resources.rtv_allocator, &resources.dsv_allocator, &resources.cbv_uav_srv_dynamic_allocator, new_settings->width, new_settings->height);
+			rasterizer.Init(this->device.Get(), &this->resources, new_settings->width, new_settings->height);
 		} else {
 			this->upload_buffer.Begin();
 			pathtracer.Init(this->device.Get(), &this->resources.allocator, &this->upload_buffer);

@@ -4,19 +4,16 @@
 #include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_core.h>
 
-void Rasterizer::Init(ID3D12Device* device, GpuAllocator* allocator, RtvPool* rtv_allocator, DsvPool* dsv_allocator, CbvSrvUavPool* cbv_uav_srv_allocator, uint32_t width, uint32_t height)
+void Rasterizer::Init(ID3D12Device* device, GpuResources* gpu_resources, uint16_t width, uint16_t height)
 {
     this->device = device;
-	this->allocator = allocator;
-    this->rtv_allocator = rtv_allocator;
-    this->dsv_allocator = dsv_allocator;
-    this->cbv_uav_srv_allocator = cbv_uav_srv_allocator;
+	this->gpu_resources = gpu_resources;
     Resize(width, height);
     forward.Create(device);
-    bloom.Create(this->device.Get(), allocator, width, height, 6);
+    bloom.Create(this->device.Get(), &gpu_resources->allocator, width, height, 6);
 }
 
-void Rasterizer::Resize(uint32_t width, uint32_t height)
+void Rasterizer::Resize(uint16_t width, uint16_t height)
 {
     this->width = width;
     this->height = height;
@@ -25,50 +22,31 @@ void Rasterizer::Resize(uint32_t width, uint32_t height)
 
 	HRESULT result;
 	// Depth buffer.
-    {
-        CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, width, height, 1, 1);
-        resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-        
-        CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, DEPTH_CLEAR_VALUE, 0);
-        result = allocator->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, &this->depth, "Depth Texture");
-        assert(result == S_OK);
+	GpuResources::DepthTargetDesc depth_target_desc = {
+		.width = width,
+		.height = height,
+		.optimized_clear_value = 0.0f,
+	};
+    result = gpu_resources->CreateDepthTarget(&depth_target_desc, &this->depth);
 
-        this->depth_dsv = dsv_allocator->AllocateAndCreateDsv(this->depth.resource.Get(), nullptr);
-        assert(this->depth_dsv.ptr != 0);
+	GpuResources::RenderTargetDesc motion_vectors_desc = {
+		.format = DXGI_FORMAT_R16G16_FLOAT,
+		.width = width,
+		.height = height,
+		.optimized_clear_value = {0.0f, 0.0f, 0.0f, 0.0f},
+		.name = "Motion Vectors",
+	};
+	result = gpu_resources->CreateRenderTarget(&motion_vectors_desc, &this->motion_vectors);
 
-        CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT);
-        this->depth_srv = cbv_uav_srv_allocator->AllocateAndCreateSrv(this->depth.resource.Get(), &srv_desc);
-        assert(this->depth_srv != -1);
-    }
-
-    // Motion vectors.
-    {
-        CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16_FLOAT, width, height, 1, 1);
-        resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-
-        float clear_color[4] = {0.0, 0.0, 0.0, 0.0};
-        CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_R16G16_FLOAT, clear_color);
-
-        result = allocator->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, &this->motion_vectors, "Motion Vectors");
-        assert(result == S_OK);
-
-        this->motion_vectors_rtv = rtv_allocator->AllocateAndCreateRtv(this->motion_vectors.resource.Get(), nullptr);
-        assert(this->motion_vectors_rtv.ptr != 0);
-        this->motion_vectors_srv = cbv_uav_srv_allocator->AllocateAndCreateSrv(this->motion_vectors.resource.Get(), nullptr);
-        assert(this->motion_vectors_srv != -1);
-    }
-
-    // Transmission.
-    {
-        CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, width, height, 1);
-        resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-                    
-        result = allocator->CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, &this->transmission, "Transmission");
-        assert(result == S_OK);
-
-        this->transmission_srv = cbv_uav_srv_allocator->AllocateAndCreateSrv(this->transmission.resource.Get(), nullptr);
-        assert(this->transmission_srv != -1);
-    }
+	GpuResources::TextureDesc transmission_desc = {
+		.format = DXGI_FORMAT_R16G16B16A16_FLOAT,
+		.width = width,
+		.height = height,
+		.mip_levels = 0,
+		.uav = true,
+		.name = "Transmission",
+	};
+	result = gpu_resources->CreateTexture(&transmission_desc, &this->transmission);
 }
 
 void Rasterizer::GatherRenderObjects(Gltf* gltf, int scene)
@@ -169,12 +147,12 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 		D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
 	context->PushTransitionBarrier(
-		motion_vectors.resource.Get(), 
+		motion_vectors.resource.resource.Get(), 
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
 		D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
 	context->PushTransitionBarrier(
-		depth.resource.Get(), 
+		depth.resource.resource.Get(), 
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
 		D3D12_RESOURCE_STATE_DEPTH_WRITE
 	);
@@ -182,8 +160,8 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	
 	float clear_color[4] = {0., 0., 0., 0.};
 	context->command_list->ClearRenderTargetView(render_rtv, clear_color, 0, nullptr);
-	context->command_list->ClearRenderTargetView(motion_vectors_rtv, clear_color, 0, nullptr);
-	context->command_list->ClearDepthStencilView(depth_dsv, D3D12_CLEAR_FLAG_DEPTH, DEPTH_CLEAR_VALUE, 0, 0, nullptr);
+	context->command_list->ClearRenderTargetView(motion_vectors.rtv, motion_vectors.optimized_clear_value, 0, nullptr);
+	context->command_list->ClearDepthStencilView(depth.dsv, D3D12_CLEAR_FLAG_DEPTH, depth.optimized_clear_value, 0, 0, nullptr);
 	
 	SetViewportAndScissorRects(context, this->width, this->height);
 
@@ -208,7 +186,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	context->command_list->IASetPrimitiveTopology(primitive_topology);
 	forward.SetRootSignature(context);
 	forward.SetConfig(context, &config);
-	forward.BindRenderTargets(context, render_rtv, motion_vectors_rtv, depth_dsv);
+	forward.BindRenderTargets(context, render_rtv, motion_vectors.rtv, depth.dsv);
 	forward.BindPipeline(context, ForwardPass::PIPELINE_FLAGS_NONE);
 	DrawRenderObjects(context, execute_params->gltf, opaque_render_objects);
 	context->EndEvent();
@@ -236,7 +214,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 		D3D12_RESOURCE_STATE_COPY_SOURCE
 	);
 	context->SubmitBarriers();
-	forward.GenerateTransmissionMips(context, execute_params->output_resource, this->transmission.resource.Get(), settings->transmission_downsample_sample_pattern);
+	forward.GenerateTransmissionMips(context, execute_params->output_resource, this->transmission.resource.resource.Get(), settings->transmission_downsample_sample_pattern);
 	context->PushTransitionBarrier(
 		execute_params->output_resource, 
 		D3D12_RESOURCE_STATE_COPY_SOURCE,
@@ -245,7 +223,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	context->SubmitBarriers();
 	context->EndEvent();
 
-	config.transmission_descriptor = this->transmission_srv;
+	config.transmission_descriptor = this->transmission.srv;
 	forward.SetConfig(context, &config);
 
 	// Render transmissives.
@@ -266,12 +244,12 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 	);
 	context->PushTransitionBarrier(
-		motion_vectors.resource.Get(), 
+		motion_vectors.resource.resource.Get(), 
 		D3D12_RESOURCE_STATE_RENDER_TARGET, 
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 	);
 	context->PushTransitionBarrier(
-		depth.resource.Get(), 
+		depth.resource.resource.Get(), 
 		D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 	);
@@ -290,24 +268,10 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 void Rasterizer::Shutdown()
 {
     device.Reset();
-    if (dsv_allocator) {
-        dsv_allocator->Free(depth_dsv);
-        depth_dsv = {0};
-    }
-    if (rtv_allocator) {
-        rtv_allocator->Free(motion_vectors_rtv);
-        motion_vectors_rtv = {0};
-    }
-    if (cbv_uav_srv_allocator) {
-        cbv_uav_srv_allocator->Free(depth_srv);
-        depth_srv = -1;
-        cbv_uav_srv_allocator->Free(motion_vectors_srv);
-        motion_vectors_srv = -1;
-        cbv_uav_srv_allocator->Free(transmission_srv);
-        transmission_srv = -1;
-    }
-    rtv_allocator = nullptr;
-    dsv_allocator = nullptr;
-    cbv_uav_srv_allocator = nullptr;
+	if (gpu_resources) {
+		gpu_resources->FreeDepthTarget(&depth);
+		gpu_resources->FreeRenderTarget(&motion_vectors);
+		gpu_resources->FreeTexture(&transmission);
+	}
     forward.Destroy();
 }
