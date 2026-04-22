@@ -183,6 +183,9 @@ HRESULT GpuResources::CreateRenderTarget(const RenderTargetDesc* desc, RenderTar
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(desc->format, desc->width, desc->height, 1, 1);
 	resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	if (desc->uav) {
+		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
 	CD3DX12_CLEAR_VALUE clear_value(desc->format, desc->optimized_clear_value);
 	result = allocator.CreateCommittedResource(
 		&heap_properties, 
@@ -210,6 +213,16 @@ HRESULT GpuResources::CreateRenderTarget(const RenderTargetDesc* desc, RenderTar
 	if (render_target->srv == -1) {
 		FreeRenderTarget(render_target);
 		return E_OUTOFMEMORY;
+	}
+
+	if (desc->uav) {
+		render_target->uav = cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(render_target->resource.resource.Get(), nullptr, nullptr);
+		if (render_target->uav == -1) {
+			FreeRenderTarget(render_target);
+			return E_OUTOFMEMORY;
+		}
+	} else {
+		render_target->uav -= -1;
 	}
 
 	return S_OK;

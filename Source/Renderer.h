@@ -181,9 +181,7 @@ private:
 	RenderSettings settings;
 
 	// Render targets and resolution dependent resources.
-	GpuResource display;
-	D3D12_CPU_DESCRIPTOR_HANDLE display_rtv = {0};
-	int display_uav = -1;
+    GpuResources::RenderTarget display;
 	
 	const int MAX_LIGHTS = 10;
 	std::vector<GpuLight> lights;

@@ -22,12 +22,14 @@ class GpuResources {
 		uint16_t width = 0;
 		uint16_t height = 0;
 		float optimized_clear_value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+		bool uav = false;
 		const char* name = nullptr;
 	};
 
 	struct RenderTarget {
 		GpuResource resource;
 		int srv = -1;
+		int uav = -1;
 		D3D12_CPU_DESCRIPTOR_HANDLE rtv = {};
 		float optimized_clear_value[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 	};

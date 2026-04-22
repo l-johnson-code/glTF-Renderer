@@ -327,8 +327,8 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.gpu_lights = this->gpu_lights,
         	.light_count = (int)this->lights.size(),
         	.environment_map = environment_map_loaded ? &map : nullptr,
-        	.output_rtv= this->display_rtv,
-        	.output_resource = this->display.resource.Get(),
+        	.output_rtv= this->display.rtv,
+        	.output_resource = this->display.resource.resource.Get(),
 		};
 		rasterizer.DrawScene(&command_context, &settings->raster, &params);
 	} else {
@@ -343,8 +343,8 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.gpu_lights = this->gpu_lights,
         	.light_count = (int)this->lights.size(),
         	.environment_map = environment_map_loaded ? &map : nullptr,
-        	.output_descriptor = this->display_uav,
-        	.output_resource = this->display.resource.Get(),
+        	.output_descriptor = this->display.uav,
+        	.output_resource = this->display.resource.resource.Get(),
 		};
 		pathtracer.PathtraceScene(&command_context, &settings->pathtracer, &params);
 	}
@@ -361,7 +361,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 
 	// Tone mapping.
 	command_context.BeginEvent("Tone Mapping");
-	this->tone_mapper.Run(&command_context, this->resources.cbv_uav_srv_dynamic_allocator.GetGpuHandle(this->display_uav), &this->settings.tone_mapper_config);
+	this->tone_mapper.Run(&command_context, this->resources.cbv_uav_srv_dynamic_allocator.GetGpuHandle(this->display.uav), &this->settings.tone_mapper_config);
 	command_context.EndEvent();
 
 	command_context.BeginEvent("ImGui");
@@ -375,25 +375,17 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 
 void Renderer::CreateRenderTargets()
 {
-    CD3DX12_HEAP_PROPERTIES render_target_heap_properties(D3D12_HEAP_TYPE_DEFAULT);
+	HRESULT result = S_OK;
 
-	HRESULT result;
-
-	// Display.
-	{
-		DXGI_FORMAT display_format = this->settings.renderer_type == RENDERER_TYPE_PATHTRACER ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT;
-		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(display_format, display_width, display_height, 1, 1);
-		resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-		
-		float clear_color[4] = {0.0, 0.0, 0.0, 0.0};
-		CD3DX12_CLEAR_VALUE clear_value(display_format, clear_color);
-		
-		result = this->resources.allocator.CreateCommittedResource(&render_target_heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, &clear_value, &this->display, "Display");
-		assert(result == S_OK);
-
-		this->display_rtv = resources.rtv_allocator.AllocateAndCreateRtv(this->display.resource.Get(), nullptr);
-		this->display_uav = resources.cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(this->display.resource.Get(), nullptr, nullptr);
-	}
+	GpuResources::RenderTargetDesc desc = {
+		.format = this->settings.renderer_type == RENDERER_TYPE_PATHTRACER ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT,
+		.width = (uint16_t)display_width,
+		.height = (uint16_t)display_height,
+		.optimized_clear_value =  {0.0f, 0.0f, 0.0f, 0.0f},
+		.uav = true,
+		.name = "Display",
+	};
+	this->resources.CreateRenderTarget(&desc, &this->display);
 }
 
 void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf, int scene)
