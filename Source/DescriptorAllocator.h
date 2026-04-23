@@ -79,6 +79,9 @@ class DescriptorRange {
 
     int GetIndex(D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle) const
     {
+        if (cpu_handle.ptr == 0) {
+            return -1;
+        }
         assert(((cpu_handle.ptr - this->cpu_start.ptr) % this->stride) == 0);
         int index = ((cpu_handle.ptr - this->cpu_start.ptr) / this->stride);
         assert(index >= this->descriptor_start);
@@ -88,6 +91,9 @@ class DescriptorRange {
 
     int GetIndex(D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle) const
     {
+        if (gpu_handle.ptr == 0) {
+            return -1;
+        }
         assert(((gpu_handle.ptr - this->gpu_start.ptr) % this->stride) == 0);
         int index = ((gpu_handle.ptr - this->gpu_start.ptr) / this->stride);
         assert(index >= this->descriptor_start);
