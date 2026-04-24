@@ -124,6 +124,7 @@ target_sources(glTF PRIVATE
     "Source/CommandContext.h"
     "Source/Config.cpp"
     "Source/Config.h"
+    "Source/DescriptorAllocator.cpp"
     "Source/DescriptorAllocator.h"
     "Source/DirectXHelpers.h"
     "Source/EnvironmentMap.cpp"

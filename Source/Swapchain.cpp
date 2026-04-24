@@ -5,7 +5,7 @@
 #include <dxgi1_5.h>
 #include <directx/d3dx12_barriers.h>
 
-void Swapchain::Create(ID3D12Device* device, ID3D12CommandQueue* command_queue, RtvPool* rtv_allocator, HWND window, uint32_t width, uint32_t height) 
+void Swapchain::Create(ID3D12Device* device, ID3D12CommandQueue* command_queue, RenderTargetViewPool* rtv_allocator, HWND window, uint32_t width, uint32_t height) 
 {
     HRESULT result = S_OK;
 
@@ -108,7 +108,7 @@ void Swapchain::CreateRenderTargetViews(ID3D12Device* device)
 		}
 	};
 	for (int i = 0; i < Config::FRAME_COUNT; i++) {
-		render_target_views[i] = rtv_allocator->AllocateAndCreateRtv(render_targets[i].Get(), &view_desc);
+		render_target_views[i] = rtv_allocator->CreateRenderTargetView(render_targets[i].Get(), &view_desc);
 		assert(render_target_views[i].ptr != 0);
 	}
 }

@@ -20,17 +20,6 @@ class DescriptorRange {
         return Create(device, &desc);
     }
 
-    HRESULT Create(ID3D12Device* device, int capacity) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_RTV || heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC desc = {
-            .Type = heap_type,
-            .NumDescriptors = (uint32_t)capacity,
-            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-            .NodeMask = 1,
-        };
-        return Create(device, &desc);
-    }
-
     void Create(const DescriptorRange<heap_type>* descriptor_range, int start, int capacity)
     {
         // TODO: Return an error if start + capacity is past the end of the descriptor range.
@@ -65,18 +54,6 @@ class DescriptorRange {
     {
         assert(IsWithinBounds(index));
         device->CreateSampler(sampler_desc, GetCpuHandle(index));
-    }
-
-    void CreateRtv(int index, ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* rtv_desc) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
-    {
-        assert(IsWithinBounds(index));
-        device->CreateRenderTargetView(resource, rtv_desc, GetCpuHandle(index));
-    }
-
-    void CreateDsv(int index, ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC* dsv_desc) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
-    {
-        assert(IsWithinBounds(index));
-        device->CreateDepthStencilView(resource, dsv_desc, GetCpuHandle(index));
     }
     
     D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(int index) const
@@ -195,12 +172,6 @@ class DescriptorStack : public DescriptorRange<heap_type> {
         return DescriptorRange<heap_type>::Create(device, capacity, gpu_visible);
     }
 
-    HRESULT Create(ID3D12Device* device, int capacity) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_RTV || heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
-    {
-        this->size = 0;
-        return DescriptorRange<heap_type>::Create(device, capacity);
-    }
-
     void Create(DescriptorRange<heap_type>* descriptor_range, int start, int capacity)
     {
         this->size = 0;
@@ -239,17 +210,6 @@ class DescriptorPool : public DescriptorRange<heap_type> {
     HRESULT Create(ID3D12Device* device, int capacity, bool gpu_visible) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER)
     {
         HRESULT result = DescriptorRange<heap_type>::Create(device, capacity, gpu_visible);
-        if (result != S_OK) {
-            Destroy();
-            return result;
-        }
-        Reset();
-        return S_OK;
-    }
-
-    HRESULT Create(ID3D12Device* device, int capacity) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_RTV || heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
-    {
-        HRESULT result = DescriptorRange<heap_type>::Create(device, capacity);
         if (result != S_OK) {
             Destroy();
             return result;
@@ -314,25 +274,7 @@ class DescriptorPool : public DescriptorRange<heap_type> {
         }
         return descriptor;
     }
-
-    D3D12_CPU_DESCRIPTOR_HANDLE AllocateAndCreateRtv(ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* rtv_desc) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
-    {
-        int descriptor = Allocate();
-        if (descriptor != -1) {
-            DescriptorRange<heap_type>::CreateRtv(descriptor, resource, rtv_desc);
-        }
-        return DescriptorRange<heap_type>::GetCpuHandle(descriptor);
-    }
-
-    D3D12_CPU_DESCRIPTOR_HANDLE AllocateAndCreateDsv(ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC* dsv_desc) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
-    {
-        int descriptor = Allocate();
-        if (descriptor != -1) {
-            DescriptorRange<heap_type>::CreateDsv(descriptor, resource, dsv_desc);
-        }
-        return DescriptorRange<heap_type>::GetCpuHandle(descriptor);
-    }
-    
+  
     void Free(int index)
     {
         if (index != -1) {
@@ -391,15 +333,46 @@ class DescriptorPool : public DescriptorRange<heap_type> {
 
 using CbvSrvUavRange = DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>;
 using SamplerRange = DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER>;
-using RtvRange = DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_RTV>;
-using DsvRange = DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_DSV>;
 
 using CbvSrvUavStack = DescriptorStack<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>;
 using SamplerStack = DescriptorStack<D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER>;
-using RtvStack = DescriptorStack<D3D12_DESCRIPTOR_HEAP_TYPE_RTV>;
-using DsvStack = DescriptorStack<D3D12_DESCRIPTOR_HEAP_TYPE_DSV>;
 
 using CbvSrvUavPool = DescriptorPool<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>;
 using SamplerPool = DescriptorPool<D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER>;
-using RtvPool = DescriptorPool<D3D12_DESCRIPTOR_HEAP_TYPE_RTV>;
-using DsvPool = DescriptorPool<D3D12_DESCRIPTOR_HEAP_TYPE_DSV>;
+
+class TargetPoolBase {
+
+    public:
+
+    void Destroy();
+    int Size();
+    int Capacity();
+    void FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
+
+    protected:
+
+    uint64_t free_slots = 0;
+    Microsoft::WRL::ComPtr<ID3D12Device> device;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptor_heap;
+    uint32_t stride = 0;
+    D3D12_CPU_DESCRIPTOR_HANDLE start = {};
+
+    HRESULT Create(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE type);
+    D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor();
+};
+
+class RenderTargetViewPool : public TargetPoolBase {
+    
+    public:
+
+    HRESULT Create(ID3D12Device* device);
+    D3D12_CPU_DESCRIPTOR_HANDLE CreateRenderTargetView(ID3D12Resource* resource, const D3D12_RENDER_TARGET_VIEW_DESC* desc);
+};
+
+class DepthStencilViewPool : public TargetPoolBase {
+
+    public:
+
+    HRESULT Create(ID3D12Device* device);
+    D3D12_CPU_DESCRIPTOR_HANDLE CreateDepthStencilView(ID3D12Resource* resource, const D3D12_DEPTH_STENCIL_VIEW_DESC* desc);
+};

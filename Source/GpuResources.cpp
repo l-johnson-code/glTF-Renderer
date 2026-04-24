@@ -63,8 +63,8 @@ void GpuResources::Create(ID3D12Device* device)
 	gltf_sampler_allocator.Create(&sampler_allocator, gltf_samplers_start, gltf_sampler_count); // Dynamic samplers.
 
 	// Render target and depth stencil views.
-	rtv_allocator.Create(this->device.Get(), Config::MAX_RENDER_TARGET_VIEWS);
-	dsv_allocator.Create(this->device.Get(), Config::MAX_DEPTH_STENCIL_VIEWS);
+	rtv_allocator.Create(this->device.Get());
+	dsv_allocator.Create(this->device.Get());
 
 	allocator.Init(this->device.Get());
 }
@@ -202,7 +202,7 @@ HRESULT GpuResources::CreateRenderTarget(const RenderTargetDesc* desc, RenderTar
 	}
 
 	// Create the render target view.
-	render_target->rtv = rtv_allocator.AllocateAndCreateRtv(render_target->resource.resource.Get(), nullptr);
+	render_target->rtv = rtv_allocator.CreateRenderTargetView(render_target->resource.resource.Get(), nullptr);
 	if (render_target->rtv.ptr == 0) {
 		FreeRenderTarget(render_target);
 		return E_OUTOFMEMORY;
@@ -259,7 +259,7 @@ HRESULT GpuResources::CreateDepthTarget(const DepthTargetDesc* desc, DepthTarget
 	}
 
 	// Create the depth stencil view.
-	depth_target->dsv = dsv_allocator.AllocateAndCreateDsv(depth_target->resource.resource.Get(), nullptr);
+	depth_target->dsv = dsv_allocator.CreateDepthStencilView(depth_target->resource.resource.Get(), nullptr);
 	if (depth_target->dsv.ptr == 0) {
 		FreeDepthTarget(depth_target);
 		return E_OUTOFMEMORY;
@@ -271,7 +271,7 @@ HRESULT GpuResources::CreateDepthTarget(const DepthTargetDesc* desc, DepthTarget
 void GpuResources::FreeDepthTarget(DepthTarget* depth_target)
 {
 	depth_target->resource.Reset();
-	dsv_allocator.Free(depth_target->dsv);
+	dsv_allocator.FreeDescriptor(depth_target->dsv);
 }
 
 HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name)

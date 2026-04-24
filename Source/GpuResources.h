@@ -70,8 +70,8 @@ class GpuResources {
 	SamplerStack gltf_sampler_allocator;
 
 	// Render target and depth stencil views.
-	DsvPool dsv_allocator;
-	RtvPool rtv_allocator;
+	DepthStencilViewPool dsv_allocator;
+	RenderTargetViewPool rtv_allocator;
 
 	// Per frame descriptor allocators.
 	MultiBuffer<CbvSrvUavStack, Config::FRAME_COUNT> cbv_uav_srv_frame_allocators;
