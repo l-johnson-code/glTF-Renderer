@@ -340,6 +340,38 @@ using SamplerStack = DescriptorStack<D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER>;
 using CbvSrvUavPool = DescriptorPool<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>;
 using SamplerPool = DescriptorPool<D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER>;
 
+class DescriptorAllocator {
+
+    public:
+
+    HRESULT Create(int capacity);
+    void Destroy();
+    int Allocate(int count);
+    void Free(int descriptor);
+    int Capacity();
+    int Size();
+
+    private:
+    
+    struct Block {
+        uint8_t size_class = 6;
+        uint16_t next_free = 0xffff;
+        uint16_t previous_free = 0xffff;
+        uint64_t free_slots = 1;
+    };
+
+    uint16_t free_lists[7];
+    std::vector<Block> blocks;
+    int size = 0;
+
+    int AllocateInBlock(int block_index);
+    uint64_t FreeMask(uint8_t size_class);
+    void RemoveFreeBlock(int block_index);
+    void AddFreeBlock(int block_index);
+    void ResetBlock(int block_index, uint8_t size_class);
+    void FreeInBlock(int block_index, int descriptor);
+};
+
 class TargetPoolBase {
 
     public:
