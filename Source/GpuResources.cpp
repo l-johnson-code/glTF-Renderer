@@ -137,17 +137,23 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 
 	// Create the resource.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(desc->format, desc->width, desc->height, 1, desc->mip_levels);
-	if (desc->uav) {
+	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		desc->format, 
+		desc->width, 
+		desc->height, 
+		desc->flags & TEXTURE_FLAG_CUBE ? 6 : 1, 
+		desc->mip_levels
+	);
+	if (desc->flags & TEXTURE_FLAG_UAV) {
 		resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	};
 	result = allocator.CreateCommittedResource(
-		&heap_properties, 
-		D3D12_HEAP_FLAG_NONE, 
-		&resource_desc, 
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
-		nullptr, 
-		&texture->resource, 
+		&heap_properties,
+		D3D12_HEAP_FLAG_NONE,
+		&resource_desc,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+		nullptr,
+		&texture->resource,
 		desc->name ? desc->name : "Texture"
 	);
 	if (FAILED(result)) {
@@ -156,7 +162,10 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 	}
 
 	// Create a shader resource view.
-	texture->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(texture->resource.resource.Get(), nullptr);
+	CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
+		CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(desc->format) :
+		CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(desc->format);
+	texture->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(texture->resource.resource.Get(), &srv_desc);
 	if (texture->srv == -1) {
 		FreeTexture(texture);
 		return E_OUTOFMEMORY;

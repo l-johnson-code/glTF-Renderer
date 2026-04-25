@@ -47,12 +47,18 @@ class GpuResources {
 		float optimized_clear_value = 0.0f;
 	};
 
+	enum TextureFlags : uint8_t {
+		TEXTURE_FLAG_NONE = 0,
+		TEXTURE_FLAG_UAV = 1 << 0,
+		TEXTURE_FLAG_CUBE = 1 << 1,
+	};
+
 	struct TextureDesc {
 		DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
 		uint16_t width = 0;
 		uint16_t height = 0;
 		uint8_t mip_levels = 0;
-		bool uav = false;
+		TextureFlags flags = TEXTURE_FLAG_NONE;
 		const char* name;
 	};
 	

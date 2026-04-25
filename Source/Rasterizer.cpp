@@ -43,7 +43,7 @@ void Rasterizer::Resize(uint16_t width, uint16_t height)
 		.width = width,
 		.height = height,
 		.mip_levels = 0,
-		.uav = true,
+		.flags = GpuResources::TEXTURE_FLAG_UAV,
 		.name = "Transmission",
 	};
 	result = gpu_resources->CreateTexture(&transmission_desc, &this->transmission);
