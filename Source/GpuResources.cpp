@@ -9,6 +9,7 @@
 #include <directx/dxgiformat.h>
 #include <stb/stb_image.h>
 #include <tinyexr/tinyexr.h>
+#include <glm/gtx/texture.hpp>
 
 #include "Config.h"
 #include "DirectXHelpers.h"
@@ -171,6 +172,20 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 		return E_OUTOFMEMORY;
 	}
 
+	// Create unordered access views.
+	uint8_t mip_levels = glm::levels(glm::u16vec2(desc->width, desc->height));
+	if (desc->flags & TEXTURE_FLAG_UAV) {
+		texture->uav = cbv_uav_srv_dynamic_allocator.Allocate(mip_levels);
+		if (texture->uav == -1) {
+			FreeTexture(texture);
+			return E_OUTOFMEMORY;
+		}
+		for (int i = 0; i < mip_levels; i++) {
+			CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(desc->format, i);
+			cbv_uav_srv_dynamic_allocator.CreateUav(texture->uav + i, texture->resource.resource.Get(), nullptr, &uav_desc);
+		}
+	}
+
 	return S_OK;
 }
 
@@ -178,6 +193,9 @@ void GpuResources::FreeTexture(Texture* texture)
 {
 	texture->resource.Reset();
 	cbv_uav_srv_dynamic_allocator.Free(texture->srv);
+	texture->srv = -1;
+	cbv_uav_srv_dynamic_allocator.Free(texture->uav);
+	texture->uav = -1;
 }
 
 HRESULT GpuResources::CreateRenderTarget(const RenderTargetDesc* desc, RenderTarget* render_target)

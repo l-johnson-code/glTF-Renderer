@@ -65,6 +65,7 @@ class GpuResources {
 	struct Texture {
 		GpuResource resource;
 		int srv = -1;
+		int uav = -1;
 	};
 
 	// Global GPU visible descriptor heaps. All other GPU visible descriptor heaps are suballocated from these.
