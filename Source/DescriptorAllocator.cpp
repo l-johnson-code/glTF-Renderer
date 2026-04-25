@@ -31,7 +31,7 @@ int DescriptorAllocator::Allocate(int count)
     int size_class = std::bit_width((uint32_t)count - 1);
     if (free_lists[size_class] != 0xffff) {
         size += 1 << size_class;
-        return AllocateInBlock(free_lists[size_class]);
+        return AllocateInBlock(free_lists[size_class]) + descriptor_start;
     }
     if (free_lists[6] != 0xffff) {
         int block_index = free_lists[6];
@@ -39,7 +39,7 @@ int DescriptorAllocator::Allocate(int count)
         ResetBlock(block_index, size_class);
         AddFreeBlock(block_index);
         size += 1 << size_class;
-        return AllocateInBlock(block_index);
+        return AllocateInBlock(block_index) + descriptor_start;
     }
     return -1;
 }
@@ -49,6 +49,7 @@ void DescriptorAllocator::Free(int descriptor)
     if (descriptor == -1) {
         return;
     }
+    descriptor -= descriptor_start;
     int block_index = descriptor / 64;
     FreeInBlock(block_index, descriptor);
 }

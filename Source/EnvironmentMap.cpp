@@ -24,7 +24,7 @@ float EnvironmentMap::MipToRoughness(int mip_level, int mip_count)
     return result;
 }
 
-void EnvironmentMap::Init(ID3D12Device* device, GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator)
+void EnvironmentMap::Init(ID3D12Device* device, GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator)
 {
     HRESULT result;
 

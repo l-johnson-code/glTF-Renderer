@@ -30,7 +30,7 @@ VertexAllocation VertexBuffer::GetAllocationSize(uint32_t vertex_count, uint32_t
 	return {vertex_count * element_size, element_size};
 }
 
-void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format)
+void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format)
 {
 	UINT vertex_size = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 		
@@ -47,7 +47,7 @@ void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS bu
 	this->descriptor = descriptor_allocator->AllocateAndCreateSrv(resource, &srv_desc);
 }
 
-void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size)
+void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size)
 {	
 	// Create a vertex buffer view.
 	view = {
@@ -68,7 +68,7 @@ void* VertexBuffer::QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* res
 	return upload_buffer->QueueBufferUpload(this->view.SizeInBytes, resource, offset);
 }
 
-void VertexBuffer::Destroy(CbvSrvUavPool* descriptor_allocator)
+void VertexBuffer::Destroy(DescriptorAllocator* descriptor_allocator)
 {
 	view = {};
 	descriptor_allocator->Free(descriptor);
@@ -81,7 +81,7 @@ VertexAllocation IndexBuffer::GetAllocationSize(uint32_t index_count, DXGI_FORMA
 	return {index_count * index_size, index_size};
 }
 
-void IndexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format)
+void IndexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format)
 {
 	UINT index_size = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 	
@@ -103,14 +103,14 @@ void* IndexBuffer::QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* reso
 	return upload_buffer->QueueBufferUpload(this->view.SizeInBytes, resource, offset);
 }
 
-void IndexBuffer::Destroy(CbvSrvUavPool* descriptor_allocator)
+void IndexBuffer::Destroy(DescriptorAllocator* descriptor_allocator)
 {
 	view = {};
 	descriptor_allocator->Free(descriptor);
 	descriptor = -1;
 }
 
-HRESULT Mesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
+HRESULT Mesh::Create(GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator, const Desc* desc, const char* name)
 {
 	ProfileZoneScoped();
 	this->topology = desc->topology;
@@ -207,7 +207,7 @@ void* Mesh::QueueJointWeightUpdate(UploadBuffer* upload_buffer)
 	return joint_weight.QueueUpdate(upload_buffer, resource.resource.Get());
 }
 
-void Mesh::Destroy(CbvSrvUavPool* descriptor_allocator)
+void Mesh::Destroy(DescriptorAllocator* descriptor_allocator)
 {
 	index.Destroy(descriptor_allocator);
 	position.Destroy(descriptor_allocator);
@@ -218,7 +218,7 @@ void Mesh::Destroy(CbvSrvUavPool* descriptor_allocator)
 	joint_weight.Destroy(descriptor_allocator);
 }
 
-HRESULT DynamicMesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
+HRESULT DynamicMesh::Create(GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator, const Desc* desc, const char* name)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -255,7 +255,7 @@ HRESULT DynamicMesh::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_a
 	return S_OK;
 }
 
-void DynamicMesh::Destroy(CbvSrvUavPool* descriptor_allocator)
+void DynamicMesh::Destroy(DescriptorAllocator* descriptor_allocator)
 {
 	resource.Reset();
 	position[0].Destroy(descriptor_allocator);
@@ -278,7 +278,7 @@ VertexBuffer* DynamicMesh::GetPreviousPositionBuffer()
 	return &position[(current_position_buffer - 1) % 1];
 }
 
-HRESULT MorphTarget::Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name)
+HRESULT MorphTarget::Create(GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator, const Desc* desc, const char* name)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -324,7 +324,7 @@ void* MorphTarget::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
 	return tangent_space.QueueUpdate(upload_buffer, resource.resource.Get());
 }
 
-void MorphTarget::Destroy(CbvSrvUavPool* descriptor_allocator)
+void MorphTarget::Destroy(DescriptorAllocator* descriptor_allocator)
 {
 	resource.Reset();
 	position.Destroy(descriptor_allocator);

@@ -203,153 +203,56 @@ class DescriptorStack : public DescriptorRange<heap_type> {
     int size = 0;
 };
 
-template<D3D12_DESCRIPTOR_HEAP_TYPE heap_type>
-class DescriptorPool : public DescriptorRange<heap_type> {
-    
-    public:
-    HRESULT Create(ID3D12Device* device, int capacity, bool gpu_visible) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER)
-    {
-        HRESULT result = DescriptorRange<heap_type>::Create(device, capacity, gpu_visible);
-        if (result != S_OK) {
-            Destroy();
-            return result;
-        }
-        Reset();
-        return S_OK;
-    }
-
-    void Create(DescriptorRange<heap_type>* descriptor_range, int start, int capacity)
-    {
-        DescriptorRange<heap_type>::Create(descriptor_range, start, capacity);
-        Reset();
-    }
-
-    int Allocate()
-    {
-        if (this->free_descriptors.empty()) {
-            return -1;
-        }
-        this->size++;
-        int descriptor = free_descriptors.back();
-        this->free_descriptors.pop_back();
-        #ifdef DEBUG
-        assert(this->used_descriptors[descriptor] == false);
-        this->used_descriptors[descriptor] = true;
-        #endif
-        return descriptor;
-    }
-
-    int AllocateAndCreateCbv(const D3D12_CONSTANT_BUFFER_VIEW_DESC* cbv_desc) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)
-    {
-        int descriptor = Allocate();
-        if (descriptor != -1) {
-            DescriptorRange<heap_type>::CreateCbv(descriptor, cbv_desc);
-        }
-        return descriptor;
-    }
-
-    int AllocateAndCreateSrv(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* srv_desc) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)
-    {
-        int descriptor = Allocate();
-        if (descriptor != -1) {
-            DescriptorRange<heap_type>::CreateSrv(descriptor, resource, srv_desc);
-        }
-        return descriptor;
-    }
-
-    int AllocateAndCreateUav(ID3D12Resource* resource, ID3D12Resource* counter_resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* uav_desc) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)
-    {
-        int descriptor = Allocate();
-        if (descriptor != -1) {
-            DescriptorRange<heap_type>::CreateUav(descriptor, resource, counter_resource, uav_desc);
-        }
-        return descriptor;
-    }
-
-    int AllocateAndCreateSampler(int index, const D3D12_SAMPLER_DESC* sampler_desc) requires (heap_type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER)
-    {
-        int descriptor = Allocate();
-        if (descriptor != -1) {
-            DescriptorRange<heap_type>::CreateSampler(descriptor, sampler_desc);
-        }
-        return descriptor;
-    }
-  
-    void Free(int index)
-    {
-        if (index != -1) {
-            assert((index >= this->descriptor_start) && (index < (this->descriptor_start + this->capacity)));
-            assert(this->size != 0);
-            this->size--;
-            this->free_descriptors.push_back(index);
-            #ifdef DEBUG
-            assert(this->used_descriptors[index] == true); // Double free.
-            this->used_descriptors[index] = false;
-            #endif
-        }
-    }
-
-    void Free(D3D12_CPU_DESCRIPTOR_HANDLE handle)
-    {
-        Free(DescriptorRange<heap_type>::GetIndex(handle));
-    }
-
-    void Reset()
-    {
-        this->size = 0;
-        this->free_descriptors.clear();
-        for (int i = this->descriptor_start + this->capacity; (i--) > this->descriptor_start;) {
-            this->free_descriptors.push_back(i);
-        }
-        #ifdef DEBUG
-        used_descriptors = std::vector<bool>(this->capacity, false);
-        #endif
-    }
-
-    int Size() const
-    {
-        return size;
-    }
-
-    void Destroy()
-    {
-        this->size = 0;
-        this->free_descriptors = std::vector<int>();
-        #ifdef DEBUG
-        this->used_descriptors = std::vector<bool>();
-        #endif
-        DescriptorRange<heap_type>::Destroy();
-    }
-    
-	protected:
-    int size = 0;
-    
-	private:
-	std::vector<int> free_descriptors;
-    #ifdef DEBUG
-    std::vector<bool> used_descriptors;
-    #endif
-};
-
 using CbvSrvUavRange = DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>;
 using SamplerRange = DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER>;
 
 using CbvSrvUavStack = DescriptorStack<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>;
 using SamplerStack = DescriptorStack<D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER>;
 
-using CbvSrvUavPool = DescriptorPool<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>;
-using SamplerPool = DescriptorPool<D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER>;
-
-class DescriptorAllocator {
+class DescriptorAllocator : public DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV> {
 
     public:
 
-    HRESULT Create(int capacity);
+    HRESULT Create(int capacity); // TODO: Add a reset method?
     void Destroy();
     int Allocate(int count);
     void Free(int descriptor);
     int Capacity();
     int Size();
+
+    void Create(DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>* descriptor_range, int start, int capacity)
+    {
+        assert((capacity % 64) == 0);
+        DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>::Create(descriptor_range, start, capacity);
+        Create(capacity);
+    }
+
+    int AllocateAndCreateCbv(const D3D12_CONSTANT_BUFFER_VIEW_DESC* cbv_desc)
+    {
+        int descriptor = Allocate(1);
+        if (descriptor != -1) {
+            DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>::CreateCbv(descriptor, cbv_desc);
+        }
+        return descriptor;
+    }
+
+    int AllocateAndCreateSrv(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* srv_desc)
+    {
+        int descriptor = Allocate(1);
+        if (descriptor != -1) {
+            DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>::CreateSrv(descriptor, resource, srv_desc);
+        }
+        return descriptor;
+    }
+
+    int AllocateAndCreateUav(ID3D12Resource* resource, ID3D12Resource* counter_resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* uav_desc)
+    {
+        int descriptor = Allocate(1);
+        if (descriptor != -1) {
+            DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV>::CreateUav(descriptor, resource, counter_resource, uav_desc);
+        }
+        return descriptor;
+    }
 
     private:
     

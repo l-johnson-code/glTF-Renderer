@@ -29,7 +29,7 @@ class EnvironmentMap {
     GpuResource equirectangular_image;
     
     static float MipToRoughness(int mip_level, int mip_count);
-    void Init(ID3D12Device* device, GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator);
+    void Init(ID3D12Device* device, GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator);
     // Note: Loading the initial image and processing the image into cubemaps are separated so that they can happen at different times.
     void LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const char* filepath, Map* map);
     void CreateEnvironmentMap(CommandContext* context, ID3D12Resource* equirectangular_image, Map* map);
@@ -50,7 +50,7 @@ class EnvironmentMap {
     
     ID3D12Device* device = nullptr;
     GpuAllocator* allocator = nullptr;
-    CbvSrvUavPool* descriptor_allocator = nullptr;
+    DescriptorAllocator* descriptor_allocator = nullptr;
     
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> generate_cubemap_pipeline_state;

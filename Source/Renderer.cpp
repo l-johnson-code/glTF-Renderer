@@ -193,13 +193,13 @@ void Renderer::InitializeImGui()
     imgui.UserData = &resources.cbv_uav_srv_dynamic_allocator;
     imgui.SrvDescriptorHeap = resources.cbv_uav_srv_dynamic_allocator.DescriptorHeap();
     imgui.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_desc_handle) {
-		CbvSrvUavPool* descriptor_pool = (CbvSrvUavPool*)info->UserData;
-		int descriptor = descriptor_pool->Allocate();
+		DescriptorAllocator* descriptor_pool = (DescriptorAllocator*)info->UserData;
+		int descriptor = descriptor_pool->Allocate(1);
 		*out_cpu_desc_handle = descriptor_pool->GetCpuHandle(descriptor);
 		*out_gpu_desc_handle = descriptor_pool->GetGpuHandle(descriptor);
 	};
     imgui.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_desc_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_desc_handle) {
-		CbvSrvUavPool* descriptor_pool = (CbvSrvUavPool*)info->UserData;
+		DescriptorAllocator* descriptor_pool = (DescriptorAllocator*)info->UserData;
 		int descriptor = descriptor_pool->GetIndex(cpu_desc_handle);
 		descriptor_pool->Free(descriptor);
 	};

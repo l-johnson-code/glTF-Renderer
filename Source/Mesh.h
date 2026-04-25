@@ -19,10 +19,10 @@ struct VertexBuffer {
 
     static VertexAllocation GetAllocationSize(uint32_t vertex_count, DXGI_FORMAT format);
     static VertexAllocation GetAllocationSize(uint32_t vertex_count, uint32_t element_size);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size);
     void* QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource);
-    void Destroy(CbvSrvUavPool* descriptor_allocator);
+    void Destroy(DescriptorAllocator* descriptor_allocator);
 };
 
 struct IndexBuffer {
@@ -30,9 +30,9 @@ struct IndexBuffer {
 	int descriptor = -1;
 
     static VertexAllocation GetAllocationSize(uint32_t index_count, DXGI_FORMAT format);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, CbvSrvUavPool* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format);
     void* QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource);
-    void Destroy(CbvSrvUavPool* descriptor_allocator);
+    void Destroy(DescriptorAllocator* descriptor_allocator);
 };
 
 struct Mesh {
@@ -75,7 +75,7 @@ struct Mesh {
     VertexBuffer color;
     VertexBuffer joint_weight;
 
-    HRESULT Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void* QueueIndexUpdate(UploadBuffer* upload_buffer);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
@@ -83,7 +83,7 @@ struct Mesh {
     void* QueueTexcoord1Update(UploadBuffer* upload_buffer);
     void* QueueColorUpdate(UploadBuffer* upload_buffer);
     void* QueueJointWeightUpdate(UploadBuffer* upload_buffer);
-    void Destroy(CbvSrvUavPool* descriptor_allocator);
+    void Destroy(DescriptorAllocator* descriptor_allocator);
 };
 
 struct DynamicMesh {
@@ -107,11 +107,11 @@ struct DynamicMesh {
     VertexBuffer position[2];
     VertexBuffer tangent_space;
 
-    HRESULT Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void Flip();
     VertexBuffer* GetCurrentPositionBuffer();
     VertexBuffer* GetPreviousPositionBuffer();
-    void Destroy(CbvSrvUavPool* descriptor_allocator);
+    void Destroy(DescriptorAllocator* descriptor_allocator);
 };
 
 struct MorphTarget {
@@ -134,8 +134,8 @@ struct MorphTarget {
     VertexBuffer position;
     VertexBuffer tangent_space;
 
-    HRESULT Create(GpuAllocator* allocator, CbvSrvUavPool* descriptor_allocator, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator, const Desc* desc, const char* name = nullptr);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
-    void Destroy(CbvSrvUavPool* descriptor_allocator);
+    void Destroy(DescriptorAllocator* descriptor_allocator);
 };

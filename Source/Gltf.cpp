@@ -881,7 +881,7 @@ void Gltf::LoadLights(tinygltf::Model* gltf)
 	}
 }
 
-void Gltf::Init(CbvSrvUavPool* srv_uav_cbv_descriptors, SamplerStack* sampler_descriptors)
+void Gltf::Init(DescriptorAllocator* srv_uav_cbv_descriptors, SamplerStack* sampler_descriptors)
 {
 	this->srv_uav_cbv_descriptors = srv_uav_cbv_descriptors;
 	this->sampler_descriptors = sampler_descriptors;
@@ -1066,7 +1066,7 @@ void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuAllocator*
 	}
 
 	// Create the descriptor.
-	textures[slot].descriptor = srv_uav_cbv_descriptors->Allocate();
+	textures[slot].descriptor = srv_uav_cbv_descriptors->Allocate(1);
 	srv_uav_cbv_descriptors->CreateSrv(textures[slot].descriptor, textures[slot].resource.resource.Get(), nullptr);
 
 	// Upload image to the GPU.
