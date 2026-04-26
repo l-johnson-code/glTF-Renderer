@@ -173,7 +173,7 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 	}
 
 	// Create unordered access views.
-	uint8_t mip_levels = glm::levels(glm::u16vec2(desc->width, desc->height));
+	uint8_t mip_levels = desc->mip_levels == 0 ? glm::levels(glm::u16vec2(desc->width, desc->height)) : desc->mip_levels;
 	if (desc->flags & TEXTURE_FLAG_UAV) {
 		texture->uav = cbv_uav_srv_dynamic_allocator.Allocate(mip_levels);
 		if (texture->uav == -1) {
