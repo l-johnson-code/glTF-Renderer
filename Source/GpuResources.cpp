@@ -186,6 +186,10 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 		}
 	}
 
+	texture->width = desc->width;
+	texture->height = desc->height;
+	texture->mip_levels = mip_levels;
+
 	return S_OK;
 }
 

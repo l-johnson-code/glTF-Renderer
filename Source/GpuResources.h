@@ -64,6 +64,9 @@ class GpuResources {
 	
 	struct Texture {
 		GpuResource resource;
+		uint16_t width = 0;
+		uint16_t height = 0;
+		uint8_t mip_levels = 0;
 		int srv = -1;
 		int uav = -1;
 	};
