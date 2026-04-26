@@ -163,17 +163,30 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 	}
 
 	// Create a shader resource view.
-	CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
-		CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(desc->format) :
-		CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(desc->format);
-	texture->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(texture->resource.resource.Get(), &srv_desc);
+	uint8_t mip_levels = desc->mip_levels == 0 ? glm::levels(glm::u16vec2(desc->width, desc->height)) : desc->mip_levels;
+	if (desc->flags & TEXTURE_FLAG_SRV_PER_MIP) {
+		texture->srv = cbv_uav_srv_dynamic_allocator.Allocate(mip_levels + 1);
+	} else {
+		texture->srv = cbv_uav_srv_dynamic_allocator.Allocate(1);
+	}
 	if (texture->srv == -1) {
 		FreeTexture(texture);
 		return E_OUTOFMEMORY;
 	}
+	CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
+		CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(desc->format) :
+		CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(desc->format);
+	cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv, texture->resource.resource.Get(), &srv_desc);
+	if (desc->flags & TEXTURE_FLAG_SRV_PER_MIP) {
+		for (int i = 0; i < mip_levels; i++) {
+			CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
+				CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(desc->format, 1, i) :
+				CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(desc->format, 1, i);
+			cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv + 1 + i, texture->resource.resource.Get(), &srv_desc);
+		}
+	}
 
 	// Create unordered access views.
-	uint8_t mip_levels = desc->mip_levels == 0 ? glm::levels(glm::u16vec2(desc->width, desc->height)) : desc->mip_levels;
 	if (desc->flags & TEXTURE_FLAG_UAV) {
 		texture->uav = cbv_uav_srv_dynamic_allocator.Allocate(mip_levels);
 		if (texture->uav == -1) {

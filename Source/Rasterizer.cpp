@@ -43,7 +43,7 @@ void Rasterizer::Resize(uint16_t width, uint16_t height)
 		.width = width,
 		.height = height,
 		.mip_levels = 0,
-		.flags = GpuResources::TEXTURE_FLAG_UAV,
+		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_SRV_PER_MIP),
 		.name = "Transmission",
 	};
 	result = gpu_resources->CreateTexture(&transmission_desc, &this->transmission);
@@ -139,10 +139,10 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	SortRenderObjects(camera_pos);
 
 	// Prepare render targets.
-	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = execute_params->output_rtv; 
+	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = execute_params->output->rtv; 
 
 	context->PushTransitionBarrier(
-		execute_params->output_resource, 
+		execute_params->output->resource.resource.Get(), 
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
 		D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
@@ -209,14 +209,14 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	// Create transmission mip chain.
 	context->BeginEvent("Transmission Mip Chain");
 	context->PushTransitionBarrier(
-		execute_params->output_resource, 
+		execute_params->output->resource.resource.Get(), 
 		D3D12_RESOURCE_STATE_RENDER_TARGET,
 		D3D12_RESOURCE_STATE_COPY_SOURCE
 	);
 	context->SubmitBarriers();
-	forward.GenerateTransmissionMips(context, execute_params->output_resource, this->transmission.resource.resource.Get(), settings->transmission_downsample_sample_pattern);
+	forward.GenerateTransmissionMips(context, execute_params->output, &this->transmission, settings->transmission_downsample_sample_pattern);
 	context->PushTransitionBarrier(
-		execute_params->output_resource, 
+		execute_params->output->resource.resource.Get(),
 		D3D12_RESOURCE_STATE_COPY_SOURCE,
 		D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
@@ -239,7 +239,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 
 	// Transition render targets to read state for post processing.
 	context->PushTransitionBarrier(
-		execute_params->output_resource, 
+		execute_params->output->resource.resource.Get(), 
 		D3D12_RESOURCE_STATE_RENDER_TARGET,
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 	);
@@ -256,10 +256,10 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	context->SubmitBarriers();
 
 	context->BeginEvent("Bloom");
-    bloom.Execute(context, execute_params->output_resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
+    bloom.Execute(context, execute_params->output->resource.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
 	context->EndEvent();
 
-	context->PushTransitionBarrier(execute_params->output_resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	context->PushTransitionBarrier(execute_params->output->resource.resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	context->SubmitBarriers();
 
 	this->previous_world_to_clip = world_to_clip;

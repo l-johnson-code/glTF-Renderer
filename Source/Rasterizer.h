@@ -25,8 +25,7 @@ class Rasterizer {
         D3D12_GPU_VIRTUAL_ADDRESS gpu_lights = 0;
         int light_count = 0;
         EnvironmentMap::Map* environment_map = nullptr;
-        D3D12_CPU_DESCRIPTOR_HANDLE output_rtv = {};
-        ID3D12Resource* output_resource = nullptr;
+        GpuResources::RenderTarget* output; // TODO: This should be a texture to allow more flexibility.
     };
 
     void Init(ID3D12Device* device, GpuResources* gpu_resources, uint16_t width, uint16_t height);

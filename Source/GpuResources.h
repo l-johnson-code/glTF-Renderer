@@ -51,6 +51,7 @@ class GpuResources {
 		TEXTURE_FLAG_NONE = 0,
 		TEXTURE_FLAG_UAV = 1 << 0,
 		TEXTURE_FLAG_CUBE = 1 << 1,
+		TEXTURE_FLAG_SRV_PER_MIP = 1 << 2,
 	};
 
 	struct TextureDesc {

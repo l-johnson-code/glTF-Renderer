@@ -11,7 +11,6 @@
 #include <glm/gtc/matrix_inverse.hpp>
 
 #include "DirectXHelpers.h"
-#include "GpuResources.h"
 
 void ForwardPass::Create(ID3D12Device* device)
 {
@@ -336,27 +335,16 @@ void ForwardPass::DrawBackground(CommandContext* context, glm::mat4x4 clip_to_wo
     context->command_list->DrawInstanced(3, 1, 0, 0);
 }
 
-void ForwardPass::GenerateTransmissionMips(CommandContext* context, ID3D12Resource* input, ID3D12Resource* output, int sample_pattern)
+void ForwardPass::GenerateTransmissionMips(CommandContext* context, GpuResources::RenderTarget* input, GpuResources::Texture* output, int sample_pattern)
 {
 	// Create mip 0.
-	context->PushTransitionBarrier(output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
+	context->PushTransitionBarrier(output->resource.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
 	context->SubmitBarriers();
 
-	const CD3DX12_TEXTURE_COPY_LOCATION copy_dest(output);
-	const CD3DX12_TEXTURE_COPY_LOCATION copy_source(input);
+	const CD3DX12_TEXTURE_COPY_LOCATION copy_dest(output->resource.resource.Get());
+	const CD3DX12_TEXTURE_COPY_LOCATION copy_source(input->resource.resource.Get());
 	context->command_list->CopyTextureRegion(&copy_dest, 0, 0, 0, &copy_source, nullptr);
-	context->PushTransitionBarrier(output, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
-
-	// Create descriptors.
-	D3D12_RESOURCE_DESC output_desc = output->GetDesc();
-	DescriptorSpan descriptors = context->AllocateDescriptors(output_desc.MipLevels * 2);
-	assert(!descriptors.IsEmpty());
-	for (int i = 0; i < output_desc.MipLevels; i++) {
-		const CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(output_desc.Format, 1, i);
-		const CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(output_desc.Format, i);
-		context->CreateSrv(descriptors[2 * i], output, &srv_desc);
-		context->CreateUav(descriptors[2 * i + 1], output, nullptr, &uav_desc);
-	}
+	context->PushTransitionBarrier(output->resource.resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
 
 	// Generate the mips.
 	context->command_list->SetComputeRootSignature(this->transmission_mips_root_signature.Get());
@@ -369,23 +357,23 @@ void ForwardPass::GenerateTransmissionMips(CommandContext* context, ID3D12Resour
 	} constant_buffer;
 	constant_buffer.sample_pattern = sample_pattern;
 
-	uint32_t width = output_desc.Width;
-	uint32_t height = output_desc.Height;
+	uint32_t width = output->width;
+	uint32_t height = output->height;
 
-	for (int i = 1; i < output_desc.MipLevels; i++) {
+	for (int i = 1; i < output->mip_levels; i++) {
 		width = std::max(width / 2u, 1u);
 		height = std::max(height / 2u, 1u);
 
-		constant_buffer.input_descriptor = descriptors[(i - 1) * 2];
-		constant_buffer.output_descriptor = descriptors[i * 2 + 1];
+		constant_buffer.input_descriptor = output->srv + i;
+		constant_buffer.output_descriptor = output->uav + i;
 
-		context->PushTransitionBarrier(output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
+		context->PushTransitionBarrier(output->resource.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
 		context->SubmitBarriers();
 
 		context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
 		context->command_list->Dispatch((width + 7) / 8, (height + 7) / 8, 1);
-		context->PushUavBarrier(output);
-		context->PushTransitionBarrier(output, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i);
+		context->PushUavBarrier(output->resource.resource.Get());
+		context->PushTransitionBarrier(output->resource.resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i);
 	}
 	context->SubmitBarriers();
 }
