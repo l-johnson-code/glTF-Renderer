@@ -305,7 +305,8 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 		command_context.BeginEvent("Environment Map");
 		environment_map.CreateEnvironmentMap(&command_context, &environment_map.equirectangular_image, &map);
 		deferred_release.Current().push_back(environment_map.equirectangular_image.resource);
-		resources.FreeTexture(&environment_map.equirectangular_image);
+		// TODO: This leaks the descriptors. Fix it!
+		environment_map.equirectangular_image.resource.Reset();
 		environment_map_loaded = true;
 		command_context.EndEvent();
 	}
