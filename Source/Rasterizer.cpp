@@ -176,8 +176,8 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 		.num_of_lights = execute_params->light_count,
 		.lights = execute_params->gpu_lights,
 		.materials = execute_params->gpu_materials,
-		.ggx_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->ggx_srv_descriptor : -1,
-		.diffuse_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->diffuse_srv_descriptor : -1,
+		.ggx_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->ggx.srv : -1,
+		.diffuse_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->diffuse.srv : -1,
 		.environment_map_intensity = 1.0,
 		.transmission_descriptor = -1,
 		.render_flags = settings->render_flags,
@@ -198,7 +198,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 
 	context->BeginEvent("Background");
 	if (execute_params->environment_map) {
-		forward.DrawBackground(context, clip_to_world, 1.0, execute_params->environment_map->cube_srv_descriptor);
+		forward.DrawBackground(context, clip_to_world, 1.0, execute_params->environment_map->cube.srv);
 		
 		// Set pipeline state back to rendering meshes.
 		forward.SetRootSignature(context);

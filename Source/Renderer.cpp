@@ -160,7 +160,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	CreateRenderTargets();
 	gpu_skinner.Create(this->device.Get());
 	tone_mapper.Create(this->device.Get());
-	environment_map.Init(this->device.Get(), &this->resources.allocator, &this->resources.cbv_uav_srv_dynamic_allocator);
+	environment_map.Init(this->device.Get(), &this->resources);
 	resources.LoadLookupTables(&this->upload_buffer);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
@@ -301,11 +301,11 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	this->graphics_command_list->SetDescriptorHeaps(std::size(descriptor_heaps), descriptor_heaps);
 
 	// Generate environment map.
-	if (environment_map.equirectangular_image.resource.Get()) {
+	// TODO: Figure out a proper solution for this. This is not freeing the descriptors!
+	if (environment_map.equirectangular_image.resource.resource.Get()) {
 		command_context.BeginEvent("Environment Map");
-		environment_map.CreateEnvironmentMap(&command_context, environment_map.equirectangular_image.resource.Get(), &map);
-		deferred_release.Current().push_back(environment_map.equirectangular_image);
-		environment_map.equirectangular_image.Reset();
+		environment_map.CreateEnvironmentMap(&command_context, &environment_map.equirectangular_image, &map);
+		deferred_release.Current().push_back(environment_map.equirectangular_image.resource);
 		environment_map_loaded = true;
 		command_context.EndEvent();
 	}
