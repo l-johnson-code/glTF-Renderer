@@ -301,11 +301,11 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	this->graphics_command_list->SetDescriptorHeaps(std::size(descriptor_heaps), descriptor_heaps);
 
 	// Generate environment map.
-	// TODO: Figure out a proper solution for this. This is not freeing the descriptors!
 	if (environment_map.equirectangular_image.resource.resource.Get()) {
 		command_context.BeginEvent("Environment Map");
 		environment_map.CreateEnvironmentMap(&command_context, &environment_map.equirectangular_image, &map);
 		deferred_release.Current().push_back(environment_map.equirectangular_image.resource);
+		resources.FreeTexture(&environment_map.equirectangular_image);
 		environment_map_loaded = true;
 		command_context.EndEvent();
 	}
