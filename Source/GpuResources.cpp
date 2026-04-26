@@ -181,7 +181,9 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 			return E_OUTOFMEMORY;
 		}
 		for (int i = 0; i < mip_levels; i++) {
-			CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(desc->format, i);
+			CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
+				CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2DArray(desc->format, 6, 0, i) :
+				CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(desc->format, i);
 			cbv_uav_srv_dynamic_allocator.CreateUav(texture->uav + i, texture->resource.resource.Get(), nullptr, &uav_desc);
 		}
 	}
