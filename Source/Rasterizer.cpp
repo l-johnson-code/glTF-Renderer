@@ -10,7 +10,7 @@ void Rasterizer::Init(ID3D12Device* device, GpuResources* gpu_resources, uint16_
 	this->gpu_resources = gpu_resources;
     Resize(width, height);
     forward.Create(device);
-    bloom.Create(this->device.Get(), &gpu_resources->allocator, width, height, 6);
+    bloom.Create(this->device.Get(), gpu_resources, width, height, 6);
 }
 
 void Rasterizer::Resize(uint16_t width, uint16_t height)
@@ -256,7 +256,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	context->SubmitBarriers();
 
 	context->BeginEvent("Bloom");
-    bloom.Execute(context, execute_params->output->resource.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
+    bloom.Execute(context, execute_params->output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
 	context->EndEvent();
 
 	context->PushTransitionBarrier(execute_params->output->resource.resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
