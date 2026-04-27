@@ -25,7 +25,7 @@ class Rasterizer {
         D3D12_GPU_VIRTUAL_ADDRESS gpu_lights = 0;
         int light_count = 0;
         EnvironmentMap::Map* environment_map = nullptr;
-        GpuResources::RenderTarget* output; // TODO: This should be a texture to allow more flexibility.
+        GpuResources::Texture* output;
     };
 
     void Init(ID3D12Device* device, GpuResources* gpu_resources, uint16_t width, uint16_t height);
@@ -53,8 +53,8 @@ class Rasterizer {
     glm::mat4x4 previous_world_to_clip;
 
     // Render targets and resolution dependent resources.
-    GpuResources::DepthTarget depth;
-    GpuResources::RenderTarget motion_vectors;
+    GpuResources::Texture depth;
+    GpuResources::Texture motion_vectors;
 	GpuResources::Texture transmission;
     
     std::vector<RenderObject> opaque_render_objects;

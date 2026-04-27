@@ -21,29 +21,35 @@ void Rasterizer::Resize(uint16_t width, uint16_t height)
     CD3DX12_HEAP_PROPERTIES render_target_heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 
 	HRESULT result;
-	// Depth buffer.
-	GpuResources::DepthTargetDesc depth_target_desc = {
+
+	GpuResources::TextureDesc depth_target_desc = {
+		.format = DXGI_FORMAT_D32_FLOAT,
 		.width = width,
 		.height = height,
-		.optimized_clear_value = 0.0f,
+		.mip_levels = 1,
+		.clear_depth = 0.0f,
+		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_DEPTH_TARGET),
+		.name = "Depth",
 	};
-    result = gpu_resources->CreateDepthTarget(&depth_target_desc, &this->depth);
+    result = gpu_resources->CreateTexture(&depth_target_desc, &this->depth);
 
-	GpuResources::RenderTargetDesc motion_vectors_desc = {
+	GpuResources::TextureDesc motion_vectors_desc = {
 		.format = DXGI_FORMAT_R16G16_FLOAT,
 		.width = width,
 		.height = height,
-		.optimized_clear_value = {0.0f, 0.0f, 0.0f, 0.0f},
+		.mip_levels = 1,
+		.clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
+		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_RENDER_TARGET),
 		.name = "Motion Vectors",
 	};
-	result = gpu_resources->CreateRenderTarget(&motion_vectors_desc, &this->motion_vectors);
+	result = gpu_resources->CreateTexture(&motion_vectors_desc, &this->motion_vectors);
 
 	GpuResources::TextureDesc transmission_desc = {
 		.format = DXGI_FORMAT_R16G16B16A16_FLOAT,
 		.width = width,
 		.height = height,
 		.mip_levels = 0,
-		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_SRV_PER_MIP),
+		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_SRV_PER_MIP),
 		.name = "Transmission",
 	};
 	result = gpu_resources->CreateTexture(&transmission_desc, &this->transmission);
@@ -139,7 +145,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	SortRenderObjects(camera_pos);
 
 	// Prepare render targets.
-	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = execute_params->output->rtv; 
+	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = execute_params->output->render.rtv; 
 
 	context->PushTransitionBarrier(
 		execute_params->output->resource.resource.Get(), 
@@ -160,8 +166,8 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	
 	float clear_color[4] = {0., 0., 0., 0.};
 	context->command_list->ClearRenderTargetView(render_rtv, clear_color, 0, nullptr);
-	context->command_list->ClearRenderTargetView(motion_vectors.rtv, motion_vectors.optimized_clear_value, 0, nullptr);
-	context->command_list->ClearDepthStencilView(depth.dsv, D3D12_CLEAR_FLAG_DEPTH, depth.optimized_clear_value, 0, 0, nullptr);
+	context->command_list->ClearRenderTargetView(motion_vectors.render.rtv, motion_vectors.render.clear_color, 0, nullptr);
+	context->command_list->ClearDepthStencilView(depth.depth.dsv, D3D12_CLEAR_FLAG_DEPTH, depth.depth.clear_depth, 0, 0, nullptr);
 	
 	SetViewportAndScissorRects(context, this->width, this->height);
 
@@ -186,7 +192,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	context->command_list->IASetPrimitiveTopology(primitive_topology);
 	forward.SetRootSignature(context);
 	forward.SetConfig(context, &config);
-	forward.BindRenderTargets(context, render_rtv, motion_vectors.rtv, depth.dsv);
+	forward.BindRenderTargets(context, render_rtv, motion_vectors.render.rtv, depth.depth.dsv);
 	forward.BindPipeline(context, ForwardPass::PIPELINE_FLAGS_NONE);
 	DrawRenderObjects(context, execute_params->gltf, opaque_render_objects);
 	context->EndEvent();
@@ -269,8 +275,8 @@ void Rasterizer::Shutdown()
 {
     device.Reset();
 	if (gpu_resources) {
-		gpu_resources->FreeDepthTarget(&depth);
-		gpu_resources->FreeRenderTarget(&motion_vectors);
+		gpu_resources->FreeTexture(&depth);
+		gpu_resources->FreeTexture(&motion_vectors);
 		gpu_resources->FreeTexture(&transmission);
 	}
     forward.Destroy();

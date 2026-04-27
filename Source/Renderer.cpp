@@ -377,15 +377,16 @@ void Renderer::CreateRenderTargets()
 {
 	HRESULT result = S_OK;
 
-	GpuResources::RenderTargetDesc desc = {
+	GpuResources::TextureDesc desc = {
 		.format = this->settings.renderer_type == RENDERER_TYPE_PATHTRACER ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT,
 		.width = (uint16_t)display_width,
 		.height = (uint16_t)display_height,
-		.optimized_clear_value =  {0.0f, 0.0f, 0.0f, 0.0f},
-		.uav = true,
+		.mip_levels = 1,
+		.clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
+		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_RENDER_TARGET | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_SRV),
 		.name = "Display",
 	};
-	this->resources.CreateRenderTarget(&desc, &this->display);
+	this->resources.CreateTexture(&desc, &this->display);
 }
 
 void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf, int scene)

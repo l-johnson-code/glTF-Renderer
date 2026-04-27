@@ -53,14 +53,15 @@ void Bloom::Resize(uint16_t width, uint16_t height, uint8_t max_iterations)
         .width = width,
         .height = height,
         .mip_levels = this->max_iterations,
-        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_SRV_PER_MIP),
+        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_SRV_PER_MIP),
+        .initial_state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
         .name = "Bloom Mip Chain"
     };
     HRESULT result = resources->CreateTexture(&desc, &this->mip_chain);
     assert(result == S_OK);
 }
 
-void Bloom::Execute(CommandContext* context, GpuResources::RenderTarget* input, D3D12_RESOURCE_STATES input_resource_states, uint8_t iterations, float strength)
+void Bloom::Execute(CommandContext* context, GpuResources::Texture* input, D3D12_RESOURCE_STATES input_resource_states, uint8_t iterations, float strength)
 {
     iterations = std::min(this->max_iterations, iterations);
 

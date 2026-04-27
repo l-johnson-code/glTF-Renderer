@@ -11,7 +11,7 @@ class Bloom {
 
     void Create(ID3D12Device* device, GpuResources* resources, uint16_t width, uint16_t height, uint8_t max_iterations);
     void Resize(uint16_t width, uint16_t height, uint8_t max_iterations);
-    void Execute(CommandContext* context, GpuResources::RenderTarget* input, D3D12_RESOURCE_STATES input_resource_states, uint8_t iterations, float strength);
+    void Execute(CommandContext* context, GpuResources::Texture* input, D3D12_RESOURCE_STATES input_resource_states, uint8_t iterations, float strength);
 
     private:
 

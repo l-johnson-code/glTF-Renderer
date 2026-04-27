@@ -181,7 +181,7 @@ private:
 	RenderSettings settings;
 
 	// Render targets and resolution dependent resources.
-    GpuResources::RenderTarget display;
+    GpuResources::Texture display;
 	
 	const int MAX_LIGHTS = 10;
 	std::vector<GpuLight> lights;

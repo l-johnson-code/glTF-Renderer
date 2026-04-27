@@ -94,7 +94,8 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, GpuResources:
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = cube_map_resolution,
         .height = cube_map_resolution,
-        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_CUBE),
+        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_CUBE),
+        .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         .name = "Environment Cube",
     };
 	result = resources->CreateTexture(&cubemap_desc, &map->cube);
@@ -108,7 +109,8 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, GpuResources:
         .width = cube_map_resolution,
         .height = cube_map_resolution,
         .mip_levels = ggx_mips,
-        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_CUBE),
+        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_CUBE),
+        .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         .name = "Environment GGX",
     };
 	result = resources->CreateTexture(&ggx_desc, &map->ggx);
@@ -121,7 +123,8 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, GpuResources:
         .width = diffuse_resolution,
         .height = diffuse_resolution,
         .mip_levels = 1,
-        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_CUBE),
+        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_CUBE),
+        .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         .name = "Environment Diffuse",
     };
 	result = resources->CreateTexture(&diffuse_desc, &map->diffuse);
@@ -219,6 +222,7 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
         .width = x,
         .height = y,
         .mip_levels = 1,
+        .flags = GpuResources::TEXTURE_FLAG_SRV,
         .name = "Environment Map",
     };
     result = resources->CreateTexture(&desc, &this->equirectangular_image);
@@ -562,6 +566,7 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
         .width = pdf_size,
         .height = pdf_size,
         .mip_levels = 1,
+        .flags = GpuResources::TEXTURE_FLAG_SRV,
         .name = "PDF",
     };
     resources->CreateTexture(&pdf_desc, &map->pdf);

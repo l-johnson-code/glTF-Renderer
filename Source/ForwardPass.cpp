@@ -335,7 +335,7 @@ void ForwardPass::DrawBackground(CommandContext* context, glm::mat4x4 clip_to_wo
     context->command_list->DrawInstanced(3, 1, 0, 0);
 }
 
-void ForwardPass::GenerateTransmissionMips(CommandContext* context, GpuResources::RenderTarget* input, GpuResources::Texture* output, int sample_pattern)
+void ForwardPass::GenerateTransmissionMips(CommandContext* context, GpuResources::Texture* input, GpuResources::Texture* output, int sample_pattern)
 {
 	// Create mip 0.
 	context->PushTransitionBarrier(output->resource.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);

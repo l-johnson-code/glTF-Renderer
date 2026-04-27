@@ -136,6 +136,8 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 {
 	HRESULT result = S_OK;
 
+	assert(!((desc->flags & TEXTURE_FLAG_RENDER_TARGET) && (desc->flags & TEXTURE_FLAG_DEPTH_TARGET)) && "Textures can not be used both as a render target and depth target");
+
 	// Create the resource.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(
@@ -145,15 +147,34 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 		desc->flags & TEXTURE_FLAG_CUBE ? 6 : 1, 
 		desc->mip_levels
 	);
+	if (!(desc->flags & TEXTURE_FLAG_SRV)) {
+		resource_desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+	}
 	if (desc->flags & TEXTURE_FLAG_UAV) {
-		resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	};
+	if (desc->flags & TEXTURE_FLAG_RENDER_TARGET) {
+		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	}
+	if (desc->flags & TEXTURE_FLAG_DEPTH_TARGET) {
+		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	}
+	CD3DX12_CLEAR_VALUE* clear_value_ptr = nullptr;
+	CD3DX12_CLEAR_VALUE clear_value;
+	if (desc->flags & TEXTURE_FLAG_RENDER_TARGET) {
+		clear_value = CD3DX12_CLEAR_VALUE(desc->format, desc->clear_color);
+		clear_value_ptr = &clear_value;
+	}
+	if (desc->flags & TEXTURE_FLAG_DEPTH_TARGET) {
+		clear_value = CD3DX12_CLEAR_VALUE(desc->format, desc->clear_depth, 0);
+		clear_value_ptr = &clear_value;
+	}
 	result = allocator.CreateCommittedResource(
 		&heap_properties,
 		D3D12_HEAP_FLAG_NONE,
 		&resource_desc,
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-		nullptr,
+		desc->initial_state,
+		clear_value_ptr,
 		&texture->resource,
 		desc->name ? desc->name : "Texture"
 	);
@@ -163,30 +184,34 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 	}
 
 	// Create a shader resource view.
+	DXGI_FORMAT srv_format = desc->format == DXGI_FORMAT_D32_FLOAT ? DXGI_FORMAT_R32_FLOAT : desc->format;
 	uint8_t mip_levels = desc->mip_levels == 0 ? glm::levels(glm::u16vec2(desc->width, desc->height)) : desc->mip_levels;
-	if (desc->flags & TEXTURE_FLAG_SRV_PER_MIP) {
-		texture->srv = cbv_uav_srv_dynamic_allocator.Allocate(mip_levels + 1);
-	} else {
-		texture->srv = cbv_uav_srv_dynamic_allocator.Allocate(1);
-	}
-	if (texture->srv == -1) {
-		FreeTexture(texture);
-		return E_OUTOFMEMORY;
-	}
-	CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
-		CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(desc->format) :
-		CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(desc->format);
-	cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv, texture->resource.resource.Get(), &srv_desc);
-	if (desc->flags & TEXTURE_FLAG_SRV_PER_MIP) {
-		for (int i = 0; i < mip_levels; i++) {
-			CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
-				CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(desc->format, 1, i) :
-				CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(desc->format, 1, i);
-			cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv + 1 + i, texture->resource.resource.Get(), &srv_desc);
+	if (desc->flags & TEXTURE_FLAG_SRV) {
+		if (desc->flags & TEXTURE_FLAG_SRV_PER_MIP) {
+			texture->srv = cbv_uav_srv_dynamic_allocator.Allocate(mip_levels + 1);
+		} else {
+			texture->srv = cbv_uav_srv_dynamic_allocator.Allocate(1);
+		}
+		if (texture->srv == -1) {
+			FreeTexture(texture);
+			return E_OUTOFMEMORY;
+		}
+		CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
+			CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(srv_format) :
+			CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(srv_format);
+		cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv, texture->resource.resource.Get(), &srv_desc);
+		if (desc->flags & TEXTURE_FLAG_SRV_PER_MIP) {
+			for (int i = 0; i < mip_levels; i++) {
+				CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
+					CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(srv_format, 1, i) :
+					CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(srv_format, 1, i);
+				cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv + 1 + i, texture->resource.resource.Get(), &srv_desc);
+			}
 		}
 	}
 
 	// Create unordered access views.
+	DXGI_FORMAT uav_format = srv_format;
 	if (desc->flags & TEXTURE_FLAG_UAV) {
 		texture->uav = cbv_uav_srv_dynamic_allocator.Allocate(mip_levels);
 		if (texture->uav == -1) {
@@ -195,10 +220,32 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 		}
 		for (int i = 0; i < mip_levels; i++) {
 			CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
-				CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2DArray(desc->format, 6, 0, i) :
-				CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(desc->format, i);
+				CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2DArray(uav_format, 6, 0, i) :
+				CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(uav_format, i);
 			cbv_uav_srv_dynamic_allocator.CreateUav(texture->uav + i, texture->resource.resource.Get(), nullptr, &uav_desc);
 		}
+	}
+
+	// Create the render target view.
+	if (desc->flags & TEXTURE_FLAG_RENDER_TARGET) { 
+		texture->render.rtv = rtv_allocator.CreateRenderTargetView(texture->resource.resource.Get(), nullptr);
+		if (texture->render.rtv.ptr == 0) {
+			FreeTexture(texture);
+			return E_OUTOFMEMORY;
+		}
+		for (int i = 0; i < 4; i++) {
+			texture->render.clear_color[i] = desc->clear_color[i];
+		}
+	}
+
+	// Create the depth stencil view.
+	if (desc->flags & TEXTURE_FLAG_DEPTH_TARGET) { 
+		texture->depth.dsv = dsv_allocator.CreateDepthStencilView(texture->resource.resource.Get(), nullptr);
+		if (texture->depth.dsv.ptr == 0) {
+			FreeTexture(texture);
+			return E_OUTOFMEMORY;
+		}
+		texture->depth.clear_depth = desc->clear_depth;
 	}
 
 	texture->width = desc->width;
@@ -215,112 +262,14 @@ void GpuResources::FreeTexture(Texture* texture)
 	texture->srv = -1;
 	cbv_uav_srv_dynamic_allocator.Free(texture->uav);
 	texture->uav = -1;
-}
-
-HRESULT GpuResources::CreateRenderTarget(const RenderTargetDesc* desc, RenderTarget* render_target)
-{
-	HRESULT result = S_OK;
-
-	for (int i = 0; i < 4; i++) {
-		render_target->optimized_clear_value[i] = desc->optimized_clear_value[i];
+	if (texture->flags & TEXTURE_FLAG_RENDER_TARGET) {
+		rtv_allocator.FreeDescriptor(texture->render.rtv);
+		texture->render.rtv = {0};
 	}
-
-	// Create the resource.
-	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(desc->format, desc->width, desc->height, 1, 1);
-	resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-	if (desc->uav) {
-		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	if (texture->flags & TEXTURE_FLAG_DEPTH_TARGET) {
+		dsv_allocator.FreeDescriptor(texture->depth.dsv);
+		texture->depth.dsv = {0};
 	}
-	CD3DX12_CLEAR_VALUE clear_value(desc->format, desc->optimized_clear_value);
-	result = allocator.CreateCommittedResource(
-		&heap_properties, 
-		D3D12_HEAP_FLAG_NONE, 
-		&resource_desc, 
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
-		&clear_value, 
-		&render_target->resource, 
-		desc->name ? desc->name : "Render Target"
-	);
-	if (FAILED(result)) {
-		FreeRenderTarget(render_target);
-		return result;
-	}
-
-	// Create the render target view.
-	render_target->rtv = rtv_allocator.CreateRenderTargetView(render_target->resource.resource.Get(), nullptr);
-	if (render_target->rtv.ptr == 0) {
-		FreeRenderTarget(render_target);
-		return E_OUTOFMEMORY;
-	}
-
-	// Create a shader resource view.
-	render_target->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(render_target->resource.resource.Get(), nullptr);
-	if (render_target->srv == -1) {
-		FreeRenderTarget(render_target);
-		return E_OUTOFMEMORY;
-	}
-
-	if (desc->uav) {
-		render_target->uav = cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(render_target->resource.resource.Get(), nullptr, nullptr);
-		if (render_target->uav == -1) {
-			FreeRenderTarget(render_target);
-			return E_OUTOFMEMORY;
-		}
-	} else {
-		render_target->uav -= -1;
-	}
-
-	render_target->width = desc->width;
-	render_target->height = desc->height;
-
-	return S_OK;
-}
-
-void GpuResources::FreeRenderTarget(RenderTarget* render_target)
-{
-
-}
-
-HRESULT GpuResources::CreateDepthTarget(const DepthTargetDesc* desc, DepthTarget* depth_target)
-{
-	HRESULT result = S_OK;
-
-	depth_target->optimized_clear_value = desc->optimized_clear_value;
-
-	// Create the resource.
-	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, desc->width, desc->height, 1, 1);
-	resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-	CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, desc->optimized_clear_value, 0);
-	result = allocator.CreateCommittedResource(
-		&heap_properties, 
-		D3D12_HEAP_FLAG_NONE, 
-		&resource_desc, 
-		D3D12_RESOURCE_STATE_COMMON, 
-		&clear_value, 
-		&depth_target->resource, 
-		desc->name ? desc->name : "Depth Target"
-	);
-	if (FAILED(result)) {
-		FreeDepthTarget(depth_target);
-		return result;
-	}
-
-	// Create the depth stencil view.
-	depth_target->dsv = dsv_allocator.CreateDepthStencilView(depth_target->resource.resource.Get(), nullptr);
-	if (depth_target->dsv.ptr == 0) {
-		FreeDepthTarget(depth_target);
-		return E_OUTOFMEMORY;
-	}
-
-	return S_OK;
-}
-
-void GpuResources::FreeDepthTarget(DepthTarget* depth_target)
-{
-	depth_target->resource.Reset();
-	dsv_allocator.FreeDescriptor(depth_target->dsv);
 }
 
 HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name)
