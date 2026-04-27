@@ -17,6 +17,30 @@ class GpuResources {
 		STATIC_DESCRIPTOR_COUNT,
 	};
 
+	enum BufferFlags : uint8_t {
+		BUFFER_FLAG_NONE = 0,
+		BUFFER_FLAG_UAV = 1 << 0,
+		BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE = 1 << 1,
+		BUFFER_FLAG_PERSISTENT_MAP = 1 << 2,
+		BUFFER_FLAG_GENERATE_DESCRIPTOR = 1 << 3,
+	};
+
+	struct BufferDesc {
+		uint64_t size = 0;
+		BufferFlags flags = BUFFER_FLAG_NONE;
+		DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+		uint32_t structured_byte_stride = 0;
+		D3D12_HEAP_TYPE heap_type = D3D12_HEAP_TYPE_DEFAULT;
+		const char* name = nullptr;
+	};
+
+	struct Buffer {
+		GpuResource resource;
+		uint64_t size = 0;
+		void* pointer = nullptr;
+		int srv = -1;
+	};
+
 	enum TextureFlags : uint8_t {
 		TEXTURE_FLAG_NONE = 0,
 		TEXTURE_FLAG_SRV = 1 << 0,
@@ -38,7 +62,7 @@ class GpuResources {
 		};
 		TextureFlags flags = TEXTURE_FLAG_NONE;
 		D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COMMON;
-		const char* name;
+		const char* name = nullptr;
 	};
 
 	struct Texture {
@@ -80,6 +104,8 @@ class GpuResources {
 	
 	void Create(ID3D12Device* device);
 	void LoadLookupTables(UploadBuffer* upload_buffer);
+	HRESULT CreateBuffer(const BufferDesc* desc, Buffer* buffer);
+	void FreeBuffer(Buffer* buffer);
 	HRESULT CreateTexture(const TextureDesc* desc, Texture* texture);
 	void FreeTexture(Texture* texture);
 	static HRESULT CreateComputePipelineState(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);

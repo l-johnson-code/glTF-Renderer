@@ -132,6 +132,71 @@ void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 	}
 }
 
+HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
+{
+	HRESULT result = S_OK;
+
+	// Create the resource.
+	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
+	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(desc->size);
+	if (desc->flags & BUFFER_FLAG_UAV) {
+		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
+	if (desc->flags & BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE) {
+		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS |  D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
+	};
+
+	result = allocator.CreateCommittedResource(
+		&heap_properties,
+		D3D12_HEAP_FLAG_NONE,
+		&resource_desc,
+		D3D12_RESOURCE_STATE_COMMON,
+		nullptr,
+		&buffer->resource,
+		desc->name ? desc->name : "Buffer"
+	);
+	if (FAILED(result)) {
+		FreeBuffer(buffer);
+		return result;
+	}
+
+	if (desc->flags & BUFFER_FLAG_PERSISTENT_MAP) {
+		result = buffer->resource.resource->Map(0, nullptr, &buffer->pointer);
+		if (FAILED(result)) {
+			FreeBuffer(buffer);
+			return result;
+		}
+	}
+
+	if (desc->flags & BUFFER_FLAG_GENERATE_DESCRIPTOR) {
+		// We assume that the descriptor spans the entire buffer.
+		CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc;
+		if (desc->structured_byte_stride != 0) {
+			srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::StructuredBuffer(desc->size / desc->structured_byte_stride, desc->structured_byte_stride);
+		} else if (desc->format != DXGI_FORMAT_UNKNOWN) {
+			srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::TypedBuffer(desc->format, (8 * desc->size) / D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(desc->format));
+		} else {
+			srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::RawBuffer(desc->size / 4);
+		}
+		buffer->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(buffer->resource.resource.Get(), &srv_desc);
+		if (buffer->srv == -1) {
+			FreeBuffer(buffer);
+			return E_OUTOFMEMORY;
+		}
+	}
+
+	buffer->size = desc->size;
+
+	return S_OK;
+}
+
+void GpuResources::FreeBuffer(Buffer* buffer)
+{
+	buffer->resource.Reset();
+	cbv_uav_srv_dynamic_allocator.Free(buffer->srv);
+	buffer->srv = -1;
+}
+
 HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 {
 	HRESULT result = S_OK;

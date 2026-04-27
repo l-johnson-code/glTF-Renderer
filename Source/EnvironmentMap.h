@@ -14,11 +14,10 @@ class EnvironmentMap {
     public:
 
     struct Map {
-        int alias_srv_descriptor = -1;
         GpuResources::Texture cube;
         GpuResources::Texture ggx;
         GpuResources::Texture diffuse;
-        GpuResource alias;
+        GpuResources::Buffer alias;
         GpuResources::Texture pdf;
     };
     

@@ -140,9 +140,7 @@ void EnvironmentMap::DestroyEnvironmentMap(Map* map)
     resources->FreeTexture(&map->cube);
     resources->FreeTexture(&map->ggx);
     resources->FreeTexture(&map->diffuse);
-    map->alias.Reset();
-    resources->cbv_uav_srv_dynamic_allocator.Free(map->alias_srv_descriptor);
-    map->alias_srv_descriptor = -1;
+    resources->FreeBuffer(&map->alias);
     resources->FreeTexture(&map->pdf);
 }
 
@@ -553,12 +551,14 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
     }
 
     // Create the alias table resource.
-    CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-	CD3DX12_RESOURCE_DESC alias_table_desc = CD3DX12_RESOURCE_DESC::Buffer(alias_table_size * sizeof(AliasMap));
-	HRESULT result = resources->allocator.CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &alias_table_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &map->alias, "Alias Table");
+    GpuResources::BufferDesc alias_desc = {
+        .size = alias_table_size * sizeof(AliasMap),
+        .flags = GpuResources::BUFFER_FLAG_GENERATE_DESCRIPTOR,
+        .structured_byte_stride = sizeof(AliasMap),
+        .name = "Alias Table",
+    };
+	HRESULT result = resources->CreateBuffer(&alias_desc, &map->alias);
 	assert(result == S_OK);
-    CD3DX12_SHADER_RESOURCE_VIEW_DESC view_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::StructuredBuffer(alias_table_size, sizeof(AliasMap));
-    map->alias_srv_descriptor = resources->cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(map->alias.resource.Get(), &view_desc);
 
     // Create the PDF texture.
 	GpuResources::TextureDesc pdf_desc = {
@@ -573,7 +573,7 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
 	assert(result == S_OK);
 
     // Upload to GPU.
-    void* ptr = upload->QueueBufferUpload(alias_table_size * sizeof(AliasMap), map->alias.resource.Get(), 0);
+    void* ptr = upload->QueueBufferUpload(alias_table_size * sizeof(AliasMap), map->alias.resource.resource.Get(), 0);
     memcpy(ptr, alias_table.data(), alias_table_size * sizeof(AliasMap));
 
     uint32_t row_pitch = 0;
