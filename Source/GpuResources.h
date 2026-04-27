@@ -28,6 +28,8 @@ class GpuResources {
 
 	struct RenderTarget {
 		GpuResource resource;
+		uint16_t width = 0;
+		uint16_t height = 0;
 		int srv = -1;
 		int uav = -1;
 		D3D12_CPU_DESCRIPTOR_HANDLE rtv = {};

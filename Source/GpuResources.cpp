@@ -271,6 +271,9 @@ HRESULT GpuResources::CreateRenderTarget(const RenderTargetDesc* desc, RenderTar
 		render_target->uav -= -1;
 	}
 
+	render_target->width = desc->width;
+	render_target->height = desc->height;
+
 	return S_OK;
 }
 
