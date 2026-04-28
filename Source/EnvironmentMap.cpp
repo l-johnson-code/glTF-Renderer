@@ -294,6 +294,7 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
         .width = (uint16_t)x,
         .height = (uint16_t)y,
         .mip_levels = 1,
+        .flags = GpuResources::TEXTURE_FLAG_SRV,
         .name = "Environment Map",
     };
     result = resources->CreateTexture(&desc, &this->equirectangular_image);
