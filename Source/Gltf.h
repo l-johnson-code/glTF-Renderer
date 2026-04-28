@@ -175,12 +175,6 @@ class Gltf {
         Texture thickness_texture;
     };
 
-    struct Texture {
-        std::string name;
-        int descriptor = -1;
-        GpuResource resource;
-    };
-
     std::string filename;
     std::vector<Camera> cameras;
     std::vector<Scene> scenes = std::vector<Scene>(1);
