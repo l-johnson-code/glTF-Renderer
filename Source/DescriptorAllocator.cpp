@@ -122,7 +122,8 @@ void DescriptorAllocator::FreeInBlock(int block_index, int descriptor)
     Block& block = blocks[block_index];
     descriptor %= 64;
     descriptor /= (1 << block.size_class); // TODO: Consider replacing division with bit shift.
-    block.free_slots |= 1 << descriptor;
+    assert(!(block.free_slots & ((uint64_t)1 << (uint64_t)descriptor)) && "Possible double free.");
+    block.free_slots |= (uint64_t)1 << (uint64_t)descriptor;
     size -= 1 << block.size_class;
 
     // Add block to free lists.
