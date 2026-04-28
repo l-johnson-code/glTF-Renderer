@@ -574,7 +574,7 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
 	assert(result == S_OK);
 
     // Upload to GPU.
-    void* ptr = upload->QueueBufferUpload(alias_table_size * sizeof(AliasMap), map->alias.resource.resource.Get(), 0);
+    void* ptr = upload->QueueBufferUpload(alias_table_size * sizeof(AliasMap), map->alias.Resource(), 0);
     memcpy(ptr, alias_table.data(), alias_table_size * sizeof(AliasMap));
 
     uint32_t row_pitch = 0;

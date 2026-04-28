@@ -144,25 +144,25 @@ HRESULT Mesh::Create(GpuResources* resources, const Desc* desc, const char* name
 		return result;
 	}
 
-	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.resource.resource->GetGPUVirtualAddress();
+	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.Resource()->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_INDEX) {
-    	index.Create(buffer.resource.resource.Get(), base_address + offsets[0], &resources->cbv_uav_srv_dynamic_allocator, num_of_indices, desc->index_format);
+    	index.Create(buffer.Resource(), base_address + offsets[0], &resources->cbv_uav_srv_dynamic_allocator, num_of_indices, desc->index_format);
 	}
-	position.Create(buffer.resource.resource.Get(), base_address + offsets[1], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
+	position.Create(buffer.Resource(), base_address + offsets[1], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
     if (desc->flags & FLAG_TANGENT_SPACE) {
-		tangent_space.Create(buffer.resource.resource.Get(), base_address + offsets[2], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
+		tangent_space.Create(buffer.Resource(), base_address + offsets[2], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
     if (desc->flags & FLAG_TEXCOORD_0) {
-		texcoords[0].Create(buffer.resource.resource.Get(), base_address + offsets[3], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
+		texcoords[0].Create(buffer.Resource(), base_address + offsets[3], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
 	}
     if (desc->flags & FLAG_TEXCOORD_1) {
-		texcoords[1].Create(buffer.resource.resource.Get(), base_address + offsets[4], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
+		texcoords[1].Create(buffer.Resource(), base_address + offsets[4], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
 	}
     if (desc->flags & FLAG_COLOR) {
-		color.Create(buffer.resource.resource.Get(), base_address + offsets[5], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM);
+		color.Create(buffer.Resource(), base_address + offsets[5], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM);
 	}
     if (desc->flags & FLAG_JOINT_WEIGHT) {
-		joint_weight.Create(buffer.resource.resource.Get(), base_address + offsets[6], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, sizeof(JointWeight));
+		joint_weight.Create(buffer.Resource(), base_address + offsets[6], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, sizeof(JointWeight));
 	}
 
 	return S_OK;
@@ -171,42 +171,42 @@ HRESULT Mesh::Create(GpuResources* resources, const Desc* desc, const char* name
 void* Mesh::QueueIndexUpdate(UploadBuffer* upload_buffer)
 {
 	assert(flags & FLAG_INDEX);
-	return index.QueueUpdate(upload_buffer, buffer.resource.resource.Get());
+	return index.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void* Mesh::QueuePositionUpdate(UploadBuffer* upload_buffer)
 {
-	return position.QueueUpdate(upload_buffer, buffer.resource.resource.Get());
+	return position.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void* Mesh::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
 {
 	assert(flags & FLAG_TANGENT_SPACE);
-	return tangent_space.QueueUpdate(upload_buffer, buffer.resource.resource.Get());
+	return tangent_space.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void* Mesh::QueueTexcoord0Update(UploadBuffer* upload_buffer)
 {
 	assert(flags & FLAG_TEXCOORD_0);
-	return texcoords[0].QueueUpdate(upload_buffer, buffer.resource.resource.Get());
+	return texcoords[0].QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void* Mesh::QueueTexcoord1Update(UploadBuffer* upload_buffer)
 {
 	assert(flags & FLAG_TEXCOORD_1);
-	return texcoords[1].QueueUpdate(upload_buffer, buffer.resource.resource.Get());
+	return texcoords[1].QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void* Mesh::QueueColorUpdate(UploadBuffer* upload_buffer)
 {
 	assert(flags & FLAG_COLOR);
-	return color.QueueUpdate(upload_buffer, buffer.resource.resource.Get());
+	return color.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void* Mesh::QueueJointWeightUpdate(UploadBuffer* upload_buffer)
 {
 	assert(flags & FLAG_JOINT_WEIGHT);
-	return joint_weight.QueueUpdate(upload_buffer, buffer.resource.resource.Get());
+	return joint_weight.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void Mesh::Destroy(GpuResources* resources)
@@ -249,13 +249,13 @@ HRESULT DynamicMesh::Create(GpuResources* resources, const Desc* desc, const cha
 		return result;
 	}
 
-	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.resource.resource->GetGPUVirtualAddress();
+	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.Resource()->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_POSITION) {
-		position[0].Create(buffer.resource.resource.Get(), base_address + offsets[0], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-		position[1].Create(buffer.resource.resource.Get(), base_address + offsets[1], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
+		position[0].Create(buffer.Resource(), base_address + offsets[0], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
+		position[1].Create(buffer.Resource(), base_address + offsets[1], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
 	}
     if (desc->flags & FLAG_TANGENT_SPACE) {
-		tangent_space.Create(buffer.resource.resource.Get(), base_address + offsets[2], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
+		tangent_space.Create(buffer.Resource(), base_address + offsets[2], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
 
 	return S_OK;
@@ -310,12 +310,12 @@ HRESULT MorphTarget::Create(GpuResources* resources, const Desc* desc, const cha
 		return result;
 	}
 
-	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.resource.resource->GetGPUVirtualAddress();
+	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.Resource()->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_POSITION) {
-		position.Create(buffer.resource.resource.Get(), base_address + offsets[0], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
+		position.Create(buffer.Resource(), base_address + offsets[0], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
 	}
     if (desc->flags & FLAG_TANGENT_SPACE) {
-		tangent_space.Create(buffer.resource.resource.Get(), base_address + offsets[1], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
+		tangent_space.Create(buffer.Resource(), base_address + offsets[1], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
 
 	return S_OK;
@@ -323,13 +323,13 @@ HRESULT MorphTarget::Create(GpuResources* resources, const Desc* desc, const cha
 
 void* MorphTarget::QueuePositionUpdate(UploadBuffer* upload_buffer)
 {
-	return position.QueueUpdate(upload_buffer, buffer.resource.resource.Get());
+	return position.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void* MorphTarget::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
 {
 	assert(flags & FLAG_TANGENT_SPACE);
-	return tangent_space.QueueUpdate(upload_buffer, buffer.resource.resource.Get());
+	return tangent_space.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void MorphTarget::Destroy(GpuResources* resources)

@@ -106,7 +106,7 @@ void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuff
     result = resources->CreateBuffer(&shader_table_buffer_desc, &this->shader_tables_buffer);
     assert(SUCCEEDED(result));
 
-    void* shader_tables_data = upload_buffer->QueueBufferUpload(shader_table_size, this->shader_tables_buffer.resource.resource.Get(), 0);
+    void* shader_tables_data = upload_buffer->QueueBufferUpload(shader_table_size, this->shader_tables_buffer.Resource(), 0);
     assert(shader_tables_data);
     
     Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> state_object_properties;
@@ -123,7 +123,7 @@ void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuff
     collection_builder.miss_table.SetShader(MISS_SHADER_SHADOW, shadow_miss_identifier);
     collection_builder.hit_group_table.SetShader(HIT_GROUP_BOUNCE, hit_group_identifier);
     collection_builder.hit_group_table.SetShader(HIT_GROUP_SHADOW, shadow_hit_group_identifier);
-    this->shader_tables = collection_builder.GetShaderTableCollection(this->shader_tables_buffer.resource.resource->GetGPUVirtualAddress());
+    this->shader_tables = collection_builder.GetShaderTableCollection(this->shader_tables_buffer.Resource()->GetGPUVirtualAddress());
 
     acceleration_structure.Init(device, &resources->allocator, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
 
@@ -330,7 +330,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .max_bounces = std::clamp(settings->max_bounces, 0, MAX_BOUNCES),
             .output_descriptor = execute_params->output_descriptor,
             .environment_map_descriptor_id = execute_params->environment_map ? execute_params->environment_map->cube.Srv() : -1,
-            .environment_alias_table_id = execute_params->environment_map ? execute_params->environment_map->alias.srv : -1,
+            .environment_alias_table_id = execute_params->environment_map ? execute_params->environment_map->alias.Srv() : -1,
             .environment_pdf = execute_params->environment_map ? execute_params->environment_map->pdf.Srv() : -1,
             .luminance_clamp = settings->luminance_clamp,
             .min_russian_roulette_continue_prob = settings->min_russian_roulette_continue_prob,

@@ -34,11 +34,20 @@ class GpuResources {
 		const char* name = nullptr;
 	};
 
-	struct Buffer {
+	class Buffer {
+		public:
+		ID3D12Resource* Resource() { return this->resource.resource.Get(); }
+		uint16_t Size() { return this->size; }
+		int Srv() { assert(this->srv != -1); return this->srv; };
+		void* Pointer() { assert(pointer); return this->pointer; }
+		
+		private:
+		friend class GpuResources;
+
 		GpuResource resource;
 		uint64_t size = 0;
-		void* pointer = nullptr;
 		int srv = -1;
+		void* pointer = nullptr;
 	};
 
 	enum TextureFlags : uint8_t {
