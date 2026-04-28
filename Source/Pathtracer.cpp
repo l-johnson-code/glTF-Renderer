@@ -125,7 +125,7 @@ void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuff
     collection_builder.hit_group_table.SetShader(HIT_GROUP_SHADOW, shadow_hit_group_identifier);
     this->shader_tables = collection_builder.GetShaderTableCollection(this->shader_tables_buffer.Resource()->GetGPUVirtualAddress());
 
-    acceleration_structure.Init(device, &resources->allocator, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
+    acceleration_structure.Init(device, resources, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
 
     // Cleanup.
     GpuResources::FreeShader(dxil_library_desc.DXILLibrary);
@@ -155,12 +155,12 @@ void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAcc
 					DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes[j];
 					gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases.resize(gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes.size());
 					RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases[j];
-					if (!dynamic_blas.resource.resource.Get()) {
+					if (!dynamic_blas.buffer.Resource()) {
 						acceleration_structure->BuildDynamicBlas(context->command_list.Get(), primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
 					}
 				} else {
 					// Static.
-					if (!primitive.blas.resource.resource.Get()) {
+					if (!primitive.blas.buffer.Resource()) {
 						acceleration_structure->BuildStaticBlas(context->command_list.Get(), primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
 					}
 				}

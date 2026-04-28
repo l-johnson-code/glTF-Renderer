@@ -154,7 +154,7 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 		&heap_properties,
 		D3D12_HEAP_FLAG_NONE,
 		&resource_desc,
-		D3D12_RESOURCE_STATE_COMMON,
+		desc->initial_state,
 		nullptr,
 		&buffer->resource,
 		desc->name ? desc->name : "Buffer"

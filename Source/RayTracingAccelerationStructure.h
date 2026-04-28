@@ -6,6 +6,7 @@
 
 #include "BufferAllocator.h"
 #include "Config.h"
+#include "GpuResources.h"
 #include "MultiBuffer.h"
 
 class RaytracingAccelerationStructure {
@@ -13,15 +14,15 @@ class RaytracingAccelerationStructure {
     public:
 
     struct Blas {
-        GpuResource resource;
+        GpuResources::Buffer buffer;
     };
 
     struct DynamicBlas {
-        GpuResource resource;
+        GpuResources::Buffer buffer;
         uint64_t update_scratch_size;
     };
     
-    void Init(ID3D12Device5* device, GpuAllocator* allocator, uint32_t max_blas_vertices, uint32_t max_tlas_instances);
+    void Init(ID3D12Device5* device, GpuResources* resources, uint32_t max_blas_vertices, uint32_t max_tlas_instances);
     
     void BuildStaticBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Blas* blas);
     void BuildDynamicBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, DynamicBlas* blas);
@@ -29,16 +30,17 @@ class RaytracingAccelerationStructure {
     void EndBlasBuilds(ID3D12GraphicsCommandList4* command_list);
     
     void BeginTlasBuild();
-    bool AddTlasInstance(const Blas* blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags);
-    bool AddTlasInstance(const DynamicBlas* blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags);
+    bool AddTlasInstance(Blas* blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags);
+    bool AddTlasInstance(DynamicBlas* blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags);
     void BuildTlas(ID3D12GraphicsCommandList4* command_list);
     
     D3D12_GPU_VIRTUAL_ADDRESS GetAccelerationStructure();
     
     private:
     
+    GpuResources* resources;
+
     Microsoft::WRL::ComPtr<ID3D12Device5> device;
-    GpuAllocator* allocator;
 
     uint64_t max_blas_scratch_size = 0;
     LinearBuffer blas_scratch;
@@ -46,9 +48,9 @@ class RaytracingAccelerationStructure {
     uint32_t instance_count = 0;
     uint32_t max_tlas_instances = 0;
     MultiBuffer<CpuMappedLinearBuffer, Config::FRAME_COUNT> tlas_staging;
-    GpuResource tlas_scratch;
-    GpuResource tlas;
+    GpuResources::Buffer tlas_scratch;
+    GpuResources::Buffer tlas;
 
-    void BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, GpuResource* resource, uint64_t* update_scratch_size = nullptr);
+    void BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, GpuResources::Buffer* buffer, uint64_t* update_scratch_size = nullptr);
     bool AddTlasInstance(D3D12_GPU_VIRTUAL_ADDRESS blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags);
 };

@@ -8,12 +8,12 @@
 
 #include "Memory.h"
 
-void RaytracingAccelerationStructure::Init(ID3D12Device5* device, GpuAllocator* allocator, uint32_t max_blas_vertices, uint32_t max_tlas_instances)
+void RaytracingAccelerationStructure::Init(ID3D12Device5* device, GpuResources* resources, uint32_t max_blas_vertices, uint32_t max_tlas_instances)
 {
 	HRESULT result = S_OK;
 
 	this->device = device;
-	this->allocator = allocator;
+	this->resources = resources;
 	this->max_tlas_instances = max_tlas_instances;
 
 	// Calculate size needed for worst case BLAS.
@@ -42,13 +42,13 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, GpuAllocator* 
 
 	// Create scratch buffer for BLAS.
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-	result = blas_scratch.Create(allocator, max_blas_scratch_size, &heap_properties, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON, "BLAS Scratch");
+	result = blas_scratch.Create(&resources->allocator, max_blas_scratch_size, &heap_properties, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON, "BLAS Scratch");
 	assert(SUCCEEDED(result));
 
 	// Create heaps for staging TLAS.
 	const int instance_desc_stride = Align(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), 16);
 	for (int i = 0; i < tlas_staging.Size(); i++) {
-		tlas_staging[i].Create(allocator, instance_desc_stride * max_tlas_instances, true, "TLAS Staging");
+		tlas_staging[i].Create(&resources->allocator, instance_desc_stride * max_tlas_instances, true, "TLAS Staging");
 	}
 
 	// Calculate size needed for heaps.
@@ -63,48 +63,33 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, GpuAllocator* 
 	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO tlas_prebuild_info = {};
 	device->GetRaytracingAccelerationStructurePrebuildInfo(&tlas_inputs, &tlas_prebuild_info);
 
-	// Create scratch buffer.
-	CD3DX12_HEAP_PROPERTIES tlas_scratch_heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-
-	CD3DX12_RESOURCE_DESC tlas_scratch_desc = CD3DX12_RESOURCE_DESC::Buffer(tlas_prebuild_info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-
-	result = allocator->CreateCommittedResource(
-		&tlas_scratch_heap_properties, 
-		D3D12_HEAP_FLAG_NONE, 
-		&tlas_scratch_desc, 
-		D3D12_RESOURCE_STATE_COMMON, 
-		nullptr, 
-		&this->tlas_scratch,
-		"TLAS Scratch"
-	);
+	// Create scratch buffer for building the TLAS.
+	GpuResources::BufferDesc tlas_scratch_desc = {
+		.size = tlas_prebuild_info.ScratchDataSizeInBytes,
+		.flags = GpuResources::BUFFER_FLAG_UAV,
+		.name = "TLAS Scratch",
+	};
+	result = resources->CreateBuffer(&tlas_scratch_desc, &this->tlas_scratch);
 	assert(result == S_OK);
 
-	// Create heap to store TLAS.
-	D3D12_HEAP_PROPERTIES tlas_heap_properties = {};
-	tlas_heap_properties.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-	CD3DX12_RESOURCE_DESC tlas_desc = CD3DX12_RESOURCE_DESC::Buffer(tlas_prebuild_info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-
-	result = allocator->CreateCommittedResource(
-		&tlas_heap_properties, 
-		D3D12_HEAP_FLAG_NONE, 
-		&tlas_desc, 
-		D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, 
-		nullptr, 
-		&this->tlas,
-		"TLAS"
-	);
+	// Create buffer to store the TLAS.
+	GpuResources::BufferDesc tlas_desc = {
+		.size = tlas_prebuild_info.ResultDataMaxSizeInBytes,
+		.flags = GpuResources::BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE,
+		.name = "TLAS",
+	};
+	result = resources->CreateBuffer(&tlas_desc, &this->tlas);
 	assert(result == S_OK);
 }
 
 void RaytracingAccelerationStructure::BuildStaticBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Blas* blas)
 {
-	BuildBlas(command_list, vertices, num_of_vertices, indices, num_of_indices, &blas->resource);
+	BuildBlas(command_list, vertices, num_of_vertices, indices, num_of_indices, &blas->buffer);
 }
 
 void RaytracingAccelerationStructure::BuildDynamicBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, DynamicBlas* blas)
 {
-	BuildBlas(command_list, vertices, num_of_vertices, indices, num_of_indices, &blas->resource, &blas->update_scratch_size);
+	BuildBlas(command_list, vertices, num_of_vertices, indices, num_of_indices, &blas->buffer, &blas->update_scratch_size);
 }
 
 void RaytracingAccelerationStructure::UpdateDynamicBlas(ID3D12GraphicsCommandList4* command_list, DynamicBlas* blas, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices)
@@ -149,9 +134,9 @@ void RaytracingAccelerationStructure::UpdateDynamicBlas(ID3D12GraphicsCommandLis
 
 	// Create raytracing acceleration structure.
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC acceleration = {
-		.DestAccelerationStructureData = blas->resource.resource->GetGPUVirtualAddress(),
+		.DestAccelerationStructureData = blas->buffer.Resource()->GetGPUVirtualAddress(),
 		.Inputs = inputs,
-		.SourceAccelerationStructureData = blas->resource.resource->GetGPUVirtualAddress(),
+		.SourceAccelerationStructureData = blas->buffer.Resource()->GetGPUVirtualAddress(),
 		.ScratchAccelerationStructureData = scratch,
 	};
 	command_list->BuildRaytracingAccelerationStructure(&acceleration, 0, nullptr);
@@ -173,22 +158,22 @@ void RaytracingAccelerationStructure::BeginTlasBuild()
 	staging->Reset();
 }
 
-bool RaytracingAccelerationStructure::AddTlasInstance(const Blas* blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags)
+bool RaytracingAccelerationStructure::AddTlasInstance(Blas* blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags)
 {
-	if (!blas->resource.resource) {
+	if (!blas->buffer.Resource()) {
 		SPDLOG_INFO("BLAS was empty.");
 		return false;
 	}
-	return AddTlasInstance(blas->resource.resource->GetGPUVirtualAddress(), transform, instance_mask, flags);
+	return AddTlasInstance(blas->buffer.Resource()->GetGPUVirtualAddress(), transform, instance_mask, flags);
 }
 
-bool RaytracingAccelerationStructure::AddTlasInstance(const DynamicBlas* blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags)
+bool RaytracingAccelerationStructure::AddTlasInstance(DynamicBlas* blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags)
 {
-	if (!blas->resource.resource) {
+	if (!blas->buffer.Resource()) {
 		SPDLOG_INFO("BLAS was empty.");
 		return false;
 	}
-	return AddTlasInstance(blas->resource.resource->GetGPUVirtualAddress(), transform, instance_mask, flags);
+	return AddTlasInstance(blas->buffer.Resource()->GetGPUVirtualAddress(), transform, instance_mask, flags);
 }
 
 void RaytracingAccelerationStructure::BuildTlas(ID3D12GraphicsCommandList4* command_list)
@@ -206,14 +191,14 @@ void RaytracingAccelerationStructure::BuildTlas(ID3D12GraphicsCommandList4* comm
 
 	// Create top level raytracing acceleration structure.
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC top_level_acceleration = {
-		.DestAccelerationStructureData = tlas.resource->GetGPUVirtualAddress(),
+		.DestAccelerationStructureData = tlas.Resource()->GetGPUVirtualAddress(),
 		.Inputs = top_level_inputs,
-		.ScratchAccelerationStructureData = tlas_scratch.resource->GetGPUVirtualAddress(),
+		.ScratchAccelerationStructureData = tlas_scratch.Resource()->GetGPUVirtualAddress(),
 	};
 	command_list->BuildRaytracingAccelerationStructure(&top_level_acceleration, 0, nullptr);
 
 	// Insert barrier so that we don't use the tlas before its built.
-	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(tlas.resource.Get());
+	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(tlas.Resource());
 	command_list->ResourceBarrier(1, &barrier);
 
 	// Advance the frame so that we dont overwrite the staging buffer while it's being used by the previous frame.
@@ -222,10 +207,10 @@ void RaytracingAccelerationStructure::BuildTlas(ID3D12GraphicsCommandList4* comm
 
 D3D12_GPU_VIRTUAL_ADDRESS RaytracingAccelerationStructure::GetAccelerationStructure()
 {
-	return tlas.resource->GetGPUVirtualAddress();
+	return tlas.Resource()->GetGPUVirtualAddress();
 }
 
-void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, GpuResource* blas_resource, uint64_t* update_scratch_size)
+void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, GpuResources::Buffer* blas_buffer, uint64_t* update_scratch_size)
 {
 	D3D12_RAYTRACING_GEOMETRY_DESC geometry = {
 		.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES, 
@@ -258,11 +243,13 @@ void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* comm
 		*update_scratch_size = prebuild_info.UpdateScratchDataSizeInBytes;
 	}
 
-	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-
-	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(prebuild_info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-
-	HRESULT result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nullptr, blas_resource, "BLAS");
+	GpuResources::BufferDesc blas_desc = {
+		.size = prebuild_info.ResultDataMaxSizeInBytes,
+		.flags = GpuResources::BUFFER_FLAG_UAV,
+		.initial_state = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+		.name = "BLAS",
+	};
+	HRESULT result = resources->CreateBuffer(&blas_desc, blas_buffer);
 	assert(result == S_OK);
 
 	if (blas_scratch.Capacity() < prebuild_info.ScratchDataSizeInBytes) {
@@ -282,7 +269,7 @@ void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* comm
 
 	// Create the BLAS.
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC acceleration = {
-		.DestAccelerationStructureData = blas_resource->resource->GetGPUVirtualAddress(),
+		.DestAccelerationStructureData = blas_buffer->Resource()->GetGPUVirtualAddress(),
 		.Inputs = inputs,
 		.ScratchAccelerationStructureData = scratch,
 	};
