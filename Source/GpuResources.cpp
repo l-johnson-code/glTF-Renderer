@@ -101,14 +101,18 @@ void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 		x = exr_image.width;
 		y = exr_image.height;
 
-		CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT, x, y, 1, 1);
-		
-		result = allocator.CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->sheen_e, "Sheen E Lookup Table");
+		TextureDesc texture_desc = {
+			.format = DXGI_FORMAT_R16_FLOAT,
+			.width = (uint16_t)x,
+			.height = (uint16_t)y,
+			.mip_levels = 1,
+			.flags = TEXTURE_FLAG_SRV,
+			.name = "Sheen E Lookup Table",
+		};
+		result = CreateTexture(&texture_desc, &this->sheen_e);
 		assert(result == S_OK);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE descriptor_cpu_handle = cbv_uav_srv_allocator.GetCpuHandle(GpuResources::STATIC_DESCRIPTOR_SRV_SHEEN_E);
-
 		D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {
 			.Format = DXGI_FORMAT_R16_FLOAT,
 			.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
@@ -118,11 +122,11 @@ void GpuResources::LoadLookupTables(UploadBuffer* upload_buffer)
 				.MipLevels = std::numeric_limits<uint32_t>::max()
 			}
 		};
-		device->CreateShaderResourceView(this->sheen_e.resource.Get(), &srv_desc, descriptor_cpu_handle);
+		device->CreateShaderResourceView(this->sheen_e.Resource(), &srv_desc, descriptor_cpu_handle);
 
 		int stride = x * 2;
 		uint32_t row_pitch = 0;
-		std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(DXGI_FORMAT_R16_FLOAT, x, y, 1, this->sheen_e.resource.Get(), 0, &row_pitch);
+		std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(DXGI_FORMAT_R16_FLOAT, x, y, 1, this->sheen_e.Resource(), 0, &row_pitch);
 		for (int i = 0; i < y; i++) {
 			memcpy(upload_ptr + row_pitch * i, exr_image.images[0] + stride * i, stride);
 		}

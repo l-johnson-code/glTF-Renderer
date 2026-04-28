@@ -146,5 +146,5 @@ class GpuResources {
 	Microsoft::WRL::ComPtr<ID3D12Device> device;
 
 	// Lookup tables.
-	GpuResource sheen_e;
+	GpuResources::Texture sheen_e;
 };
