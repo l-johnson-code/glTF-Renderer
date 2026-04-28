@@ -191,7 +191,7 @@ private:
 
 	uint64_t frame = 0;
 
-	MultiBuffer<std::vector<GpuResource>, Config::FRAME_COUNT> deferred_release;
+	MultiBuffer<std::vector<GpuResources::Texture>, Config::FRAME_COUNT> deferred_release;
 
 	Swapchain swapchain;
 	MultiBuffer<CpuMappedLinearBuffer, Config::FRAME_COUNT> frame_allocators;
