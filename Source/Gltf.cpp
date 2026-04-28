@@ -128,21 +128,21 @@ void Gltf::Unload()
 	// Need to explicitly free descriptors for all meshes and textures.
 	for (Mesh& mesh: meshes) {
 		for (Primitive& primitive: mesh.primitives) {
-			primitive.mesh.Destroy(this->srv_uav_cbv_descriptors);
+			primitive.mesh.Destroy(this->gpu_resources);
 		}
 	}
 	for (DynamicPrimitives& dynamic: dynamic_primitives) {
 		for (DynamicMesh& dynamic_mesh: dynamic.dynamic_meshes) {
-			dynamic_mesh.Destroy(this->srv_uav_cbv_descriptors);
+			dynamic_mesh.Destroy(this->gpu_resources);
 		}
 	}
 	for (Texture& texture: textures) {
-		srv_uav_cbv_descriptors->Free(texture.descriptor);
+		gpu_resources->cbv_uav_srv_dynamic_allocator.Free(texture.descriptor);
 		texture.descriptor = -1;
 	}
 	// We can free all dynamic samplers at once because this is the only class that uses them.
-	if (sampler_descriptors) {
-		sampler_descriptors->Reset();
+	if (gpu_resources) {
+		gpu_resources->gltf_sampler_allocator.Reset();
 	}
 	
 	cameras.clear();
@@ -156,22 +156,22 @@ void Gltf::Unload()
     textures.clear();
 }
 
-void Gltf::LoadMeshes(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer)
+void Gltf::LoadMeshes(tinygltf::Model* gltf, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	// Create meshes.
 	this->meshes.resize(gltf->meshes.size());
 	for (int i = 0; i < gltf->meshes.size(); i++) {
-		LoadMesh(gltf, &gltf->meshes[i], gpu_allocator, upload_buffer, &this->meshes[i]);
+		LoadMesh(gltf, &gltf->meshes[i], gpu_resources, upload_buffer, &this->meshes[i]);
 	}
 }
 
-void Gltf::LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer, Mesh* mesh)
+void Gltf::LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, GpuResources* gpu_resources, UploadBuffer* upload_buffer, Mesh* mesh)
 {
 	mesh->name = gltf_mesh->name;
 	mesh->primitives.resize(gltf_mesh->primitives.size());
 	for (int i = 0; i < gltf_mesh->primitives.size(); i++) {
-		LoadPrimitive(gltf, &gltf_mesh->primitives[i], gpu_allocator, upload_buffer, &mesh->primitives[i]);
+		LoadPrimitive(gltf, &gltf_mesh->primitives[i], gpu_resources, upload_buffer, &mesh->primitives[i]);
 	}
 	mesh->weights.resize(gltf_mesh->weights.size());
 	for (int i = 0; i < gltf_mesh->weights.size(); i++) {
@@ -179,7 +179,7 @@ void Gltf::LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, GpuAllocat
 	}
 }
 
-void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primitive, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer, Primitive* primitive)
+void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primitive, GpuResources* gpu_resources, UploadBuffer* upload_buffer, Primitive* primitive)
 {
 	::Mesh::Desc desc = {};
 
@@ -232,7 +232,7 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 
 	desc.num_of_vertices = gltf->accessors[gltf_primitive->attributes["POSITION"]].count;
 
-	primitive->mesh.Create(gpu_allocator, srv_uav_cbv_descriptors, &desc);
+	primitive->mesh.Create(gpu_resources, &desc);
 
 	// Begin uploading data.
 	if (desc.flags & ::Mesh::FLAG_INDEX) {
@@ -316,11 +316,11 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 	// Create morph targets.
 	primitive->targets.resize(gltf_primitive->targets.size());
 	for (int i = 0; i < gltf_primitive->targets.size(); i++) {
-		CreateMorphTarget(gltf, &gltf_primitive->targets[i], gpu_allocator, upload_buffer, primitive->mesh.num_of_vertices, &primitive->targets[i]);
+		CreateMorphTarget(gltf, &gltf_primitive->targets[i], gpu_resources, upload_buffer, primitive->mesh.num_of_vertices, &primitive->targets[i]);
 	}
 }
 
-void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target)
+void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, GpuResources* gpu_resources, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target)
 {
 	ProfileZoneScoped();
 
@@ -329,7 +329,7 @@ void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* 
 	desc.flags |= target->contains("POSITION") ? MorphTarget::FLAG_POSITION : 0;
 	desc.flags |= target->contains("NORMAL") ? MorphTarget::FLAG_TANGENT_SPACE : 0;
 
-	morph_target->Create(gpu_allocator, srv_uav_cbv_descriptors, &desc);
+	morph_target->Create(gpu_resources, &desc);
 
 	if (desc.flags & MorphTarget::FLAG_POSITION) {
 		glm::vec3* dest = (glm::vec3*)morph_target->QueuePositionUpdate(upload_buffer);
@@ -397,7 +397,7 @@ void Gltf::GetTextureTransform(tinygltf::Value* gltf_value, int* tex_coord, glm:
 	}
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_index, int tex_coord, tinygltf::Value* texture_transform, bool srgb, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_index, int tex_coord, tinygltf::Value* texture_transform, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	Material::Texture material_texture;
 	if (texture_index != -1) {
@@ -406,11 +406,11 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 		if (texture_source != -1) {
 			if (this->textures[texture_source].descriptor == -1) {
 				// Load the texture if not yet loaded.
-				LoadTexture(gltf, texture_source, srgb, gpu_allocator, upload_buffer);
+				LoadTexture(gltf, texture_source, srgb, gpu_resources, upload_buffer);
 			}
 			material_texture = {
 				.texture = this->textures[texture_source].descriptor,
-				.sampler = texture->sampler == -1 ? 0 : sampler_descriptors->GetAbsoluteIndex(texture->sampler),
+				.sampler = texture->sampler == -1 ? 0 : this->gpu_resources->gltf_sampler_allocator.GetAbsoluteIndex(texture->sampler),
 				.tex_coord = tex_coord < ::Mesh::MAX_TEXCOORDS ? tex_coord : 0,
 			};
 			GetTextureTransform(texture_transform, &material_texture.tex_coord, &material_texture.offset, &material_texture.rotation, &material_texture.scale);
@@ -421,23 +421,23 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 	return material_texture;
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
 {
-	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], srgb, gpu_allocator, upload_buffer);
+	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], srgb, gpu_resources, upload_buffer);
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	*scale = texture_info->scale;
-	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], false, gpu_allocator, upload_buffer);
+	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], false, gpu_resources, upload_buffer);
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
 {
-	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], false, gpu_allocator, upload_buffer);
+	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], false, gpu_resources, upload_buffer);
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	Material::Texture desc;
 
@@ -461,10 +461,10 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::
 		transform_extension = extensions.Get("KHR_texture_transform");
 	}
 
-	return GetTexture(gltf, index, tex_coord, &transform_extension, srgb, gpu_allocator, upload_buffer);
+	return GetTexture(gltf, index, tex_coord, &transform_extension, srgb, gpu_resources, upload_buffer);
 }
 
-void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer)
+void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	materials.resize(gltf->materials.size() + 1);
@@ -476,11 +476,11 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, Upl
 
 		// Normal map.
 		tinygltf::NormalTextureInfo* normal_texture_info = &tiny_gltf_material->normalTexture;
-		material.normal = GetTexture(gltf, normal_texture_info, &material.normal_map_scale, gpu_allocator, upload_buffer);
+		material.normal = GetTexture(gltf, normal_texture_info, &material.normal_map_scale, gpu_resources, upload_buffer);
 
 		// Albedo.
 		tinygltf::TextureInfo* albedo_texture_info = &tiny_gltf_material->pbrMetallicRoughness.baseColorTexture;
-		material.albedo = GetTexture(gltf, albedo_texture_info, true, gpu_allocator, upload_buffer);
+		material.albedo = GetTexture(gltf, albedo_texture_info, true, gpu_resources, upload_buffer);
 		material.base_color_factor = glm::vec4(
 			tiny_gltf_material->pbrMetallicRoughness.baseColorFactor[0],
 			tiny_gltf_material->pbrMetallicRoughness.baseColorFactor[1],
@@ -490,17 +490,17 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, Upl
 
 		// Metalness and roughness.
 		tinygltf::TextureInfo* metallic_roughness_texture_info = &tiny_gltf_material->pbrMetallicRoughness.metallicRoughnessTexture;
-		material.metallic_roughness = GetTexture(gltf, metallic_roughness_texture_info, false, gpu_allocator, upload_buffer);
+		material.metallic_roughness = GetTexture(gltf, metallic_roughness_texture_info, false, gpu_resources, upload_buffer);
 		material.metalness_factor = tiny_gltf_material->pbrMetallicRoughness.metallicFactor;
 		material.roughness_factor = tiny_gltf_material->pbrMetallicRoughness.roughnessFactor;
 
 		// Occlusion.
 		tinygltf::OcclusionTextureInfo* occlusion_texture_info = &tiny_gltf_material->occlusionTexture;
-		material.occlusion = GetTexture(gltf, occlusion_texture_info, gpu_allocator, upload_buffer);
+		material.occlusion = GetTexture(gltf, occlusion_texture_info, gpu_resources, upload_buffer);
 
 		// Emissive.
 		tinygltf::TextureInfo* emissive_texture_info = &tiny_gltf_material->emissiveTexture;
-		material.emissive = GetTexture(gltf, emissive_texture_info, true, gpu_allocator, upload_buffer);
+		material.emissive = GetTexture(gltf, emissive_texture_info, true, gpu_resources, upload_buffer);
 		material.emissive_factor = glm::vec3(tiny_gltf_material->emissiveFactor[0], tiny_gltf_material->emissiveFactor[1], tiny_gltf_material->emissiveFactor[2]);
 
 		// Alpha.
@@ -524,7 +524,7 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, Upl
 			if (it != tiny_gltf_material->extensions.end()) {
 				tinygltf::tools::GetValue(it->second, "anisotropyStrength", &material.anisotropy_strength);
 				tinygltf::tools::GetValue(it->second, "anisotropyRotation", &material.anisotropy_rotation);
-				material.anisotropy_texture = GetTexture(gltf, &it->second.Get("anisotropyTexture"), nullptr, false, gpu_allocator, upload_buffer);
+				material.anisotropy_texture = GetTexture(gltf, &it->second.Get("anisotropyTexture"), nullptr, false, gpu_resources, upload_buffer);
 			}
 		}
 
@@ -534,9 +534,9 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, Upl
 			if (it != tiny_gltf_material->extensions.end()) {
 				tinygltf::tools::GetValue(it->second, "clearcoatFactor", &material.clearcoat_factor);
 				tinygltf::tools::GetValue(it->second, "clearcoatRoughnessFactor", &material.clearcoat_roughness_factor);
-				material.clearcoat_texture = GetTexture(gltf, &it->second.Get("clearcoatTexture"), nullptr, false, gpu_allocator, upload_buffer);
-				material.clearcoat_roughness_texture = GetTexture(gltf, &it->second.Get("clearcoatRoughnessTexture"), nullptr, false, gpu_allocator, upload_buffer);
-				material.clearcoat_normal_texture = GetTexture(gltf, &it->second.Get("clearcoatNormalTexture"), &material.clearcoat_normal_scale, false, gpu_allocator, upload_buffer);
+				material.clearcoat_texture = GetTexture(gltf, &it->second.Get("clearcoatTexture"), nullptr, false, gpu_resources, upload_buffer);
+				material.clearcoat_roughness_texture = GetTexture(gltf, &it->second.Get("clearcoatRoughnessTexture"), nullptr, false, gpu_resources, upload_buffer);
+				material.clearcoat_normal_texture = GetTexture(gltf, &it->second.Get("clearcoatNormalTexture"), &material.clearcoat_normal_scale, false, gpu_resources, upload_buffer);
 			}
 		}
 
@@ -572,8 +572,8 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, Upl
 				tinygltf::tools::GetValue(it->second, "iridescenceIor", &material.iridescence_ior);
 				tinygltf::tools::GetValue(it->second, "iridescenceThicknessMinimum", &material.iridescence_thickness_minimum);
 				tinygltf::tools::GetValue(it->second, "iridescenceThicknessMaximum", &material.iridescence_thickness_maximum);
-				material.iridescence_texture = GetTexture(gltf, &it->second.Get("iridescenceTexture"), nullptr, false, gpu_allocator, upload_buffer);
-				material.iridescence_thickness_texture = GetTexture(gltf, &it->second.Get("iridescenceThicknessTexture"), nullptr, false, gpu_allocator, upload_buffer);
+				material.iridescence_texture = GetTexture(gltf, &it->second.Get("iridescenceTexture"), nullptr, false, gpu_resources, upload_buffer);
+				material.iridescence_thickness_texture = GetTexture(gltf, &it->second.Get("iridescenceThicknessTexture"), nullptr, false, gpu_resources, upload_buffer);
 			}
 		}
 
@@ -583,8 +583,8 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, Upl
 			if (it != tiny_gltf_material->extensions.end()) {
 				tinygltf::tools::GetValue(it->second, "sheenColorFactor", &material.sheen_color_factor);
 				tinygltf::tools::GetValue(it->second, "sheenRoughnessFactor", &material.sheen_roughness_factor);
-				material.sheen_color_texture = GetTexture(gltf, &it->second.Get("sheenColorTexture"), nullptr, true, gpu_allocator, upload_buffer);
-				material.sheen_roughness_texture = GetTexture(gltf, &it->second.Get("sheenRoughnessTexture"), nullptr, false, gpu_allocator, upload_buffer);
+				material.sheen_color_texture = GetTexture(gltf, &it->second.Get("sheenColorTexture"), nullptr, true, gpu_resources, upload_buffer);
+				material.sheen_roughness_texture = GetTexture(gltf, &it->second.Get("sheenRoughnessTexture"), nullptr, false, gpu_resources, upload_buffer);
 			}
 		}
 
@@ -594,8 +594,8 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, Upl
 			if (it != tiny_gltf_material->extensions.end()) {
 				tinygltf::tools::GetValue(it->second, "specularFactor", &material.specular_factor);
 				tinygltf::tools::GetValue(it->second, "specularColorFactor", &material.specular_color_factor);
-				material.specular_texture = GetTexture(gltf, &it->second.Get("specularTexture"), nullptr, false, gpu_allocator, upload_buffer);
-				material.specular_color_texture = GetTexture(gltf, &it->second.Get("specularColorTexture"), nullptr, true, gpu_allocator, upload_buffer);
+				material.specular_texture = GetTexture(gltf, &it->second.Get("specularTexture"), nullptr, false, gpu_resources, upload_buffer);
+				material.specular_color_texture = GetTexture(gltf, &it->second.Get("specularColorTexture"), nullptr, true, gpu_resources, upload_buffer);
 			}
 		}
 
@@ -604,7 +604,7 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, Upl
 			auto it = tiny_gltf_material->extensions.find("KHR_materials_transmission");
 			if (it != tiny_gltf_material->extensions.end()) {
 				tinygltf::tools::GetValue(it->second, "transmissionFactor", &material.transmission_factor);
-				material.transmission_texture = GetTexture(gltf, &it->second.Get("transmissionTexture"), nullptr, false, gpu_allocator, upload_buffer);
+				material.transmission_texture = GetTexture(gltf, &it->second.Get("transmissionTexture"), nullptr, false, gpu_resources, upload_buffer);
 			}
 		}
 
@@ -613,7 +613,7 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, Upl
 			auto it = tiny_gltf_material->extensions.find("KHR_materials_volume");
 			if (it != tiny_gltf_material->extensions.end()) {
 				tinygltf::tools::GetValue(it->second, "thicknessFactor", &material.thickness_factor);
-				material.thickness_texture = GetTexture(gltf, &it->second.Get("thicknessTexture"), nullptr, false, gpu_allocator, upload_buffer);
+				material.thickness_texture = GetTexture(gltf, &it->second.Get("thicknessTexture"), nullptr, false, gpu_resources, upload_buffer);
 				tinygltf::tools::GetValue(it->second, "attenuationDistance", &material.attenuation_distance);
 				tinygltf::tools::GetValue(it->second, "attenuationColor", &material.attenuation_color);
 			}
@@ -849,7 +849,7 @@ void Gltf::LoadSamplers(tinygltf::Model* gltf)
 			.MinLOD = 0.0f,
 			.MaxLOD = (gltf_sampler.minFilter == TINYGLTF_TEXTURE_FILTER_NEAREST) || (gltf_sampler.minFilter == TINYGLTF_TEXTURE_FILTER_LINEAR) ? 0.0f : std::numeric_limits<float>::max(),
 		};
-		sampler_descriptors->CreateSampler(sampler_descriptors->GetAbsoluteIndex(i), &sampler_desc);
+		this->gpu_resources->gltf_sampler_allocator.CreateSampler(this->gpu_resources->gltf_sampler_allocator.GetAbsoluteIndex(i), &sampler_desc);
 	}
 }
 
@@ -881,13 +881,12 @@ void Gltf::LoadLights(tinygltf::Model* gltf)
 	}
 }
 
-void Gltf::Init(DescriptorAllocator* srv_uav_cbv_descriptors, SamplerStack* sampler_descriptors)
+void Gltf::Init(GpuResources* gpu_resources)
 {
-	this->srv_uav_cbv_descriptors = srv_uav_cbv_descriptors;
-	this->sampler_descriptors = sampler_descriptors;
+	this->gpu_resources = gpu_resources;
 }
 
-bool Gltf::LoadFromGltf(const char* filepath, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer)
+bool Gltf::LoadFromGltf(const char* filepath, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	tinygltf::TinyGLTF gltf;
@@ -934,19 +933,19 @@ bool Gltf::LoadFromGltf(const char* filepath, GpuAllocator* gpu_allocator, Uploa
 
 	LoadSamplers(&model);
 	ReserveTextures(&model);
-	LoadMeshes(&model, gpu_allocator, upload_buffer);
-	LoadMaterials(&model, gpu_allocator, upload_buffer);
+	LoadMeshes(&model, gpu_resources, upload_buffer);
+	LoadMaterials(&model, gpu_resources, upload_buffer);
 	LoadScenes(&model);
 	LoadNodes(&model);
 	LoadSkins(&model);
 	LoadAnimations(&model);
 	LoadLights(&model);
-	CreateDynamicMesh(gpu_allocator);
+	CreateDynamicMesh(gpu_resources);
 
 	return true;
 }
 
-void Gltf::CreateDynamicMesh(GpuAllocator* gpu_allocator)
+void Gltf::CreateDynamicMesh(GpuResources* gpu_resources)
 {
 	ProfileZoneScoped();
 	// Create dynamic mesh instances for any meshes that are skinned or have morph weights.
@@ -968,7 +967,7 @@ void Gltf::CreateDynamicMesh(GpuAllocator* gpu_allocator)
 			if (primitives[j].mesh.flags & ::Mesh::FLAG_TANGENT_SPACE) {
 				desc.flags |= DynamicMesh::FLAG_TANGENT_SPACE;
 			}
-        	dynamic.dynamic_meshes[j].Create(gpu_allocator, srv_uav_cbv_descriptors, &desc);
+        	dynamic.dynamic_meshes[j].Create(gpu_resources, &desc);
 		}
 		node.dynamic_mesh = dynamic_primitives.size() - 1;
     }
@@ -1045,7 +1044,7 @@ void Gltf::ReserveTextures(tinygltf::Model* gltf)
 	this->textures.resize(gltf->images.size());
 }
 
-void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer)
+void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	this->textures.reserve(slot + 1);
@@ -1059,15 +1058,15 @@ void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuAllocator*
 	DXGI_FORMAT format = srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(format, image.width, image.height, 1, 1);
 	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-	HRESULT result = gpu_allocator->CreateResource(&resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->textures[slot].resource);
+	HRESULT result = gpu_resources->allocator.CreateResource(&resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->textures[slot].resource);
 	assert(result == S_OK);
 	if (SUCCEEDED(result)) {
 		SetName(this->textures[slot].resource.resource.Get(), image.name.data());
 	}
 
 	// Create the descriptor.
-	textures[slot].descriptor = srv_uav_cbv_descriptors->Allocate(1);
-	srv_uav_cbv_descriptors->CreateSrv(textures[slot].descriptor, textures[slot].resource.resource.Get(), nullptr);
+	textures[slot].descriptor = gpu_resources->cbv_uav_srv_dynamic_allocator.Allocate(1);
+	gpu_resources->cbv_uav_srv_dynamic_allocator.CreateSrv(textures[slot].descriptor, textures[slot].resource.resource.Get(), nullptr);
 
 	// Upload image to the GPU.
 	uint32_t pitch = 0;

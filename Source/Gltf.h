@@ -193,8 +193,8 @@ class Gltf {
     std::vector<Light> lights;
     std::vector<Texture> textures;
     
-    void Init(DescriptorAllocator* srv_uav_cbv_descriptors, SamplerStack* sampler_descriptors);
-    bool LoadFromGltf(const char* filepath, GpuAllocator* allocator, UploadBuffer* upload_buffer);
+    void Init(GpuResources* gpu_resources);
+    bool LoadFromGltf(const char* filepath, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
     void Unload();
     void ApplyRestTransforms();
     void CalculateGlobalTransforms(int scene);
@@ -204,20 +204,19 @@ class Gltf {
     
     private:
 
-    DescriptorAllocator* srv_uav_cbv_descriptors;
-    SamplerStack* sampler_descriptors;
+    GpuResources* gpu_resources = nullptr;
 
-    void LoadMeshes(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer);
-    void LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer, Mesh* mesh);
-    void LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primitive, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer, Primitive* primitive);
-    void CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target);
+    void LoadMeshes(tinygltf::Model* gltf, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
+    void LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, GpuResources* gpu_resources, UploadBuffer* upload_buffer, Mesh* mesh);
+    void LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primitive, GpuResources* gpu_resources, UploadBuffer* upload_buffer, Primitive* primitive);
+    void CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, GpuResources* gpu_resources, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target);
     void GetTextureTransform(tinygltf::Value* gltf_value, int* tex_coord, glm::vec2* offset, float* rotation, glm::vec2* scale);
-    Material::Texture GetTexture(tinygltf::Model* gltf, int texture_index, int tex_coord, tinygltf::Value* extensions, bool srgb, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer);
-    Material::Texture GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer);
-    Material::Texture GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer);
-    Material::Texture GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer);
-    Material::Texture GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer);
-    void LoadMaterials(tinygltf::Model* gltf, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer);
+    Material::Texture GetTexture(tinygltf::Model* gltf, int texture_index, int tex_coord, tinygltf::Value* extensions, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
+    Material::Texture GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
+    Material::Texture GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
+    Material::Texture GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
+    Material::Texture GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
+    void LoadMaterials(tinygltf::Model* gltf, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
     void LoadScenes(tinygltf::Model* gltf);
     void LoadCameras(tinygltf::Model* gltf);
     void LoadNodes(tinygltf::Model* gltf);
@@ -227,7 +226,7 @@ class Gltf {
     void LoadSamplers(tinygltf::Model* gltf);
     void LoadLights(tinygltf::Model* gltf);
     void ReserveTextures(tinygltf::Model* gltf);
-    void LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuAllocator* gpu_allocator, UploadBuffer* upload_buffer);
-    void CreateDynamicMesh(GpuAllocator* gpu_allocator);
+    void LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
+    void CreateDynamicMesh(GpuResources* gpu_resources);
     void CalculateGlobalTransforms(Node* node, glm::mat4x4 parent_global_transform);
 };

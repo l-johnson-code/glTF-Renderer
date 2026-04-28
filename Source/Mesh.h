@@ -4,8 +4,7 @@
 #include <glm/glm.hpp>
 #include <wrl/client.h>
 
-#include "DescriptorAllocator.h"
-#include "GpuAllocator.h"
+#include "GpuResources.h"
 #include "UploadBuffer.h"
 
 struct VertexAllocation {
@@ -66,7 +65,7 @@ struct Mesh {
     uint32_t num_of_vertices = 0;
     uint32_t num_of_indices = 0;
 
-    GpuResource resource;
+    GpuResources::Buffer buffer;
 
     IndexBuffer index;
     VertexBuffer position;
@@ -75,7 +74,7 @@ struct Mesh {
     VertexBuffer color;
     VertexBuffer joint_weight;
 
-    HRESULT Create(GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(GpuResources* resources, const Desc* desc, const char* name = nullptr);
     void* QueueIndexUpdate(UploadBuffer* upload_buffer);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
@@ -83,7 +82,7 @@ struct Mesh {
     void* QueueTexcoord1Update(UploadBuffer* upload_buffer);
     void* QueueColorUpdate(UploadBuffer* upload_buffer);
     void* QueueJointWeightUpdate(UploadBuffer* upload_buffer);
-    void Destroy(DescriptorAllocator* descriptor_allocator);
+    void Destroy(GpuResources* resources);
 };
 
 struct DynamicMesh {
@@ -102,16 +101,16 @@ struct DynamicMesh {
     uint32_t num_of_vertices = 0;
     int current_position_buffer = 0;
 
-    GpuResource resource;
+    GpuResources::Buffer buffer;
 
     VertexBuffer position[2];
     VertexBuffer tangent_space;
 
-    HRESULT Create(GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(GpuResources* resources, const Desc* desc, const char* name = nullptr);
     void Flip();
     VertexBuffer* GetCurrentPositionBuffer();
     VertexBuffer* GetPreviousPositionBuffer();
-    void Destroy(DescriptorAllocator* descriptor_allocator);
+    void Destroy(GpuResources* resources);
 };
 
 struct MorphTarget {
@@ -129,13 +128,13 @@ struct MorphTarget {
     uint8_t flags = 0;
     uint32_t num_of_vertices = 0;
 
-    GpuResource resource;
+    GpuResources::Buffer buffer;
     
     VertexBuffer position;
     VertexBuffer tangent_space;
 
-    HRESULT Create(GpuAllocator* allocator, DescriptorAllocator* descriptor_allocator, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(GpuResources* resources, const Desc* desc, const char* name = nullptr);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
-    void Destroy(DescriptorAllocator* descriptor_allocator);
+    void Destroy(GpuResources* resources);
 };
