@@ -301,12 +301,12 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	this->graphics_command_list->SetDescriptorHeaps(std::size(descriptor_heaps), descriptor_heaps);
 
 	// Generate environment map.
-	if (environment_map.equirectangular_image.resource.resource.Get()) {
+	if (environment_map.equirectangular_image.Resource()) {
 		command_context.BeginEvent("Environment Map");
 		environment_map.CreateEnvironmentMap(&command_context, &environment_map.equirectangular_image, &map);
-		deferred_release.Current().push_back(environment_map.equirectangular_image.resource);
+		deferred_release.Current().push_back(environment_map.equirectangular_image.AllocatedResource());
 		// TODO: This leaks the descriptors. Fix it!
-		environment_map.equirectangular_image.resource.Reset();
+		environment_map.equirectangular_image.AllocatedResource().Reset();
 		environment_map_loaded = true;
 		command_context.EndEvent();
 	}
@@ -343,8 +343,8 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.gpu_lights = this->gpu_lights,
         	.light_count = (int)this->lights.size(),
         	.environment_map = environment_map_loaded ? &map : nullptr,
-        	.output_descriptor = this->display.uav,
-        	.output_resource = this->display.resource.resource.Get(),
+        	.output_descriptor = this->display.Uav(),
+        	.output_resource = this->display.Resource(),
 		};
 		pathtracer.PathtraceScene(&command_context, &settings->pathtracer, &params);
 	}
@@ -361,7 +361,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 
 	// Tone mapping.
 	command_context.BeginEvent("Tone Mapping");
-	this->tone_mapper.Run(&command_context, this->resources.cbv_uav_srv_dynamic_allocator.GetGpuHandle(this->display.uav), &this->settings.tone_mapper_config);
+	this->tone_mapper.Run(&command_context, this->resources.cbv_uav_srv_dynamic_allocator.GetGpuHandle(this->display.Uav()), &this->settings.tone_mapper_config);
 	command_context.EndEvent();
 
 	command_context.BeginEvent("ImGui");

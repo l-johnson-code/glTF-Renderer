@@ -65,7 +65,25 @@ class GpuResources {
 		const char* name = nullptr;
 	};
 
-	struct Texture {
+	class Texture {
+		public:
+		ID3D12Resource* Resource() { return this->resource.resource.Get(); }
+		uint16_t Width() { return this->width; }
+		uint16_t Height() { return this->height; }
+		uint8_t MipLevels() { return this->mip_levels; };
+		int Srv() { assert(this->srv != -1); return this->srv; };
+		int Srv(int mip) { assert((this->flags & TEXTURE_FLAG_SRV_PER_MIP) && (this->srv != -1) && (mip < this->mip_levels)); return this->srv + 1 + mip; };
+		int Uav() { assert(this->uav != -1); return this->uav; }
+		int Uav(int mip) { assert((this->uav != -1) && (mip < this->mip_levels)); return this->uav + mip; };
+		D3D12_CPU_DESCRIPTOR_HANDLE Rtv() { assert((this->flags & TEXTURE_FLAG_RENDER_TARGET) && (this->render.rtv.ptr != 0)); return this->render.rtv; }
+		const float* ClearColor() { assert(this->flags & TEXTURE_FLAG_RENDER_TARGET); return &this->render.clear_color[0]; }
+		D3D12_CPU_DESCRIPTOR_HANDLE Dsv() { assert((this->flags & TEXTURE_FLAG_DEPTH_TARGET) && (this->depth.dsv.ptr != 0)); return this->depth.dsv; }
+		float ClearDepth() { assert(this->flags & TEXTURE_FLAG_DEPTH_TARGET); return this->depth.clear_depth; }
+		GpuResource& AllocatedResource() { return this->resource; } // TODO: This is only for a temporary workaround and should be removed.
+
+		private:
+		friend class GpuResources;
+
 		GpuResource resource;
 		uint16_t width = 0;
 		uint16_t height = 0;

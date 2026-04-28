@@ -403,12 +403,12 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 		tinygltf::Texture* texture = &gltf->textures[texture_index];
 		int texture_source = texture->source;
 		if (texture_source != -1) {
-			if (this->textures[texture_source].srv == -1) {
+			if (this->textures[texture_source].Resource() == nullptr) {
 				// Load the texture if not yet loaded.
 				LoadTexture(gltf, texture_source, srgb, gpu_resources, upload_buffer);
 			}
 			material_texture = {
-				.texture = this->textures[texture_source].srv,
+				.texture = this->textures[texture_source].Srv(),
 				.sampler = texture->sampler == -1 ? 0 : this->gpu_resources->gltf_sampler_allocator.GetAbsoluteIndex(texture->sampler),
 				.tex_coord = tex_coord < ::Mesh::MAX_TEXCOORDS ? tex_coord : 0,
 			};
@@ -1067,7 +1067,7 @@ void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuResources*
 
 	// Upload image to the GPU.
 	uint32_t pitch = 0;
-	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(texture_desc.format, image.width, image.height, 1, textures[slot].resource.resource.Get(), 0, &pitch);
+	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(texture_desc.format, image.width, image.height, 1, textures[slot].Resource(), 0, &pitch);
 	for (int i = 0; i < image.height; i++) {
 		memcpy(upload_ptr + i * pitch, image.image.data() + i * image.width * 4, image.width * 4);
 	}

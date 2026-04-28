@@ -88,7 +88,7 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, GpuResources:
     HRESULT result = S_OK;
 
 	// Create the destination cubemap.
-    uint16_t cube_map_resolution = std::max(((int)equirectangular_image->width / 4) / 2, 1) + 1; // TODO: I dont think this is correct.
+    uint16_t cube_map_resolution = std::max(((int)equirectangular_image->Width() / 4) / 2, 1) + 1; // TODO: I dont think this is correct.
 	GpuResources::TextureDesc cubemap_desc = 
     {
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
@@ -234,7 +234,7 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
 	int pixel_size = exr_header.channels[0].pixel_type == TINYEXR_PIXELTYPE_HALF ? 2 : 4;
 	int destination_stride = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 	uint32_t row_pitch = 0;
-	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.resource.resource.Get(), 0, &row_pitch);
+	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.Resource(), 0, &row_pitch);
 	if (!upload_ptr) {
         SPDLOG_ERROR("Not enough space on the upload buffer to allocate image.");
         FreeEXRHeader(&exr_header);
@@ -305,7 +305,7 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
     }
 
     uint32_t row_pitch = 0;
-	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.resource.resource.Get(), 0, &row_pitch);
+	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, x, y, 1, this->equirectangular_image.Resource(), 0, &row_pitch);
     if (!upload_ptr) {
         SPDLOG_ERROR("Not enough space on the upload buffer to allocate image.");
         stbi_image_free(image);
@@ -332,26 +332,26 @@ void EnvironmentMap::GenerateCubemap(CommandContext* context, GpuResources::Text
     } constant_buffer;
 
     constant_buffer = {
-        .environment = equirectangular_image->srv,
-        .cube = cubemap->uav,
+        .environment = equirectangular_image->Srv(),
+        .cube = cubemap->Uav(),
     };
     context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
-    uint32_t thread_groups_x = ((cubemap->width * 6) + 7) / 8;
-    uint32_t thread_groups_y = (cubemap->height + 7) / 8;
+    uint32_t thread_groups_x = ((cubemap->Width() * 6) + 7) / 8;
+    uint32_t thread_groups_y = (cubemap->Height() + 7) / 8;
     context->command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
 
     // Generate the mips.
     context->command_list->SetPipelineState(this->generate_cube_mip_pipeline_state.Get());
-    for (int i = 1; i < cubemap->mip_levels; i++) {
+    for (int i = 1; i < cubemap->MipLevels(); i++) {
         struct {
             int input_descriptor;
             int output_descriptor;
         } constant_buffer;
 
-        int output_width = cubemap->width >> i;
+        int output_width = cubemap->Width() >> i;
         constant_buffer = {
-            .input_descriptor = cubemap->uav + i - 1,
-            .output_descriptor = cubemap->uav + i,
+            .input_descriptor = cubemap->Uav(i - 1),
+            .output_descriptor = cubemap->Uav(i),
         };
 
         context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
@@ -359,18 +359,18 @@ void EnvironmentMap::GenerateCubemap(CommandContext* context, GpuResources::Text
         uint32_t thread_groups_y = (output_width + 7) / 8;
         context->command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
 
-        context->PushUavBarrier(cubemap->resource.resource.Get());
+        context->PushUavBarrier(cubemap->Resource());
         context->SubmitBarriers();
     }
 
-	context->PushTransitionBarrier(cubemap->resource.resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	context->PushTransitionBarrier(cubemap->Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	context->SubmitBarriers();
 }
 
 void EnvironmentMap::FilterCube(CommandContext* context, GpuResources::Texture* cubemap, Bsdf bsdf, float mip_bias, int num_of_samples, GpuResources::Texture* filtered_cube_map)
 {
-    int mip_count = filtered_cube_map->mip_levels;
-    int resolution = filtered_cube_map->width;
+    int mip_count = filtered_cube_map->MipLevels();
+    int resolution = filtered_cube_map->Width();
         
     // Generate the mips.
     struct {
@@ -382,7 +382,7 @@ void EnvironmentMap::FilterCube(CommandContext* context, GpuResources::Texture* 
         int bsdf;
     } constant_buffer;
     constant_buffer = {
-        .input = cubemap->srv,
+        .input = cubemap->Srv(),
         .num_of_samples = num_of_samples,
         .mip_bias = mip_bias,
         .bsdf = bsdf,
@@ -390,7 +390,7 @@ void EnvironmentMap::FilterCube(CommandContext* context, GpuResources::Texture* 
     context->command_list->SetComputeRootSignature(this->root_signature.Get());
     context->command_list->SetPipelineState(this->filter_cube_map_pipeline_state.Get());
     for (int i = 0; i < mip_count; i++) {
-        constant_buffer.output = filtered_cube_map->uav + i;
+        constant_buffer.output = filtered_cube_map->Uav(i);
         constant_buffer.roughness = MipToRoughness(i, mip_count);
         context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
         uint32_t thread_groups_x = (resolution * 6 + 7) / 8;
@@ -400,7 +400,7 @@ void EnvironmentMap::FilterCube(CommandContext* context, GpuResources::Texture* 
         // TODO: Are there missing UAV barriers here?
     }
     
-    context->PushTransitionBarrier(filtered_cube_map->resource.resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    context->PushTransitionBarrier(filtered_cube_map->Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     context->SubmitBarriers();
 }
 
@@ -578,7 +578,7 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
     memcpy(ptr, alias_table.data(), alias_table_size * sizeof(AliasMap));
 
     uint32_t row_pitch = 0;
-    ptr = upload->QueueTextureUpload(DXGI_FORMAT_R16_FLOAT, pdf_size, pdf_size, 1, map->pdf.resource.resource.Get(), 0, &row_pitch);
+    ptr = upload->QueueTextureUpload(DXGI_FORMAT_R16_FLOAT, pdf_size, pdf_size, 1, map->pdf.Resource(), 0, &row_pitch);
     for (int i = 0; i < pdf_size; i++) {
         for (int j = 0; j < pdf_size; j++) {
             *((uint16_t*)((std::byte*)ptr + i * row_pitch) + j) = glm::packHalf1x16(pdf[i * pdf_size + j]); 

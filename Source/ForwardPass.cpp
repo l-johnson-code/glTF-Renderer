@@ -338,13 +338,13 @@ void ForwardPass::DrawBackground(CommandContext* context, glm::mat4x4 clip_to_wo
 void ForwardPass::GenerateTransmissionMips(CommandContext* context, GpuResources::Texture* input, GpuResources::Texture* output, int sample_pattern)
 {
 	// Create mip 0.
-	context->PushTransitionBarrier(output->resource.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
+	context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
 	context->SubmitBarriers();
 
-	const CD3DX12_TEXTURE_COPY_LOCATION copy_dest(output->resource.resource.Get());
-	const CD3DX12_TEXTURE_COPY_LOCATION copy_source(input->resource.resource.Get());
+	const CD3DX12_TEXTURE_COPY_LOCATION copy_dest(output->Resource());
+	const CD3DX12_TEXTURE_COPY_LOCATION copy_source(input->Resource());
 	context->command_list->CopyTextureRegion(&copy_dest, 0, 0, 0, &copy_source, nullptr);
-	context->PushTransitionBarrier(output->resource.resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
+	context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
 
 	// Generate the mips.
 	context->command_list->SetComputeRootSignature(this->transmission_mips_root_signature.Get());
@@ -357,23 +357,23 @@ void ForwardPass::GenerateTransmissionMips(CommandContext* context, GpuResources
 	} constant_buffer;
 	constant_buffer.sample_pattern = sample_pattern;
 
-	uint32_t width = output->width;
-	uint32_t height = output->height;
+	uint32_t width = output->Width();
+	uint32_t height = output->Height();
 
-	for (int i = 1; i < output->mip_levels; i++) {
+	for (int i = 1; i < output->MipLevels(); i++) {
 		width = std::max(width / 2u, 1u);
 		height = std::max(height / 2u, 1u);
 
-		constant_buffer.input_descriptor = output->srv + i;
-		constant_buffer.output_descriptor = output->uav + i;
+		constant_buffer.input_descriptor = output->Srv(i - 1);
+		constant_buffer.output_descriptor = output->Uav(i);
 
-		context->PushTransitionBarrier(output->resource.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
+		context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
 		context->SubmitBarriers();
 
 		context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
 		context->command_list->Dispatch((width + 7) / 8, (height + 7) / 8, 1);
-		context->PushUavBarrier(output->resource.resource.Get());
-		context->PushTransitionBarrier(output->resource.resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i);
+		context->PushUavBarrier(output->Resource());
+		context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i);
 	}
 	context->SubmitBarriers();
 }

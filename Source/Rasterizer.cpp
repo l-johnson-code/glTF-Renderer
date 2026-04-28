@@ -145,20 +145,20 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	SortRenderObjects(camera_pos);
 
 	// Prepare render targets.
-	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = execute_params->output->render.rtv; 
+	D3D12_CPU_DESCRIPTOR_HANDLE render_rtv = execute_params->output->Rtv(); 
 
 	context->PushTransitionBarrier(
-		execute_params->output->resource.resource.Get(), 
+		execute_params->output->Resource(), 
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
 		D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
 	context->PushTransitionBarrier(
-		motion_vectors.resource.resource.Get(), 
+		motion_vectors.Resource(), 
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
 		D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
 	context->PushTransitionBarrier(
-		depth.resource.resource.Get(), 
+		depth.Resource(), 
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 
 		D3D12_RESOURCE_STATE_DEPTH_WRITE
 	);
@@ -166,8 +166,8 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	
 	float clear_color[4] = {0., 0., 0., 0.};
 	context->command_list->ClearRenderTargetView(render_rtv, clear_color, 0, nullptr);
-	context->command_list->ClearRenderTargetView(motion_vectors.render.rtv, motion_vectors.render.clear_color, 0, nullptr);
-	context->command_list->ClearDepthStencilView(depth.depth.dsv, D3D12_CLEAR_FLAG_DEPTH, depth.depth.clear_depth, 0, 0, nullptr);
+	context->command_list->ClearRenderTargetView(motion_vectors.Rtv(), motion_vectors.ClearColor(), 0, nullptr);
+	context->command_list->ClearDepthStencilView(depth.Dsv(), D3D12_CLEAR_FLAG_DEPTH, depth.ClearDepth(), 0, 0, nullptr);
 	
 	SetViewportAndScissorRects(context, this->width, this->height);
 
@@ -182,8 +182,8 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 		.num_of_lights = execute_params->light_count,
 		.lights = execute_params->gpu_lights,
 		.materials = execute_params->gpu_materials,
-		.ggx_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->ggx.srv : -1,
-		.diffuse_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->diffuse.srv : -1,
+		.ggx_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->ggx.Srv() : -1,
+		.diffuse_cube_descriptor = execute_params->environment_map ? execute_params->environment_map->diffuse.Srv() : -1,
 		.environment_map_intensity = 1.0,
 		.transmission_descriptor = -1,
 		.render_flags = settings->render_flags,
@@ -192,7 +192,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	context->command_list->IASetPrimitiveTopology(primitive_topology);
 	forward.SetRootSignature(context);
 	forward.SetConfig(context, &config);
-	forward.BindRenderTargets(context, render_rtv, motion_vectors.render.rtv, depth.depth.dsv);
+	forward.BindRenderTargets(context, render_rtv, motion_vectors.Rtv(), depth.Dsv());
 	forward.BindPipeline(context, ForwardPass::PIPELINE_FLAGS_NONE);
 	DrawRenderObjects(context, execute_params->gltf, opaque_render_objects);
 	context->EndEvent();
@@ -204,7 +204,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 
 	context->BeginEvent("Background");
 	if (execute_params->environment_map) {
-		forward.DrawBackground(context, clip_to_world, 1.0, execute_params->environment_map->cube.srv);
+		forward.DrawBackground(context, clip_to_world, 1.0, execute_params->environment_map->cube.Srv());
 		
 		// Set pipeline state back to rendering meshes.
 		forward.SetRootSignature(context);
@@ -215,21 +215,21 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	// Create transmission mip chain.
 	context->BeginEvent("Transmission Mip Chain");
 	context->PushTransitionBarrier(
-		execute_params->output->resource.resource.Get(), 
+		execute_params->output->Resource(), 
 		D3D12_RESOURCE_STATE_RENDER_TARGET,
 		D3D12_RESOURCE_STATE_COPY_SOURCE
 	);
 	context->SubmitBarriers();
 	forward.GenerateTransmissionMips(context, execute_params->output, &this->transmission, settings->transmission_downsample_sample_pattern);
 	context->PushTransitionBarrier(
-		execute_params->output->resource.resource.Get(),
+		execute_params->output->Resource(),
 		D3D12_RESOURCE_STATE_COPY_SOURCE,
 		D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
 	context->SubmitBarriers();
 	context->EndEvent();
 
-	config.transmission_descriptor = this->transmission.srv;
+	config.transmission_descriptor = this->transmission.Srv();
 	forward.SetConfig(context, &config);
 
 	// Render transmissives.
@@ -245,17 +245,17 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 
 	// Transition render targets to read state for post processing.
 	context->PushTransitionBarrier(
-		execute_params->output->resource.resource.Get(), 
+		execute_params->output->Resource(), 
 		D3D12_RESOURCE_STATE_RENDER_TARGET,
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 	);
 	context->PushTransitionBarrier(
-		motion_vectors.resource.resource.Get(), 
+		motion_vectors.Resource(), 
 		D3D12_RESOURCE_STATE_RENDER_TARGET, 
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 	);
 	context->PushTransitionBarrier(
-		depth.resource.resource.Get(), 
+		depth.Resource(), 
 		D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 	);
@@ -265,7 +265,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
     bloom.Execute(context, execute_params->output, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, settings->bloom_radius, settings->bloom_strength);
 	context->EndEvent();
 
-	context->PushTransitionBarrier(execute_params->output->resource.resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	context->PushTransitionBarrier(execute_params->output->Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	context->SubmitBarriers();
 
 	this->previous_world_to_clip = world_to_clip;
