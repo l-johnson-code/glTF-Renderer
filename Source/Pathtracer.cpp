@@ -9,9 +9,11 @@
 
 #include "GpuResources.h"
 
-void Pathtracer::Init(ID3D12Device5* device, GpuAllocator* allocator, UploadBuffer* upload_buffer)
+void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuffer* upload_buffer)
 {
     HRESULT result = S_OK;
+
+    this->resources = resources;
 
     CD3DX12_ROOT_PARAMETER root_parameters[ROOT_PARAMETER_COUNT];
     root_parameters[ROOT_PARAMETER_CONSTANT_BUFFER].InitAsConstantBufferView(0);
@@ -96,12 +98,15 @@ void Pathtracer::Init(ID3D12Device5* device, GpuAllocator* allocator, UploadBuff
     assert(SUCCEEDED(result));
 
     // Create the shader table.
-    int shader_table_size = ShaderTableCollectionBuilder::CalculateRequiredSize(1, 1, 0);
-    CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-    CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(shader_table_size, D3D12_RESOURCE_FLAG_NONE, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
-    result = allocator->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->shader_tables_resource, "Shader Tables");
+    uint64_t shader_table_size = ShaderTableCollectionBuilder::CalculateRequiredSize(1, 1, 0);
+    GpuResources::BufferDesc shader_table_buffer_desc = {
+        .size = shader_table_size,
+        .name = "Shader Table",
+    };
+    result = resources->CreateBuffer(&shader_table_buffer_desc, &this->shader_tables_buffer);
     assert(SUCCEEDED(result));
-    void* shader_tables_data = upload_buffer->QueueBufferUpload(shader_table_size, this->shader_tables_resource.resource.Get(), 0);
+
+    void* shader_tables_data = upload_buffer->QueueBufferUpload(shader_table_size, this->shader_tables_buffer.resource.resource.Get(), 0);
     assert(shader_tables_data);
     
     Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> state_object_properties;
@@ -118,9 +123,9 @@ void Pathtracer::Init(ID3D12Device5* device, GpuAllocator* allocator, UploadBuff
     collection_builder.miss_table.SetShader(MISS_SHADER_SHADOW, shadow_miss_identifier);
     collection_builder.hit_group_table.SetShader(HIT_GROUP_BOUNCE, hit_group_identifier);
     collection_builder.hit_group_table.SetShader(HIT_GROUP_SHADOW, shadow_hit_group_identifier);
-    this->shader_tables = collection_builder.GetShaderTableCollection(this->shader_tables_resource.resource->GetGPUVirtualAddress());
+    this->shader_tables = collection_builder.GetShaderTableCollection(this->shader_tables_buffer.resource.resource->GetGPUVirtualAddress());
 
-    acceleration_structure.Init(device, allocator, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
+    acceleration_structure.Init(device, &resources->allocator, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
 
     // Cleanup.
     GpuResources::FreeShader(dxil_library_desc.DXILLibrary);
@@ -130,7 +135,9 @@ void Pathtracer::Shutdown()
 {
     root_signature.Reset();
     state_object.Reset();
-    shader_tables_resource.Reset();
+    if (resources) {
+        resources->FreeBuffer(&shader_tables_buffer);
+    }
 }
 
 void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
