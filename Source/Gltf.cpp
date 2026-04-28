@@ -136,9 +136,8 @@ void Gltf::Unload()
 			dynamic_mesh.Destroy(this->gpu_resources);
 		}
 	}
-	for (Texture& texture: textures) {
-		gpu_resources->cbv_uav_srv_dynamic_allocator.Free(texture.descriptor);
-		texture.descriptor = -1;
+	for (GpuResources::Texture& texture: textures) {
+		gpu_resources->FreeTexture(&texture);
 	}
 	// We can free all dynamic samplers at once because this is the only class that uses them.
 	if (gpu_resources) {
@@ -404,12 +403,12 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 		tinygltf::Texture* texture = &gltf->textures[texture_index];
 		int texture_source = texture->source;
 		if (texture_source != -1) {
-			if (this->textures[texture_source].descriptor == -1) {
+			if (this->textures[texture_source].srv == -1) {
 				// Load the texture if not yet loaded.
 				LoadTexture(gltf, texture_source, srgb, gpu_resources, upload_buffer);
 			}
 			material_texture = {
-				.texture = this->textures[texture_source].descriptor,
+				.texture = this->textures[texture_source].srv,
 				.sampler = texture->sampler == -1 ? 0 : this->gpu_resources->gltf_sampler_allocator.GetAbsoluteIndex(texture->sampler),
 				.tex_coord = tex_coord < ::Mesh::MAX_TEXCOORDS ? tex_coord : 0,
 			};
@@ -1054,23 +1053,21 @@ void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuResources*
 	assert(image.component == 4);
 	assert(image.bits == 8);
 	
-	// Create the resource.
-	DXGI_FORMAT format = srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
-	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(format, image.width, image.height, 1, 1);
-	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-	HRESULT result = gpu_resources->allocator.CreateResource(&resource_desc, D3D12_RESOURCE_STATE_COMMON, nullptr, &this->textures[slot].resource);
-	assert(result == S_OK);
-	if (SUCCEEDED(result)) {
-		SetName(this->textures[slot].resource.resource.Get(), image.name.data());
-	}
-
-	// Create the descriptor.
-	textures[slot].descriptor = gpu_resources->cbv_uav_srv_dynamic_allocator.Allocate(1);
-	gpu_resources->cbv_uav_srv_dynamic_allocator.CreateSrv(textures[slot].descriptor, textures[slot].resource.resource.Get(), nullptr);
+	// Create the texture.
+	GpuResources::TextureDesc texture_desc = {
+		.format = srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM,
+		.width = (uint16_t)image.width,
+		.height = (uint16_t)image.height,
+		.mip_levels = 1,
+		.flags = GpuResources::TEXTURE_FLAG_SRV,
+		.name = image.name.data(),
+	};
+	HRESULT result = gpu_resources->CreateTexture(&texture_desc, &textures[slot]);
+	assert(SUCCEEDED(result));
 
 	// Upload image to the GPU.
 	uint32_t pitch = 0;
-	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(format, image.width, image.height, 1, textures[slot].resource.resource.Get(), 0, &pitch);
+	std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(texture_desc.format, image.width, image.height, 1, textures[slot].resource.resource.Get(), 0, &pitch);
 	for (int i = 0; i < image.height; i++) {
 		memcpy(upload_ptr + i * pitch, image.image.data() + i * image.width * 4, image.width * 4);
 	}

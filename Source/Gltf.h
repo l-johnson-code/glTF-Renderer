@@ -191,7 +191,7 @@ class Gltf {
     std::vector<DynamicPrimitives> dynamic_primitives;
     std::vector<Animation> animations;
     std::vector<Light> lights;
-    std::vector<Texture> textures;
+    std::vector<GpuResources::Texture> textures;
     
     void Init(GpuResources* gpu_resources);
     bool LoadFromGltf(const char* filepath, GpuResources* gpu_resources, UploadBuffer* upload_buffer);
