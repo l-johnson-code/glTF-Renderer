@@ -73,7 +73,6 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 	HRESULT result = S_OK;
 
 	// Create the resource.
-	CD3DX12_HEAP_PROPERTIES heap_properties(desc->heap_type);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(desc->size);
 	if (desc->flags & BUFFER_FLAG_UAV) {
 		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
@@ -81,14 +80,14 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 	if (desc->flags & BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE) {
 		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS |  D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 	};
-	result = allocator.CreateCommittedResource(
-		&heap_properties,
-		D3D12_HEAP_FLAG_NONE,
+	result = allocator.CreateResource(
+		desc->heap_type,
 		&resource_desc,
 		desc->initial_state,
 		nullptr,
-		&buffer->resource,
-		desc->name ? desc->name : "Buffer"
+		desc->name ? desc->name : "Buffer",
+		&buffer->allocation,
+		IID_PPV_ARGS(&buffer->resource)
 	);
 	if (FAILED(result)) {
 		FreeBuffer(buffer);
@@ -97,7 +96,7 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 
 	// Map the resource.
 	if (desc->flags & BUFFER_FLAG_PERSISTENT_MAP) {
-		result = buffer->resource.resource->Map(0, nullptr, &buffer->pointer);
+		result = buffer->resource->Map(0, nullptr, &buffer->pointer);
 		if (FAILED(result)) {
 			FreeBuffer(buffer);
 			return result;
@@ -114,7 +113,7 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 		} else {
 			srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::RawBuffer(desc->size / 4);
 		}
-		buffer->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(buffer->resource.resource.Get(), &srv_desc);
+		buffer->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(buffer->resource, &srv_desc);
 		if (buffer->srv == -1) {
 			FreeBuffer(buffer);
 			return E_OUTOFMEMORY;
@@ -128,7 +127,12 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 
 void GpuResources::FreeBuffer(Buffer* buffer)
 {
-	buffer->resource.Reset();
+	if (buffer->resource) {
+		buffer->resource->Release();
+		buffer->resource = nullptr;
+	}
+	buffer->allocation.Free();
+	buffer->resource = nullptr;
 	cbv_uav_srv_dynamic_allocator.Free(buffer->srv);
 	buffer->srv = -1;
 }
@@ -170,14 +174,14 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 		clear_value = CD3DX12_CLEAR_VALUE(desc->format, desc->clear_depth, 0);
 		clear_value_ptr = &clear_value;
 	}
-	result = allocator.CreateCommittedResource(
-		&heap_properties,
-		D3D12_HEAP_FLAG_NONE,
+	result = allocator.CreateResource(
+		D3D12_HEAP_TYPE_DEFAULT,
 		&resource_desc,
 		desc->initial_state,
 		clear_value_ptr,
-		&texture->resource,
-		desc->name ? desc->name : "Texture"
+		desc->name ? desc->name : "Texture",
+		&texture->allocation,
+		IID_PPV_ARGS(&texture->resource)
 	);
 	if (FAILED(result)) {
 		FreeTexture(texture);
@@ -200,13 +204,13 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 		CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
 			CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(srv_format) :
 			CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(srv_format);
-		cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv, texture->resource.resource.Get(), &srv_desc);
+		cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv, texture->resource, &srv_desc);
 		if (desc->flags & TEXTURE_FLAG_SRV_PER_MIP) {
 			for (int i = 0; i < mip_levels; i++) {
 				CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
 					CD3DX12_SHADER_RESOURCE_VIEW_DESC::TexCube(srv_format, 1, i) :
 					CD3DX12_SHADER_RESOURCE_VIEW_DESC::Tex2D(srv_format, 1, i);
-				cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv + 1 + i, texture->resource.resource.Get(), &srv_desc);
+				cbv_uav_srv_dynamic_allocator.CreateSrv(texture->srv + 1 + i, texture->resource, &srv_desc);
 			}
 		}
 	}
@@ -223,13 +227,13 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 			CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc = desc->flags & TEXTURE_FLAG_CUBE ? 
 				CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2DArray(uav_format, 6, 0, i) :
 				CD3DX12_UNORDERED_ACCESS_VIEW_DESC::Tex2D(uav_format, i);
-			cbv_uav_srv_dynamic_allocator.CreateUav(texture->uav + i, texture->resource.resource.Get(), nullptr, &uav_desc);
+			cbv_uav_srv_dynamic_allocator.CreateUav(texture->uav + i, texture->resource, nullptr, &uav_desc);
 		}
 	}
 
 	// Create the render target view.
 	if (desc->flags & TEXTURE_FLAG_RENDER_TARGET) { 
-		texture->render.rtv = rtv_allocator.CreateRenderTargetView(texture->resource.resource.Get(), nullptr);
+		texture->render.rtv = rtv_allocator.CreateRenderTargetView(texture->resource, nullptr);
 		if (texture->render.rtv.ptr == 0) {
 			FreeTexture(texture);
 			return E_OUTOFMEMORY;
@@ -241,7 +245,7 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 
 	// Create the depth stencil view.
 	if (desc->flags & TEXTURE_FLAG_DEPTH_TARGET) { 
-		texture->depth.dsv = dsv_allocator.CreateDepthStencilView(texture->resource.resource.Get(), nullptr);
+		texture->depth.dsv = dsv_allocator.CreateDepthStencilView(texture->resource, nullptr);
 		if (texture->depth.dsv.ptr == 0) {
 			FreeTexture(texture);
 			return E_OUTOFMEMORY;
@@ -259,7 +263,11 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 
 void GpuResources::FreeTexture(Texture* texture)
 {
-	texture->resource.Reset();
+	if (texture->resource) {
+		texture->resource->Release();
+		texture->resource = nullptr;
+	}
+	texture->allocation.Free();
 	cbv_uav_srv_dynamic_allocator.Free(texture->srv);
 	texture->srv = -1;
 	cbv_uav_srv_dynamic_allocator.Free(texture->uav);

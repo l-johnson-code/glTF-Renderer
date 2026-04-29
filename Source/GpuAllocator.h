@@ -11,7 +11,6 @@
 #include "TlsfHeap.h"
 
 class GpuAllocation;
-struct GpuResource;
 
 class GpuAllocator {
     public:
@@ -22,25 +21,25 @@ class GpuAllocator {
     {
         return supports_gpu_upload_heap;
     }
-    HRESULT CreateResource(const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource, const char* name = nullptr);
-    HRESULT CreateCommittedResource(const D3D12_HEAP_PROPERTIES* heap_properties, D3D12_HEAP_FLAGS heap_flags, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource, const char* name = nullptr);
-    HRESULT Allocate(uint64_t size, uint64_t alignment, int* heap_index, TlsfHeap::Allocation* allocation);
+    HRESULT CreateResource(D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, const char* name, GpuAllocation* allocation, REFIID iid, void** resource);
     void Free(GpuAllocation* allocation);
-
+    
     private:
-
+    
     static constexpr uint64_t heap_size = Mebibytes(256);
-
+    
     bool supports_gpu_upload_heap = false;
-
+    
     size_t local_capacity = 0;
     size_t non_local_capacity = 0;
-
+    
     size_t local_budget = 0;
     size_t non_local_budget = 0;
-
+    
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     std::vector<TlsfHeap> heaps;
+
+    HRESULT Allocate(uint64_t size, uint64_t alignment, int* heap_index, TlsfHeap::Allocation* allocation);
 };
 
 class GpuAllocation {
@@ -55,17 +54,14 @@ class GpuAllocation {
         this->resource->AddRef();
     }
 
-    GpuAllocation(GpuAllocator* allocator, int heap, void* handle)
+    GpuAllocation(GpuAllocator* allocator, ID3D12Resource* resource, int heap, void* handle)
     {
         this->is_committed = false;
         this->allocator = allocator;
+        this->resource = resource;
+        this->resource->AddRef();
         this->heap = heap;
         this->handle = handle;
-    }
-
-    ~GpuAllocation()
-    {
-        Free();
     }
 
     void Free() 
@@ -80,17 +76,5 @@ class GpuAllocation {
     bool is_committed = false;
     int heap = 0;
     void* handle = nullptr;
-};
-
-struct GpuResource {
-
-	Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-	std::shared_ptr<GpuAllocation> allocation;
-
-    void Reset()
-    {
-        resource.Reset();
-        allocation.reset();
-    }
 };
 

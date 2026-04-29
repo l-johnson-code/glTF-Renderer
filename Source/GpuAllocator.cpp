@@ -87,58 +87,56 @@ void GpuAllocator::DeInit()
     this->heaps = std::vector<TlsfHeap>();
 }
 
-HRESULT GpuAllocator::CreateResource(const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource, const char* name)
+HRESULT GpuAllocator::CreateResource(D3D12_HEAP_TYPE heap_type, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, const char* name, GpuAllocation* allocation, REFIID iid, void** resource)
 {
     ProfileZoneScoped();
+
+    HRESULT result = S_OK;
 
     // TODO: Support tight alignment.
     D3D12_RESOURCE_ALLOCATION_INFO allocation_info = device->GetResourceAllocationInfo(0, 1, desc);
 
+    if ((heap_type != D3D12_HEAP_TYPE_DEFAULT) || (allocation_info.SizeInBytes > heap_size)) {
+        
+        CD3DX12_HEAP_PROPERTIES heap_properties(heap_type);
+        result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, desc, initial_state, optimized_clear_value, iid, resource);
+        
+        assert(SUCCEEDED(result));
+        if (FAILED(result)) {
+            return result;
+        }
+
+        if (name) {
+            SetName((ID3D12Object*)*resource, name);
+        }
+
+        // Log the allocation in tracy.
+        Profiling::MemoryPool pool = GetPoolFromHeapProperties(this->device.Get(), &heap_properties);
+        ProfileAllocP(*resource, allocation_info.SizeInBytes, pool);
+
+        *allocation = GpuAllocation(this, (ID3D12Resource*)*resource);
+
+        return S_OK;
+    }
+
     int heap_index = 0;
     TlsfHeap::Allocation heap_allocation;
-    HRESULT result = Allocate(allocation_info.SizeInBytes, allocation_info.Alignment, &heap_index, &heap_allocation);
+    result = Allocate(allocation_info.SizeInBytes, allocation_info.Alignment, &heap_index, &heap_allocation);
     if (FAILED(result)) {
         return result;
     }
 
-    result = this->device->CreatePlacedResource(heaps[heap_index].heap, heap_allocation.offset, desc, initial_state, optimized_clear_value, IID_PPV_ARGS(&resource->resource));
+    result = this->device->CreatePlacedResource(heaps[heap_index].heap, heap_allocation.offset, desc, initial_state, optimized_clear_value, iid, resource);
     if (FAILED(result)) {
         heaps[heap_index].Free(heap_allocation.handle);
         return result;
     }
 
     if (name) {
-        SetName(resource->resource.Get(), name);
+        SetName((ID3D12Object*)*resource, name);
     }
 
-    resource->allocation = std::make_shared<GpuAllocation>(this, heap_index, heap_allocation.handle);
-
-    return S_OK;
-}
-
-HRESULT GpuAllocator::CreateCommittedResource(const D3D12_HEAP_PROPERTIES* heap_properties, D3D12_HEAP_FLAGS heap_flags, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initial_state, const D3D12_CLEAR_VALUE *optimized_clear_value, GpuResource* resource, const char* name)
-{
-    ProfileZoneScoped();
-
-	HRESULT result = device->CreateCommittedResource(heap_properties, heap_flags, desc, initial_state, optimized_clear_value, IID_PPV_ARGS(&resource->resource));
-	assert(SUCCEEDED(result));
-	if (FAILED(result)) {
-		return result;
-	}
-
-    if (name) {
-        SetName(resource->resource.Get(), name);
-    }
-
-	// Estimate the size of the resource. 
-	// This value may be lower or higher than the underlying heap size but there appears to be no way to directly query the size of the underlying heap.
-	D3D12_RESOURCE_ALLOCATION_INFO alloc_info = device->GetResourceAllocationInfo(0, 1, desc);
-
-    // Log the allocation in tracy.
-	Profiling::MemoryPool pool = GetPoolFromHeapProperties(this->device.Get(), heap_properties);
-	ProfileAllocP(resource->resource.Get(), alloc_info.SizeInBytes, pool);
-
-    resource->allocation = std::make_shared<GpuAllocation>(this, resource->resource.Get());
+    *allocation = GpuAllocation(this, (ID3D12Resource*)*resource, heap_index, heap_allocation.handle);
 
     return S_OK;
 }
@@ -182,6 +180,10 @@ void GpuAllocator::Free(GpuAllocation* allocation)
         } else if (allocation->handle){
             TlsfHeap& heap = heaps[allocation->heap];
             heap.Free(allocation->handle);
+            if (allocation->resource) {
+                allocation->resource->Release();
+                allocation->resource = nullptr;
+            }
         }
     }
 }

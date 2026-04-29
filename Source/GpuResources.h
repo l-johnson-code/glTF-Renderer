@@ -36,7 +36,7 @@ class GpuResources {
 
 	class Buffer {
 		public:
-		ID3D12Resource* Resource() { return this->resource.resource.Get(); }
+		ID3D12Resource* Resource() { return this->resource; }
 		uint64_t Size() { return this->size; }
 		int Srv() { assert(this->srv != -1); return this->srv; };
 		void* Pointer() { assert(pointer); return this->pointer; }
@@ -44,7 +44,8 @@ class GpuResources {
 		private:
 		friend class GpuResources;
 
-		GpuResource resource;
+		ID3D12Resource* resource = nullptr;
+		GpuAllocation allocation;
 		uint64_t size = 0;
 		int srv = -1;
 		void* pointer = nullptr;
@@ -76,7 +77,7 @@ class GpuResources {
 
 	class Texture {
 		public:
-		ID3D12Resource* Resource() { return this->resource.resource.Get(); }
+		ID3D12Resource* Resource() { return this->resource; }
 		uint16_t Width() { return this->width; }
 		uint16_t Height() { return this->height; }
 		uint8_t MipLevels() { return this->mip_levels; };
@@ -88,12 +89,19 @@ class GpuResources {
 		const float* ClearColor() { assert(this->flags & TEXTURE_FLAG_RENDER_TARGET); return &this->render.clear_color[0]; }
 		D3D12_CPU_DESCRIPTOR_HANDLE Dsv() { assert((this->flags & TEXTURE_FLAG_DEPTH_TARGET) && (this->depth.dsv.ptr != 0)); return this->depth.dsv; }
 		float ClearDepth() { assert(this->flags & TEXTURE_FLAG_DEPTH_TARGET); return this->depth.clear_depth; }
-		GpuResource& AllocatedResource() { return this->resource; } // TODO: This is only for a temporary workaround and should be removed.
+		// TODO: This is a for a temporary fix and should be removed. 
+		void Invalidate() 
+		{ 
+			resource = nullptr;
+			srv = -1;
+			uav = -1;
+		}
 
 		private:
 		friend class GpuResources;
 
-		GpuResource resource;
+		ID3D12Resource* resource = nullptr;
+		GpuAllocation allocation;
 		uint16_t width = 0;
 		uint16_t height = 0;
 		uint8_t mip_levels = 0;

@@ -312,7 +312,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 		command_context.BeginEvent("Environment Map");
 		environment_map.CreateEnvironmentMap(&command_context, &environment_map.equirectangular_image, &map);
 		deferred_release.Current().push_back(environment_map.equirectangular_image); // TODO: Need a proper mechanism for deferred deletion.
-		environment_map.equirectangular_image.AllocatedResource().Reset();
+		environment_map.equirectangular_image.Invalidate();
 		environment_map_loaded = true;
 		command_context.EndEvent();
 	}
