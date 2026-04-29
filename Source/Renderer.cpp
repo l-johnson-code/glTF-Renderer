@@ -8,6 +8,7 @@
 #include <directx/dxgiformat.h>
 #include <imgui/backends/imgui_impl_dx12.h>
 #include <spdlog/spdlog.h>
+#include <tinyexr/tinyexr.h>
 
 #include "BufferAllocator.h"
 #include "Config.h"
@@ -161,7 +162,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	gpu_skinner.Create(this->device.Get());
 	tone_mapper.Create(this->device.Get());
 	environment_map.Init(this->device.Get(), &this->resources);
-	resources.LoadLookupTables(&this->upload_buffer);
+	LoadLookupTables(&this->upload_buffer);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 		rasterizer.Init(this->device.Get(), &resources, this->display_width, this->display_height);
@@ -370,6 +371,73 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	EndFrame();
 	ProfilePlotBytes("Transient Allocator", (int64_t)frame_allocator->Size());
 	ProfilePlotNumber("Transient Descriptors", (int64_t)descriptor_allocator->Size());
+}
+
+void Renderer::LoadLookupTables(UploadBuffer* upload_buffer)
+{
+	ProfileZoneScoped();
+	HRESULT result = S_OK;
+	{
+		int x, y;
+		const char* file = "Sheen_E.exr";
+		const char* error;
+
+		EXRVersion exr_version;
+		int ret = ParseEXRVersionFromFile(&exr_version, file);
+		assert(ret == TINYEXR_SUCCESS);
+		assert(exr_version.tiled == 0);
+		assert(exr_version.multipart == 0);
+		assert(exr_version.non_image == 0);
+
+		EXRHeader exr_header;
+		InitEXRHeader(&exr_header);
+		ret = ParseEXRHeaderFromFile(&exr_header, &exr_version, file, &error);
+		assert(ret == TINYEXR_SUCCESS);
+		assert(exr_header.num_channels == 1);
+		assert(exr_header.channels[0].pixel_type == TINYEXR_PIXELTYPE_HALF);
+
+		EXRImage exr_image;
+		InitEXRImage(&exr_image);
+
+		ret = LoadEXRImageFromFile(&exr_image, &exr_header, file, &error);
+		assert(ret == TINYEXR_SUCCESS);
+		x = exr_image.width;
+		y = exr_image.height;
+
+		GpuResources::TextureDesc texture_desc = {
+			.format = DXGI_FORMAT_R16_FLOAT,
+			.width = (uint16_t)x,
+			.height = (uint16_t)y,
+			.mip_levels = 1,
+			.flags = GpuResources::TEXTURE_FLAG_SRV,
+			.name = "Sheen E Lookup Table",
+		};
+		result = resources.CreateTexture(&texture_desc, &this->sheen_e);
+		assert(result == S_OK);
+
+		// TODO: Use the SRV created with the texture instead of this. Remove static descriptors altogether.
+		D3D12_CPU_DESCRIPTOR_HANDLE descriptor_cpu_handle = resources.cbv_uav_srv_allocator.GetCpuHandle(GpuResources::STATIC_DESCRIPTOR_SRV_SHEEN_E);
+		D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {
+			.Format = DXGI_FORMAT_R16_FLOAT,
+			.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+			.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+			.Texture2D = {
+				.MostDetailedMip = 0,
+				.MipLevels = std::numeric_limits<uint32_t>::max()
+			}
+		};
+		device->CreateShaderResourceView(this->sheen_e.Resource(), &srv_desc, descriptor_cpu_handle);
+
+		int stride = x * 2;
+		uint32_t row_pitch = 0;
+		std::byte* upload_ptr = (std::byte*)upload_buffer->QueueTextureUpload(DXGI_FORMAT_R16_FLOAT, x, y, 1, this->sheen_e.Resource(), 0, &row_pitch);
+		for (int i = 0; i < y; i++) {
+			memcpy(upload_ptr + row_pitch * i, exr_image.images[0] + stride * i, stride);
+		}
+
+		FreeEXRImage(&exr_image);
+		FreeEXRHeader(&exr_header);
+	}
 }
 
 void Renderer::CreateRenderTargets()

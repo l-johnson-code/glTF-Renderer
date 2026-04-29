@@ -6,7 +6,6 @@
 #include "Config.h"
 #include "DescriptorAllocator.h"
 #include "MultiBuffer.h"
-#include "UploadBuffer.h"
 #include "GpuAllocator.h"
 
 class GpuResources {
@@ -131,7 +130,6 @@ class GpuResources {
 	GpuAllocator allocator;
 	
 	void Create(ID3D12Device* device);
-	void LoadLookupTables(UploadBuffer* upload_buffer);
 	HRESULT CreateBuffer(const BufferDesc* desc, Buffer* buffer);
 	void FreeBuffer(Buffer* buffer);
 	HRESULT CreateTexture(const TextureDesc* desc, Texture* texture);
@@ -145,7 +143,4 @@ class GpuResources {
 	private:
 
 	Microsoft::WRL::ComPtr<ID3D12Device> device;
-
-	// Lookup tables.
-	GpuResources::Texture sheen_e;
 };

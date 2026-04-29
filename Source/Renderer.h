@@ -188,6 +188,9 @@ private:
 	std::vector<D3D12_RAYTRACING_INSTANCE_DESC> raytracing_instances;
 	D3D12_GPU_VIRTUAL_ADDRESS gpu_lights;
 	D3D12_GPU_VIRTUAL_ADDRESS gpu_materials;
+    
+    // Lookup tables.
+	GpuResources::Texture sheen_e;
 
 	uint64_t frame = 0;
 
@@ -213,6 +216,7 @@ private:
 	ToneMapper tone_mapper;
 	bool environment_map_loaded = false;
 
+    void LoadLookupTables(UploadBuffer* upload_buffer);
 	void CreateRenderTargets();
 	void CreateRendererTypeSpecificResources(RendererType renderer_type);
 	void DestroyRendererTypeSpecificResources(RendererType renderer_type);
