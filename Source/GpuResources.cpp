@@ -73,7 +73,7 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 	HRESULT result = S_OK;
 
 	// Create the resource.
-	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
+	CD3DX12_HEAP_PROPERTIES heap_properties(desc->heap_type);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(desc->size);
 	if (desc->flags & BUFFER_FLAG_UAV) {
 		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
@@ -81,7 +81,6 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 	if (desc->flags & BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE) {
 		resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS |  D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 	};
-
 	result = allocator.CreateCommittedResource(
 		&heap_properties,
 		D3D12_HEAP_FLAG_NONE,
@@ -96,6 +95,7 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 		return result;
 	}
 
+	// Map the resource.
 	if (desc->flags & BUFFER_FLAG_PERSISTENT_MAP) {
 		result = buffer->resource.resource->Map(0, nullptr, &buffer->pointer);
 		if (FAILED(result)) {
@@ -104,8 +104,8 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 		}
 	}
 
+	// Create descriptor. We assume that the descriptor spans the entire buffer.
 	if (desc->flags & BUFFER_FLAG_GENERATE_DESCRIPTOR) {
-		// We assume that the descriptor spans the entire buffer.
 		CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc;
 		if (desc->structured_byte_stride != 0) {
 			srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::StructuredBuffer(desc->size / desc->structured_byte_stride, desc->structured_byte_stride);

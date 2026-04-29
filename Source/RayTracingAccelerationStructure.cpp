@@ -41,14 +41,24 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, GpuResources* 
 	max_blas_scratch_size = Align(blas_prebuild_info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
 
 	// Create scratch buffer for BLAS.
-	CD3DX12_HEAP_PROPERTIES heap_properties(D3D12_HEAP_TYPE_DEFAULT);
-	result = blas_scratch.Create(&resources->allocator, max_blas_scratch_size, &heap_properties, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON, "BLAS Scratch");
+	GpuResources::BufferDesc blas_scratch_desc = {
+		.size = max_blas_scratch_size,
+		.flags = GpuResources::BUFFER_FLAG_UAV,
+		.name = "BLAS Scratch",
+	};
+	result = blas_scratch.Create(resources, &blas_scratch_desc);
 	assert(SUCCEEDED(result));
 
 	// Create heaps for staging TLAS.
 	const int instance_desc_stride = Align(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), 16);
 	for (int i = 0; i < tlas_staging.Size(); i++) {
-		tlas_staging[i].Create(&resources->allocator, instance_desc_stride * max_tlas_instances, true, "TLAS Staging");
+		GpuResources::BufferDesc tlas_scratch_desc = {
+			.size = instance_desc_stride * max_tlas_instances,
+			.flags = (GpuResources::BufferFlags)(GpuResources::BUFFER_FLAG_UAV | GpuResources::BUFFER_FLAG_PERSISTENT_MAP),
+			.heap_type = resources->allocator.SupportsGpuUploadHeap() ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD,
+			.name = "TLAS Staging",
+		};
+		tlas_staging[i].Create(resources, &tlas_scratch_desc);
 	}
 
 	// Calculate size needed for heaps.
@@ -126,7 +136,7 @@ void RaytracingAccelerationStructure::UpdateDynamicBlas(ID3D12GraphicsCommandLis
 
 	D3D12_GPU_VIRTUAL_ADDRESS scratch = blas_scratch.Allocate(blas->update_scratch_size, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
 	if (scratch == 0) {
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->blas_scratch.resource.resource.Get());
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->blas_scratch.buffer.Resource());
 		command_list->ResourceBarrier(1, &barrier);
 		this->blas_scratch.Reset();
 		scratch = blas_scratch.Allocate(blas->update_scratch_size, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
@@ -145,7 +155,7 @@ void RaytracingAccelerationStructure::UpdateDynamicBlas(ID3D12GraphicsCommandLis
 void RaytracingAccelerationStructure::EndBlasBuilds(ID3D12GraphicsCommandList4* command_list)
 {
 	// Final barrier.
-	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->blas_scratch.resource.resource.Get());
+	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->blas_scratch.buffer.Resource());
 	command_list->ResourceBarrier(1, &barrier);
 	this->blas_scratch.Reset();
 }
@@ -186,7 +196,7 @@ void RaytracingAccelerationStructure::BuildTlas(ID3D12GraphicsCommandList4* comm
 		.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE,
 		.NumDescs = instance_count,
 		.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-		.InstanceDescs = staging->resource.resource->GetGPUVirtualAddress(),
+		.InstanceDescs = staging->buffer.Resource()->GetGPUVirtualAddress(),
 	};
 
 	// Create top level raytracing acceleration structure.
@@ -261,7 +271,7 @@ void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* comm
 	
 	// Check if there was enough space left in the scratch buffer. If there wasn't, insert a barrier and reset the allocator.
 	if (scratch == 0) {
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->blas_scratch.resource.resource.Get());
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->blas_scratch.buffer.Resource());
 		command_list->ResourceBarrier(1, &barrier);
 		this->blas_scratch.Reset();
 		scratch = blas_scratch.Allocate(prebuild_info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);

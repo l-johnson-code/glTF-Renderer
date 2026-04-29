@@ -148,10 +148,16 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	// Create the swapchain.
 	swapchain.Create(this->device.Get(), this->graphics_command_queue.Get(), &this->resources.rtv_allocator, window, display_width, display_height);
 	
-	upload_buffer.Create(this->device.Get(), &this->resources.allocator, ::Config::UPLOAD_BUFFER_CAPACITY, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, ::Config::FRAME_COUNT);
+	upload_buffer.Create(this->device.Get(), &this->resources, ::Config::UPLOAD_BUFFER_CAPACITY, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, ::Config::FRAME_COUNT);
 
 	for (int i = 0; i < frame_allocators.Size(); i++) {
-		frame_allocators[i].Create(&this->resources.allocator, ::Config::FRAME_HEAP_CAPACITY, true, "Transient Resources");
+		GpuResources::BufferDesc buffer_desc = {
+			.size = ::Config::FRAME_HEAP_CAPACITY,
+			.flags = GpuResources::BUFFER_FLAG_PERSISTENT_MAP,
+			.heap_type = resources.allocator.SupportsGpuUploadHeap() ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD,
+			.name = "Transient Resources",
+		};
+		frame_allocators[i].Create(&this->resources, &buffer_desc);
 	}
 
 	InitializeImGui();

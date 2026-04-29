@@ -7,34 +7,22 @@
 
 #include "Memory.h"
 
-HRESULT LinearBuffer::Create(GpuAllocator* allocator, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, D3D12_RESOURCE_STATES initial_resource_state, const char* name)
+HRESULT LinearBuffer::Create(GpuResources* resources, const GpuResources::BufferDesc* buffer_desc)
 {
-    this->capacity = capacity;
     this->size = 0;
 
-	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(capacity, resource_flags);
-	
-    HRESULT result = allocator->CreateCommittedResource(
-        heap_properties,
-        D3D12_HEAP_FLAG_NONE,
-        &resource_desc,
-        initial_resource_state,
-        nullptr,
-        &this->resource,
-        name
-	);
+    HRESULT result = resources->CreateBuffer(buffer_desc, &this->buffer);
     if (FAILED(result)) {
-        Destroy();
+        Destroy(resources);
         return result;
     }
     
     return result;
 }
 
-void LinearBuffer::Destroy()
+void LinearBuffer::Destroy(GpuResources* resources)
 {
-	this->resource.Reset();
-	this->capacity = 0;
+	resources->FreeBuffer(&this->buffer);
     this->size = 0;
 }
 
@@ -50,7 +38,7 @@ uint64_t LinearBuffer::Size()
 
 uint64_t LinearBuffer::Capacity()
 {
-	return this->capacity;
+	return this->buffer.Size();
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS LinearBuffer::Allocate(uint64_t size, uint64_t alignment)
@@ -58,52 +46,12 @@ D3D12_GPU_VIRTUAL_ADDRESS LinearBuffer::Allocate(uint64_t size, uint64_t alignme
 	uint64_t aligned_address = Align(this->size, alignment);
 	uint64_t new_size = aligned_address + size;
 	// Bounds check.
-	if (new_size > this->capacity) {
+	if (new_size > this->Capacity()) {
 		return 0;
 	} else {
 		this->size = new_size;
-		return this->resource.resource->GetGPUVirtualAddress() + aligned_address;
+		return this->buffer.Resource()->GetGPUVirtualAddress() + aligned_address;
 	}
-}
-
-HRESULT CpuMappedLinearBuffer::Create(GpuAllocator* allocator, uint64_t capacity, bool use_gpu_upload_heap, const char* name)
-{
-	HRESULT result = S_OK;
-
-    this->capacity = capacity;
-    this->size = 0;
-
-	CD3DX12_HEAP_PROPERTIES heap_properties((use_gpu_upload_heap && allocator->SupportsGpuUploadHeap()) ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD);
-
-	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(capacity);
-
-    result = allocator->CreateCommittedResource(
-        &heap_properties,
-        D3D12_HEAP_FLAG_NONE,
-        &resource_desc,
-        D3D12_RESOURCE_STATE_COMMON,
-        nullptr,
-        &this->resource,
-        name
-	);
-    if (FAILED(result)) {
-        Destroy();
-        return result;
-    }
-
-	result = this->resource.resource->Map(0, nullptr, &this->pointer);
-	if (FAILED(result)) {
-        Destroy();
-        return result;
-    }
-
-	return result;
-}
-
-void CpuMappedLinearBuffer::Destroy()
-{
-	LinearBuffer::Destroy();
-    this->pointer = nullptr;
 }
 
 void* CpuMappedLinearBuffer::Allocate(uint64_t size, uint64_t alignment, D3D12_GPU_VIRTUAL_ADDRESS* gpu_address)
@@ -111,19 +59,19 @@ void* CpuMappedLinearBuffer::Allocate(uint64_t size, uint64_t alignment, D3D12_G
 	uint64_t aligned_address = Align(this->size, alignment);
 	uint64_t new_size = aligned_address + size;
 	// Bounds check.
-	if (new_size > this->capacity) {
+	if (new_size > this->Capacity()) {
 		*gpu_address = 0;
 		return nullptr;
 	} else {
-		*gpu_address = this->resource.resource->GetGPUVirtualAddress() + aligned_address;
+		*gpu_address = this->buffer.Resource()->GetGPUVirtualAddress() + aligned_address;
 		this->size = new_size;
-		return (char*)(this->pointer) + aligned_address;
+		return (char*)(this->buffer.Pointer()) + aligned_address;
 	}
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS CpuMappedLinearBuffer::Copy(const void* data, uint64_t size, uint64_t alignment)
 {
-	assert(this->pointer);
+	assert(this->buffer.Pointer());
     void* ptr = nullptr;
     D3D12_GPU_VIRTUAL_ADDRESS gpu_ptr = 0;
     ptr = Allocate(size, alignment, &gpu_ptr);
@@ -131,32 +79,13 @@ D3D12_GPU_VIRTUAL_ADDRESS CpuMappedLinearBuffer::Copy(const void* data, uint64_t
     return gpu_ptr;
 }
 
-HRESULT CircularBuffer::Create(GpuAllocator* allocator, uint64_t capacity, D3D12_HEAP_PROPERTIES* heap_properties, D3D12_RESOURCE_FLAGS resource_flags, const char* name)
+HRESULT CircularBuffer::Create(GpuResources* resources, const GpuResources::BufferDesc* buffer_desc)
 {
-    this->capacity = capacity;
     this->size = 0;
 
-	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(capacity, resource_flags);
-	
-    HRESULT result = allocator->CreateCommittedResource(
-        heap_properties,
-        D3D12_HEAP_FLAG_NONE,
-        &resource_desc,
-        D3D12_RESOURCE_STATE_COMMON,
-        nullptr,
-        &this->resource,
-        name
-	);
+    HRESULT result = resources->CreateBuffer(buffer_desc, &this->buffer);
     if (FAILED(result)) {
-        Destroy();
-        return result;
-    }
-
-    // Map the resource for CPU access.
-    this->ptr = nullptr;
-    result = this->resource.resource->Map(0, nullptr, &this->ptr);
-    if (FAILED(result)) {
-        Destroy();
+        Destroy(resources);
         return result;
     }
 
@@ -169,15 +98,15 @@ uint64_t CircularBuffer::Allocate(uint64_t size, uint64_t alignment)
     uint64_t aligned_write = Align(this->write, alignment);
     uint64_t new_write = aligned_write + size;
     uint64_t new_size = this->size + new_write - this->write;
-    if (new_size <= capacity && new_write <= capacity) {
+    if (new_size <= Capacity() && new_write <= Capacity()) {
         this->size = new_size;
-        this->write = new_write % capacity;
+        this->write = new_write % Capacity();
         return aligned_write;
     }
     
     // Try to allocate at the beginning of the buffer.
-    new_size = this->size + size + this->capacity - this->write;
-    if (new_size <= capacity) {
+    new_size = this->size + size + Capacity() - this->write;
+    if (new_size <= Capacity()) {
         this->size = new_size;
         this->write = size;
         return 0;
@@ -189,7 +118,7 @@ uint64_t CircularBuffer::Allocate(uint64_t size, uint64_t alignment)
 
 void* CircularBuffer::GetCpuAddress(uint64_t offset)
 {
-    return (std::byte*)ptr + offset;
+    return (std::byte*)buffer.Pointer() + offset;
 }
 
 uint64_t CircularBuffer::GetMarker()
@@ -199,12 +128,12 @@ uint64_t CircularBuffer::GetMarker()
 
 void CircularBuffer::Free(uint64_t marker)
 {
-    assert(marker < capacity);
+    assert(marker < Capacity());
     uint64_t new_size;
     if (marker <= this->write) {
         new_size = this->write - marker;
     } else {
-        new_size = this->write + this->capacity - marker;
+        new_size = this->write + Capacity() - marker;
     }
     assert(new_size <= this->size);  // Check we haven't freed in the incorrect order.
     this->size = new_size;
@@ -223,19 +152,17 @@ uint64_t CircularBuffer::Size()
 
 uint64_t CircularBuffer::Capacity()
 {
-    return this->capacity;
+    return this->buffer.Size();
 }
 
 ID3D12Resource* CircularBuffer::Resource()
 {
-    return this->resource.resource.Get();
+    return this->buffer.Resource();
 }
 
-void CircularBuffer::Destroy()
+void CircularBuffer::Destroy(GpuResources* resources)
 {
-    this->resource.Reset();
-    this->ptr = nullptr;
+    resources->FreeBuffer(&this->buffer);
     this->write = 0;
     this->size = 0;
-    this->capacity = 0;
 }

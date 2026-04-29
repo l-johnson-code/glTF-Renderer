@@ -37,7 +37,7 @@ class GpuResources {
 	class Buffer {
 		public:
 		ID3D12Resource* Resource() { return this->resource.resource.Get(); }
-		uint16_t Size() { return this->size; }
+		uint64_t Size() { return this->size; }
 		int Srv() { assert(this->srv != -1); return this->srv; };
 		void* Pointer() { assert(pointer); return this->pointer; }
 		
