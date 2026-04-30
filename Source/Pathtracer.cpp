@@ -94,7 +94,7 @@ void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuff
         .NumSubobjects = std::size(subobjects),
         .pSubobjects = subobjects,
     };
-    result = device->CreateStateObject(&state_object_desc, IID_PPV_ARGS(&this->state_object));
+    result = resources->CreateStateObject(&state_object_desc, &this->state_object, "Path Tracer State Object");
     assert(SUCCEEDED(result));
 
     // Create the shader table.

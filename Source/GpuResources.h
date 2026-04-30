@@ -142,9 +142,10 @@ class GpuResources {
 	void FreeBuffer(Buffer* buffer);
 	HRESULT CreateTexture(const TextureDesc* desc, Texture* texture);
 	void FreeTexture(Texture* texture);
+	HRESULT CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name = nullptr);
 	HRESULT CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	HRESULT CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
-	HRESULT CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name = nullptr);
+	HRESULT CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name = nullptr);
 	static D3D12_SHADER_BYTECODE LoadShader(const char* filepath);
 	static void FreeShader(D3D12_SHADER_BYTECODE shader);
 	

@@ -329,6 +329,26 @@ HRESULT GpuResources::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_
 	return result;
 }
 
+HRESULT GpuResources::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name)
+{
+	ProfileZoneScoped();
+	Microsoft::WRL::ComPtr<ID3D12Device5> device_5;
+	HRESULT result = device.As(&device_5);
+	assert(SUCCEEDED(result));
+	if (FAILED(result)) {
+		return result;
+	}
+	result = device_5->CreateStateObject(desc, IID_PPV_ARGS(state_object));
+	assert(SUCCEEDED(result));
+	if (FAILED(result)) {
+		return result;
+	}
+	if (name) {
+		SetName(*state_object, name);
+	}
+	return result;
+}
+
 D3D12_SHADER_BYTECODE GpuResources::LoadShader(const char* filepath)
 {
 	ProfileZoneScoped();
