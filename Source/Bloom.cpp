@@ -7,11 +7,10 @@
 #include "DirectXHelpers.h"
 #include "GpuResources.h"
 
-void Bloom::Create(ID3D12Device* device, GpuResources* resources, uint16_t width, uint16_t height, uint8_t max_iterations)
+void Bloom::Create(GpuResources* resources, uint16_t width, uint16_t height, uint8_t max_iterations)
 {
     HRESULT result = S_OK;
 
-    this->device = device;
     this->resources = resources;
 
     // Create the mip chain.
@@ -22,7 +21,7 @@ void Bloom::Create(ID3D12Device* device, GpuResources* resources, uint16_t width
 	root_parameter.InitAsConstantBufferView(0);
 	CD3DX12_STATIC_SAMPLER_DESC sampler_desc(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
 	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(1, &root_parameter, 1, &sampler_desc, D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-	result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->root_signature, "Bloom Root Signature");
+	result = resources->CreateRootSignature(&root_signature_desc, &this->root_signature, "Bloom Root Signature");
 	assert(result == S_OK);
     
     // Create the pipeline states.
@@ -31,12 +30,12 @@ void Bloom::Create(ID3D12Device* device, GpuResources* resources, uint16_t width
 	};
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/BloomDownsample.cs.bin");
-	result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->downsample_pipeline_state, "Bloom Downsample");
+	result = resources->CreateComputePipelineState(&pipeline_desc, &this->downsample_pipeline_state, "Bloom Downsample");
 	assert(result == S_OK);
 	GpuResources::FreeShader(pipeline_desc.CS);
     	
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/BloomUpsample.cs.bin");
-	result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->upsample_pipeline_state, "Bloom Upsample");
+	result = resources->CreateComputePipelineState(&pipeline_desc, &this->upsample_pipeline_state, "Bloom Upsample");
 	assert(result == S_OK);
 	GpuResources::FreeShader(pipeline_desc.CS);
 }

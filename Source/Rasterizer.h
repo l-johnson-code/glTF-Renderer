@@ -28,7 +28,7 @@ class Rasterizer {
         GpuResources::Texture* output;
     };
 
-    void Init(ID3D12Device* device, GpuResources* gpu_resources, uint16_t width, uint16_t height);
+    void Init(GpuResources* gpu_resources, uint16_t width, uint16_t height);
     void Resize(uint16_t width, uint16_t height);
 	void DrawScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
@@ -45,7 +45,6 @@ class Rasterizer {
 		int material_id;
 	};
 
-	Microsoft::WRL::ComPtr<ID3D12Device> device;
     GpuResources* gpu_resources = nullptr;
 
     uint32_t width;

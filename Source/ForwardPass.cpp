@@ -12,7 +12,7 @@
 
 #include "DirectXHelpers.h"
 
-void ForwardPass::Create(ID3D12Device* device)
+void ForwardPass::Create(GpuResources* resources)
 {
     HRESULT result;
 
@@ -29,7 +29,7 @@ void ForwardPass::Create(ID3D12Device* device)
 		CD3DX12_STATIC_SAMPLER_DESC(1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP)
 	};
 	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(ROOT_PARAMETER_COUNT, root_parameters, std::size(static_samplers), static_samplers, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED | D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-	result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->root_signature, "Forward Signature");
+	result = resources->CreateRootSignature(&root_signature_desc, &this->root_signature, "Forward Signature");
 	assert(result == S_OK);
 
 	// Load shaders.
@@ -37,17 +37,17 @@ void ForwardPass::Create(ID3D12Device* device)
 	D3D12_SHADER_BYTECODE pixel_shader = GpuResources::LoadShader("Shaders/Forward.ps.bin");
 
 	for (uint32_t permutation = 0; permutation < std::size(pipeline_states); permutation++) {
-		CreatePipeline(device, vertex_shader, pixel_shader, permutation, root_signature.Get());
+		CreatePipeline(resources, vertex_shader, pixel_shader, permutation, root_signature.Get());
 	}
 
 	GpuResources::FreeShader(vertex_shader);
 	GpuResources::FreeShader(pixel_shader);
 
-	CreateBackgroundRenderer(device);
-	CreateTranmissionMipPipeline(device);
+	CreateBackgroundRenderer(resources);
+	CreateTranmissionMipPipeline(resources);
 }
 
-void ForwardPass::CreatePipeline(ID3D12Device* device, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature)
+void ForwardPass::CreatePipeline(GpuResources* resources, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature)
 {
 	HRESULT result;
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
@@ -112,7 +112,7 @@ void ForwardPass::CreatePipeline(ID3D12Device* device, D3D12_SHADER_BYTECODE ver
 
 	// Root signature.
 	pipeline_desc.pRootSignature = root_signature;
-	result = GpuResources::CreateGraphicsPipelineState(device, &pipeline_desc, &pipeline_states[flags], "Forward Pipeline");
+	result = resources->CreateGraphicsPipelineState(&pipeline_desc, &pipeline_states[flags], "Forward Pipeline");
 	assert(result == S_OK);
 }
 
@@ -241,7 +241,7 @@ void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, gl
     }
 }
 
-void ForwardPass::CreateBackgroundRenderer(ID3D12Device* device)
+void ForwardPass::CreateBackgroundRenderer(GpuResources* resources)
 {
 	HRESULT result;
 
@@ -258,7 +258,7 @@ void ForwardPass::CreateBackgroundRenderer(ID3D12Device* device)
 		static_samplers, 
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
 	);
-	result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->background_root_signature, "Background Signature");
+	result = resources->CreateRootSignature(&root_signature_desc, &this->background_root_signature, "Background Signature");
 	assert(result == S_OK);
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
@@ -299,7 +299,7 @@ void ForwardPass::CreateBackgroundRenderer(ID3D12Device* device)
 
 	pipeline_desc.pRootSignature = this->background_root_signature.Get();
 
-	result = GpuResources::CreateGraphicsPipelineState(device, &pipeline_desc, &this->background_pipeline_state, "Background Pipeline");
+	result = resources->CreateGraphicsPipelineState(&pipeline_desc, &this->background_pipeline_state, "Background Pipeline");
 	assert(result == S_OK);
 
 	GpuResources::FreeShader(pipeline_desc.VS);
@@ -378,21 +378,21 @@ void ForwardPass::GenerateTransmissionMips(CommandContext* context, GpuResources
 	context->SubmitBarriers();
 }
 
-void ForwardPass::CreateTranmissionMipPipeline(ID3D12Device* device)
+void ForwardPass::CreateTranmissionMipPipeline(GpuResources* resources)
 {
 	HRESULT result = S_OK;
 	CD3DX12_ROOT_PARAMETER root_parameter;
 	root_parameter.InitAsConstantBufferView(0);
 	CD3DX12_STATIC_SAMPLER_DESC sampler_desc(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
 	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(1, &root_parameter, 1, &sampler_desc, D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-	result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->transmission_mips_root_signature, "Transmission Mip Root Signature");
+	result = resources->CreateRootSignature(&root_signature_desc, &this->transmission_mips_root_signature, "Transmission Mip Root Signature");
 	assert(result == S_OK);
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {
 		.pRootSignature = transmission_mips_root_signature.Get(),
 		.CS = GpuResources::LoadShader("Shaders/TransmissionDownsample.cs.bin"),
 	};
-	result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->transmission_mips_pipeline_state, "Transmission Downsample");
+	result = resources->CreateComputePipelineState(&pipeline_desc, &this->transmission_mips_pipeline_state, "Transmission Downsample");
 	assert(result == S_OK);
 	GpuResources::FreeShader(pipeline_desc.CS);
 }

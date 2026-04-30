@@ -19,7 +19,7 @@ class ToneMapper {
 		int frame;
 	};
 
-    void Create(ID3D12Device* device);
+    void Create(GpuResources* resources);
     void Run(CommandContext* context, D3D12_GPU_DESCRIPTOR_HANDLE input_descriptor, const Config* config);
 
 	private:

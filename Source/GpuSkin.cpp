@@ -10,7 +10,7 @@
 #include "Config.h"
 #include "GpuResources.h"
 
-void GpuSkin::Create(ID3D12Device* device)
+void GpuSkin::Create(GpuResources* resources)
 {
     HRESULT result = S_OK;
 
@@ -33,7 +33,7 @@ void GpuSkin::Create(ID3D12Device* device)
 		.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED,
 	};
 
-	result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->root_signature, "GPU skin Root Signature");
+	result = resources->CreateRootSignature(&root_signature_desc, &this->root_signature, "GPU skin Root Signature");
 	assert(result == S_OK);
 
     // Create the pipeline.
@@ -41,7 +41,7 @@ void GpuSkin::Create(ID3D12Device* device)
 		.pRootSignature = this->root_signature.Get(),
 		.CS = GpuResources::LoadShader("Shaders/Skin.cs.bin"),
 	};
-	result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->pipeline_state, "Skin");
+	result = resources->CreateComputePipelineState(&pipeline_desc, &this->pipeline_state, "Skin");
 	assert(result == S_OK);
 
     // Cleanup.

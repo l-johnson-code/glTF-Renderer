@@ -4,13 +4,12 @@
 #include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_core.h>
 
-void Rasterizer::Init(ID3D12Device* device, GpuResources* gpu_resources, uint16_t width, uint16_t height)
+void Rasterizer::Init(GpuResources* gpu_resources, uint16_t width, uint16_t height)
 {
-    this->device = device;
 	this->gpu_resources = gpu_resources;
     Resize(width, height);
-    forward.Create(device);
-    bloom.Create(this->device.Get(), gpu_resources, width, height, 6);
+    forward.Create(gpu_resources);
+    bloom.Create(gpu_resources, width, height, 6);
 }
 
 void Rasterizer::Resize(uint16_t width, uint16_t height)
@@ -273,7 +272,6 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 
 void Rasterizer::Shutdown()
 {
-    device.Reset();
 	if (gpu_resources) {
 		gpu_resources->FreeTexture(&depth);
 		gpu_resources->FreeTexture(&motion_vectors);

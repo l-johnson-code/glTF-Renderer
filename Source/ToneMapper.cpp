@@ -9,7 +9,7 @@
 #include "DirectXHelpers.h"
 #include "GpuResources.h"
 
-void ToneMapper::Create(ID3D12Device* device)
+void ToneMapper::Create(GpuResources* resources)
 {
 	HRESULT result;
 
@@ -19,7 +19,7 @@ void ToneMapper::Create(ID3D12Device* device)
 	root_parameters[ROOT_PARAMETER_INPUT].InitAsDescriptorTable(1, &descriptor_range, D3D12_SHADER_VISIBILITY_PIXEL);
 	root_parameters[ROOT_PARAMETER_CONFIG].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
 	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(ROOT_PARAMETER_COUNT, root_parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-	result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->root_signature, "Tone Mapper Root Signature");
+	result = resources->CreateRootSignature(&root_signature_desc, &this->root_signature, "Tone Mapper Root Signature");
 	assert(result == S_OK);
 
     // Create pipeline.
@@ -59,7 +59,7 @@ void ToneMapper::Create(ID3D12Device* device)
 			.Quality = 0,
 		}
 	};
-	result = GpuResources::CreateGraphicsPipelineState(device, &pipeline_desc, &this->pipeline_state, "Tone Mapper Pipeline");
+	result = resources->CreateGraphicsPipelineState(&pipeline_desc, &this->pipeline_state, "Tone Mapper Pipeline");
 	assert(result == S_OK);
 
     // Cleanup.

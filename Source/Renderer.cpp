@@ -165,13 +165,13 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	upload_buffer.Begin();
 
 	CreateRenderTargets();
-	gpu_skinner.Create(this->device.Get());
-	tone_mapper.Create(this->device.Get());
-	environment_map.Init(this->device.Get(), &this->resources);
+	gpu_skinner.Create(&this->resources);
+	tone_mapper.Create(&this->resources);
+	environment_map.Init(&this->resources);
 	LoadLookupTables(&this->upload_buffer);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
-		rasterizer.Init(this->device.Get(), &resources, this->display_width, this->display_height);
+		rasterizer.Init(&this->resources, this->display_width, this->display_height);
 	} else {
 		pathtracer.Init(this->device.Get(), &this->resources, &this->upload_buffer);
 	}
@@ -246,7 +246,7 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 			pathtracer.Shutdown();
 		}
 		if (new_settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
-			rasterizer.Init(this->device.Get(), &this->resources, new_settings->width, new_settings->height);
+			rasterizer.Init(&this->resources, new_settings->width, new_settings->height);
 		} else {
 			this->upload_buffer.Begin();
 			pathtracer.Init(this->device.Get(), &this->resources, &this->upload_buffer);

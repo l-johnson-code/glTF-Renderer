@@ -24,11 +24,10 @@ float EnvironmentMap::MipToRoughness(int mip_level, int mip_count)
     return result;
 }
 
-void EnvironmentMap::Init(ID3D12Device* device, GpuResources* resources)
+void EnvironmentMap::Init(GpuResources* resources)
 {
     HRESULT result;
 
-    this->device = device;
     this->resources = resources;
 
     // Create the root signature.
@@ -41,34 +40,34 @@ void EnvironmentMap::Init(ID3D12Device* device, GpuResources* resources)
         CD3DX12_STATIC_SAMPLER_DESC(1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP)
     };
     CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(1, &root_parameter, std::size(sampler_descs), sampler_descs, D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-    result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->root_signature, "Environment Root Signature");
+    result = resources->CreateRootSignature(&root_signature_desc, &this->root_signature, "Environment Root Signature");
     assert(result == S_OK);
 
     // Create the pipelines.
     D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {};
     pipeline_desc.pRootSignature = this->root_signature.Get();
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/ConvertEquirectangularToCubemap.cs.bin");
-    result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->generate_cubemap_pipeline_state, "Convert Equirectangular To Cubemap");
+    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_cubemap_pipeline_state, "Convert Equirectangular To Cubemap");
     assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/GenerateMipLevelArray.cs.bin");
-	result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->generate_cube_mip_pipeline_state, "Generate Mip Level Array");
+	result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_cube_mip_pipeline_state, "Generate Mip Level Array");
 	assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/GenerateEnvironmentImportanceMap.cs.bin");
-    result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->generate_importance_map_pipeline_state, "Generate Environment Importance Map");
+    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_importance_map_pipeline_state, "Generate Environment Importance Map");
     assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/GenerateEnvironmentImportanceMapLevel.cs.bin");
-    result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->generate_importance_map_level_pipeline_state, "Generate Environment Importance Map Level");
+    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_importance_map_level_pipeline_state, "Generate Environment Importance Map Level");
     assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 
     pipeline_desc.CS = GpuResources::LoadShader("Shaders/FilterEnvironmentCubeMap.cs.bin");
-    result = GpuResources::CreateComputePipelineState(device, &pipeline_desc, &this->filter_cube_map_pipeline_state, "Filter Environment Cube Map");
+    result = resources->CreateComputePipelineState(&pipeline_desc, &this->filter_cube_map_pipeline_state, "Filter Environment Cube Map");
     assert(result == S_OK);
     GpuResources::FreeShader(pipeline_desc.CS);
 }

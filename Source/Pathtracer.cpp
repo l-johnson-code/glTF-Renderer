@@ -39,7 +39,7 @@ void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuff
         D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | 
         D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
     
-    result = GpuResources::CreateRootSignature(device, &root_signature_desc, &this->root_signature, "Path Tracer Root Signature");
+    result = resources->CreateRootSignature(&root_signature_desc, &this->root_signature, "Path Tracer Root Signature");
     assert(SUCCEEDED(result));
 
     // Root signature shared between all shaders.

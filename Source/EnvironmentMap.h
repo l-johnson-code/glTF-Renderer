@@ -24,7 +24,7 @@ class EnvironmentMap {
     GpuResources::Texture equirectangular_image;
     
     static float MipToRoughness(int mip_level, int mip_count);
-    void Init(ID3D12Device* device, GpuResources* resources);
+    void Init(GpuResources* resources);
     // Note: Loading the initial image and processing the image into cubemaps are separated so that they can happen at different times.
     void LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const char* filepath, Map* map);
     void CreateEnvironmentMap(CommandContext* context, GpuResources::Texture* equirectangular_image, Map* map);
@@ -43,7 +43,6 @@ class EnvironmentMap {
         glm::u16vec2 alias;
     };
     
-    Microsoft::WRL::ComPtr<ID3D12Device> device;
     GpuResources* resources = nullptr;
     
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;

@@ -282,7 +282,7 @@ void GpuResources::FreeTexture(Texture* texture)
 	}
 }
 
-HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name)
+HRESULT GpuResources::CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name)
 {
 	ProfileZoneScoped();
 	HRESULT result = S_OK;
@@ -301,7 +301,7 @@ HRESULT GpuResources::CreateRootSignature(ID3D12Device* device, const D3D12_ROOT
 	return result;
 }
 
-HRESULT GpuResources::CreateComputePipelineState(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
+HRESULT GpuResources::CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
 {
 	ProfileZoneScoped();
 	HRESULT result = device->CreateComputePipelineState(desc, IID_PPV_ARGS(pipeline_state));
@@ -315,7 +315,7 @@ HRESULT GpuResources::CreateComputePipelineState(ID3D12Device* device, const D3D
 	return result;
 }
 
-HRESULT GpuResources::CreateGraphicsPipelineState(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
+HRESULT GpuResources::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
 {
 	ProfileZoneScoped();
 	HRESULT result = device->CreateGraphicsPipelineState(desc, IID_PPV_ARGS(pipeline_state));

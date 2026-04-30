@@ -44,7 +44,7 @@ class ForwardPass {
         uint32_t render_flags;
     };
 
-    void Create(ID3D12Device* device);
+    void Create(GpuResources* resources);
     void Destroy();
     void SetRootSignature(CommandContext* context);
     void SetConfig(CommandContext* context, const Config* config);
@@ -78,7 +78,7 @@ class ForwardPass {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> transmission_mips_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> transmission_mips_pipeline_state;
 
-    void CreatePipeline(ID3D12Device* device, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature);
-    void CreateBackgroundRenderer(ID3D12Device* device);
-    void CreateTranmissionMipPipeline(ID3D12Device* device);
+    void CreatePipeline(GpuResources* resources, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature);
+    void CreateBackgroundRenderer(GpuResources* resources);
+    void CreateTranmissionMipPipeline(GpuResources* resources);
 };
