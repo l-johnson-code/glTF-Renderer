@@ -3,8 +3,6 @@
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
 
-#include "DirectXHelpers.h"
-#include "GpuAllocator.h"
 #include "Memory.h"
 #include "Profiling.h"
 
@@ -30,7 +28,7 @@ VertexAllocation VertexBuffer::GetAllocationSize(uint32_t vertex_count, uint32_t
 	return {vertex_count * element_size, element_size};
 }
 
-void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format)
+void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t vertex_count, DXGI_FORMAT format)
 {
 	UINT vertex_size = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 		
@@ -44,10 +42,10 @@ void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS bu
 	// Create a descriptor.
 	uint64_t first_element = (buffer - resource->GetGPUVirtualAddress()) / vertex_size;
 	CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::TypedBuffer(format, vertex_count, first_element);
-	this->descriptor = descriptor_allocator->AllocateAndCreateSrv(resource, &srv_desc);
+	this->descriptor = resources->CreateShaderResourceView(resource, &srv_desc);
 }
 
-void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size)
+void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t vertex_count, uint32_t vertex_size)
 {	
 	// Create a vertex buffer view.
 	view = {
@@ -59,7 +57,7 @@ void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS bu
 	// Create a descriptor.
 	uint64_t first_element = (buffer - resource->GetGPUVirtualAddress()) / vertex_size;
 	CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::StructuredBuffer(vertex_count, vertex_size);
-	this->descriptor = descriptor_allocator->AllocateAndCreateSrv(resource, &srv_desc);
+	this->descriptor = resources->CreateShaderResourceView(resource, &srv_desc);
 }
 
 void* VertexBuffer::QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource)
@@ -68,10 +66,10 @@ void* VertexBuffer::QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* res
 	return upload_buffer->QueueBufferUpload(this->view.SizeInBytes, resource, offset);
 }
 
-void VertexBuffer::Destroy(DescriptorAllocator* descriptor_allocator)
+void VertexBuffer::Destroy(GpuResources* resources)
 {
 	view = {};
-	descriptor_allocator->Free(descriptor);
+	resources->FreeResourceDescriptor(descriptor);
 	descriptor = -1;
 }
 
@@ -81,7 +79,7 @@ VertexAllocation IndexBuffer::GetAllocationSize(uint32_t index_count, DXGI_FORMA
 	return {index_count * index_size, index_size};
 }
 
-void IndexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format)
+void IndexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t index_count, DXGI_FORMAT format)
 {
 	UINT index_size = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 	
@@ -94,7 +92,7 @@ void IndexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buf
 
 	// Create a descriptor.
 	CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::TypedBuffer(format, index_count);
-	this->descriptor = descriptor_allocator->AllocateAndCreateSrv(resource, &srv_desc);
+	this->descriptor = resources->CreateShaderResourceView(resource, &srv_desc);
 }
 
 void* IndexBuffer::QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource)
@@ -103,10 +101,10 @@ void* IndexBuffer::QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* reso
 	return upload_buffer->QueueBufferUpload(this->view.SizeInBytes, resource, offset);
 }
 
-void IndexBuffer::Destroy(DescriptorAllocator* descriptor_allocator)
+void IndexBuffer::Destroy(GpuResources* resources)
 {
 	view = {};
-	descriptor_allocator->Free(descriptor);
+	resources->FreeResourceDescriptor(descriptor);
 	descriptor = -1;
 }
 
@@ -146,23 +144,23 @@ HRESULT Mesh::Create(GpuResources* resources, const Desc* desc, const char* name
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.Resource()->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_INDEX) {
-    	index.Create(buffer.Resource(), base_address + offsets[0], &resources->cbv_uav_srv_dynamic_allocator, num_of_indices, desc->index_format);
+    	index.Create(buffer.Resource(), base_address + offsets[0], resources, num_of_indices, desc->index_format);
 	}
-	position.Create(buffer.Resource(), base_address + offsets[1], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
+	position.Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
     if (desc->flags & FLAG_TANGENT_SPACE) {
-		tangent_space.Create(buffer.Resource(), base_address + offsets[2], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
+		tangent_space.Create(buffer.Resource(), base_address + offsets[2], resources, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
     if (desc->flags & FLAG_TEXCOORD_0) {
-		texcoords[0].Create(buffer.Resource(), base_address + offsets[3], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
+		texcoords[0].Create(buffer.Resource(), base_address + offsets[3], resources, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
 	}
     if (desc->flags & FLAG_TEXCOORD_1) {
-		texcoords[1].Create(buffer.Resource(), base_address + offsets[4], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
+		texcoords[1].Create(buffer.Resource(), base_address + offsets[4], resources, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
 	}
     if (desc->flags & FLAG_COLOR) {
-		color.Create(buffer.Resource(), base_address + offsets[5], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM);
+		color.Create(buffer.Resource(), base_address + offsets[5], resources, num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM);
 	}
     if (desc->flags & FLAG_JOINT_WEIGHT) {
-		joint_weight.Create(buffer.Resource(), base_address + offsets[6], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, sizeof(JointWeight));
+		joint_weight.Create(buffer.Resource(), base_address + offsets[6], resources, num_of_vertices, sizeof(JointWeight));
 	}
 
 	return S_OK;
@@ -212,13 +210,13 @@ void* Mesh::QueueJointWeightUpdate(UploadBuffer* upload_buffer)
 void Mesh::Destroy(GpuResources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
-	index.Destroy(&resources->cbv_uav_srv_dynamic_allocator);
-	position.Destroy(&resources->cbv_uav_srv_dynamic_allocator);
-	tangent_space.Destroy(&resources->cbv_uav_srv_dynamic_allocator);
-	texcoords[0].Destroy(&resources->cbv_uav_srv_dynamic_allocator);
-	texcoords[1].Destroy(&resources->cbv_uav_srv_dynamic_allocator);
-	color.Destroy(&resources->cbv_uav_srv_dynamic_allocator);
-	joint_weight.Destroy(&resources->cbv_uav_srv_dynamic_allocator);
+	index.Destroy(resources);
+	position.Destroy(resources);
+	tangent_space.Destroy(resources);
+	texcoords[0].Destroy(resources);
+	texcoords[1].Destroy(resources);
+	color.Destroy(resources);
+	joint_weight.Destroy(resources);
 }
 
 HRESULT DynamicMesh::Create(GpuResources* resources, const Desc* desc, const char* name)
@@ -251,11 +249,11 @@ HRESULT DynamicMesh::Create(GpuResources* resources, const Desc* desc, const cha
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.Resource()->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_POSITION) {
-		position[0].Create(buffer.Resource(), base_address + offsets[0], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-		position[1].Create(buffer.Resource(), base_address + offsets[1], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
+		position[0].Create(buffer.Resource(), base_address + offsets[0], resources, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
+		position[1].Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
 	}
     if (desc->flags & FLAG_TANGENT_SPACE) {
-		tangent_space.Create(buffer.Resource(), base_address + offsets[2], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
+		tangent_space.Create(buffer.Resource(), base_address + offsets[2], resources, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
 
 	return S_OK;
@@ -264,9 +262,9 @@ HRESULT DynamicMesh::Create(GpuResources* resources, const Desc* desc, const cha
 void DynamicMesh::Destroy(GpuResources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
-	position[0].Destroy(&resources->cbv_uav_srv_dynamic_allocator);
-	position[1].Destroy(&resources->cbv_uav_srv_dynamic_allocator);
-	tangent_space.Destroy(&resources->cbv_uav_srv_dynamic_allocator);
+	position[0].Destroy(resources);
+	position[1].Destroy(resources);
+	tangent_space.Destroy(resources);
 }
 
 void DynamicMesh::Flip()
@@ -312,10 +310,10 @@ HRESULT MorphTarget::Create(GpuResources* resources, const Desc* desc, const cha
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.Resource()->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_POSITION) {
-		position.Create(buffer.Resource(), base_address + offsets[0], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
+		position.Create(buffer.Resource(), base_address + offsets[0], resources, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
 	}
     if (desc->flags & FLAG_TANGENT_SPACE) {
-		tangent_space.Create(buffer.Resource(), base_address + offsets[1], &resources->cbv_uav_srv_dynamic_allocator, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
+		tangent_space.Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
 
 	return S_OK;
@@ -335,6 +333,6 @@ void* MorphTarget::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
 void MorphTarget::Destroy(GpuResources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
-	position.Destroy(&resources->cbv_uav_srv_dynamic_allocator);
-	tangent_space.Destroy(&resources->cbv_uav_srv_dynamic_allocator);
+	position.Destroy(resources);
+	tangent_space.Destroy(resources);
 }

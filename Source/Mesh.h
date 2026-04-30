@@ -18,10 +18,10 @@ struct VertexBuffer {
 
     static VertexAllocation GetAllocationSize(uint32_t vertex_count, DXGI_FORMAT format);
     static VertexAllocation GetAllocationSize(uint32_t vertex_count, uint32_t element_size);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t vertex_count, DXGI_FORMAT format);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t vertex_count, uint32_t vertex_size);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t vertex_count, DXGI_FORMAT format);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t vertex_count, uint32_t vertex_size);
     void* QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource);
-    void Destroy(DescriptorAllocator* descriptor_allocator);
+    void Destroy(GpuResources* resources);
 };
 
 struct IndexBuffer {
@@ -29,9 +29,9 @@ struct IndexBuffer {
 	int descriptor = -1;
 
     static VertexAllocation GetAllocationSize(uint32_t index_count, DXGI_FORMAT format);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, DescriptorAllocator* descriptor_allocator, uint32_t index_count, DXGI_FORMAT format);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t index_count, DXGI_FORMAT format);
     void* QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource);
-    void Destroy(DescriptorAllocator* descriptor_allocator);
+    void Destroy(GpuResources* resources);
 };
 
 struct Mesh {

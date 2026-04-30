@@ -349,6 +349,16 @@ HRESULT GpuResources::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3
 	return result;
 }
 
+int GpuResources::CreateShaderResourceView(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* desc)
+{
+	return this->cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(resource, desc);
+}
+
+void GpuResources::FreeResourceDescriptor(int descriptor)
+{
+	this->cbv_uav_srv_dynamic_allocator.Free(descriptor);
+}
+
 D3D12_SHADER_BYTECODE GpuResources::LoadShader(const char* filepath)
 {
 	ProfileZoneScoped();
