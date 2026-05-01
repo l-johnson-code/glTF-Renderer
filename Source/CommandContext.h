@@ -106,9 +106,10 @@ class CommandContext
     DescriptorSpan AllocateDescriptors(int count);
     void CreateSrv(int index, ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* srv_desc);
     void CreateUav(int index, ID3D12Resource* resource, ID3D12Resource* counter_resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* uav_desc);
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> command_list;
     
     private:
+    
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> command_list;
     CbvSrvUavStack* transient_descriptors = nullptr;
     CpuMappedLinearBuffer* transient_allocator = nullptr;
     std::vector<D3D12_RESOURCE_BARRIER>* barriers = nullptr;
