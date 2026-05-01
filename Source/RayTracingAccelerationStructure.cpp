@@ -92,17 +92,17 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, Gpu::Resources
 	assert(result == S_OK);
 }
 
-void RaytracingAccelerationStructure::BuildStaticBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Blas* blas)
+void RaytracingAccelerationStructure::BuildStaticBlas(CommandContext* command_context, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Blas* blas)
 {
-	BuildBlas(command_list, vertices, num_of_vertices, indices, num_of_indices, &blas->buffer);
+	BuildBlas(command_context, vertices, num_of_vertices, indices, num_of_indices, &blas->buffer);
 }
 
-void RaytracingAccelerationStructure::BuildDynamicBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, DynamicBlas* blas)
+void RaytracingAccelerationStructure::BuildDynamicBlas(CommandContext* command_context, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, DynamicBlas* blas)
 {
-	BuildBlas(command_list, vertices, num_of_vertices, indices, num_of_indices, &blas->buffer, &blas->update_scratch_size);
+	BuildBlas(command_context, vertices, num_of_vertices, indices, num_of_indices, &blas->buffer, &blas->update_scratch_size);
 }
 
-void RaytracingAccelerationStructure::UpdateDynamicBlas(ID3D12GraphicsCommandList4* command_list, DynamicBlas* blas, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices)
+void RaytracingAccelerationStructure::UpdateDynamicBlas(CommandContext* command_context, DynamicBlas* blas, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices)
 {
 	D3D12_RAYTRACING_GEOMETRY_DESC geometry = {
 		.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
@@ -136,8 +136,8 @@ void RaytracingAccelerationStructure::UpdateDynamicBlas(ID3D12GraphicsCommandLis
 
 	D3D12_GPU_VIRTUAL_ADDRESS scratch = blas_scratch.Allocate(blas->update_scratch_size, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
 	if (scratch == 0) {
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->blas_scratch.buffer.Resource());
-		command_list->ResourceBarrier(1, &barrier);
+		command_context->PushUavBarrier(this->blas_scratch.buffer.Resource());
+		command_context->SubmitBarriers();
 		this->blas_scratch.Reset();
 		scratch = blas_scratch.Allocate(blas->update_scratch_size, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
 	}
@@ -149,14 +149,14 @@ void RaytracingAccelerationStructure::UpdateDynamicBlas(ID3D12GraphicsCommandLis
 		.SourceAccelerationStructureData = blas->buffer.Resource()->GetGPUVirtualAddress(),
 		.ScratchAccelerationStructureData = scratch,
 	};
-	command_list->BuildRaytracingAccelerationStructure(&acceleration, 0, nullptr);
+	command_context->BuildRaytracingAccelerationStructure(&acceleration, 0, nullptr);
 }
 
-void RaytracingAccelerationStructure::EndBlasBuilds(ID3D12GraphicsCommandList4* command_list)
+void RaytracingAccelerationStructure::EndBlasBuilds(CommandContext* command_context)
 {
 	// Final barrier.
-	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->blas_scratch.buffer.Resource());
-	command_list->ResourceBarrier(1, &barrier);
+	command_context->PushUavBarrier(this->blas_scratch.buffer.Resource());
+	command_context->SubmitBarriers();
 	this->blas_scratch.Reset();
 }
 
@@ -186,7 +186,7 @@ bool RaytracingAccelerationStructure::AddTlasInstance(DynamicBlas* blas, glm::ma
 	return AddTlasInstance(blas->buffer.Resource()->GetGPUVirtualAddress(), transform, instance_mask, flags);
 }
 
-void RaytracingAccelerationStructure::BuildTlas(ID3D12GraphicsCommandList4* command_list)
+void RaytracingAccelerationStructure::BuildTlas(CommandContext* command_context)
 {
 	CpuMappedLinearBuffer* staging = &tlas_staging.Current();
 
@@ -205,11 +205,11 @@ void RaytracingAccelerationStructure::BuildTlas(ID3D12GraphicsCommandList4* comm
 		.Inputs = top_level_inputs,
 		.ScratchAccelerationStructureData = tlas_scratch.Resource()->GetGPUVirtualAddress(),
 	};
-	command_list->BuildRaytracingAccelerationStructure(&top_level_acceleration, 0, nullptr);
+	command_context->BuildRaytracingAccelerationStructure(&top_level_acceleration, 0, nullptr);
 
 	// Insert barrier so that we don't use the tlas before its built.
-	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(tlas.Resource());
-	command_list->ResourceBarrier(1, &barrier);
+	command_context->PushUavBarrier(tlas.Resource());
+	command_context->SubmitBarriers();
 
 	// Advance the frame so that we dont overwrite the staging buffer while it's being used by the previous frame.
 	tlas_staging.Next();
@@ -220,7 +220,7 @@ D3D12_GPU_VIRTUAL_ADDRESS RaytracingAccelerationStructure::GetAccelerationStruct
 	return tlas.Resource()->GetGPUVirtualAddress();
 }
 
-void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Gpu::Buffer* blas_buffer, uint64_t* update_scratch_size)
+void RaytracingAccelerationStructure::BuildBlas(CommandContext* command_context, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Gpu::Buffer* blas_buffer, uint64_t* update_scratch_size)
 {
 	D3D12_RAYTRACING_GEOMETRY_DESC geometry = {
 		.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES, 
@@ -271,8 +271,8 @@ void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* comm
 	
 	// Check if there was enough space left in the scratch buffer. If there wasn't, insert a barrier and reset the allocator.
 	if (scratch == 0) {
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(this->blas_scratch.buffer.Resource());
-		command_list->ResourceBarrier(1, &barrier);
+		command_context->PushUavBarrier(this->blas_scratch.buffer.Resource());
+		command_context->SubmitBarriers();
 		this->blas_scratch.Reset();
 		scratch = blas_scratch.Allocate(prebuild_info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
 	}
@@ -283,7 +283,7 @@ void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* comm
 		.Inputs = inputs,
 		.ScratchAccelerationStructureData = scratch,
 	};
-	command_list->BuildRaytracingAccelerationStructure(&acceleration, 0, nullptr);
+	command_context->BuildRaytracingAccelerationStructure(&acceleration, 0, nullptr);
 }
 
 bool RaytracingAccelerationStructure::AddTlasInstance(D3D12_GPU_VIRTUAL_ADDRESS blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags)

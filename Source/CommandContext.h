@@ -90,6 +90,7 @@ class CommandContext
 	void DrawIndexedInstanced(uint32_t index_count_per_instance, uint32_t instance_count, uint32_t index_start_location, int base_vertex_location, uint32_t instance_start_location);
     
     // Raytracing.
+    void BuildRaytracingAccelerationStructure(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc, uint32_t postbuild_info_count, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* postbuild_info);
     void SetPipelineState(ID3D12StateObject* state_object);
     void DispatchRays(const D3D12_DISPATCH_RAYS_DESC* desc);
 

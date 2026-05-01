@@ -156,18 +156,18 @@ void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAcc
 					gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases.resize(gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes.size());
 					RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases[j];
 					if (!dynamic_blas.buffer.Resource()) {
-						acceleration_structure->BuildDynamicBlas(context->command_list.Get(), primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
+						acceleration_structure->BuildDynamicBlas(context, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
 					}
 				} else {
 					// Static.
 					if (!primitive.blas.buffer.Resource()) {
-						acceleration_structure->BuildStaticBlas(context->command_list.Get(), primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
+						acceleration_structure->BuildStaticBlas(context, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
 					}
 				}
 			}
         }
     }
-    acceleration_structure->EndBlasBuilds(context->command_list.Get());
+    acceleration_structure->EndBlasBuilds(context);
 }
 
 void Pathtracer::UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
@@ -180,11 +180,11 @@ void Pathtracer::UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAc
 			std::vector<Gltf::Primitive>& primitives = gltf->meshes[mesh_id].primitives; 
 			Gltf::DynamicPrimitives& dynamic_primitives = gltf->dynamic_primitives[skin_id];
 			for (int j = 0; j < dynamic_primitives.dynamic_blases.size(); j++) {
-				acceleration_structure->UpdateDynamicBlas(context->command_list.Get(), &dynamic_primitives.dynamic_blases[j], dynamic_primitives.dynamic_meshes[j].GetCurrentPositionBuffer()->view.BufferLocation, primitives[j].mesh.num_of_vertices, primitives[j].mesh.index.view, primitives[j].mesh.num_of_indices);
+				acceleration_structure->UpdateDynamicBlas(context, &dynamic_primitives.dynamic_blases[j], dynamic_primitives.dynamic_meshes[j].GetCurrentPositionBuffer()->view.BufferLocation, primitives[j].mesh.num_of_vertices, primitives[j].mesh.index.view, primitives[j].mesh.num_of_indices);
 			}
         }
     }
-    acceleration_structure->EndBlasBuilds(context->command_list.Get());
+    acceleration_structure->EndBlasBuilds(context);
 }
 
 void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure)
@@ -257,7 +257,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 		}
 	});
 
-    acceleration_structure->BuildTlas(context->command_list.Get());
+    acceleration_structure->BuildTlas(context);
 	this->gpu_mesh_instances = context->AllocateAndCopy(mesh_instances.data(), sizeof(GpuMeshInstance) * mesh_instances.size(), 4);
 }
 

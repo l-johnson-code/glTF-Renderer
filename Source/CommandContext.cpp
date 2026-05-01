@@ -149,6 +149,11 @@ void CommandContext::DrawIndexedInstanced(uint32_t index_count_per_instance, uin
     this->command_list->DrawIndexedInstanced(index_count_per_instance, instance_count, index_start_location, base_vertex_location, instance_start_location);
 }
 
+void CommandContext::BuildRaytracingAccelerationStructure(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc, uint32_t postbuild_info_count, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* postbuild_info)
+{
+    this->command_list->BuildRaytracingAccelerationStructure(desc, postbuild_info_count, postbuild_info);
+}
+
 void CommandContext::SetPipelineState(ID3D12StateObject* state_object)
 {
     this->command_list->SetPipelineState1(state_object);
