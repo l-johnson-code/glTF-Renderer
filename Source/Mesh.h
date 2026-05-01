@@ -18,10 +18,10 @@ struct VertexBuffer {
 
     static VertexAllocation GetAllocationSize(uint32_t vertex_count, DXGI_FORMAT format);
     static VertexAllocation GetAllocationSize(uint32_t vertex_count, uint32_t element_size);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t vertex_count, DXGI_FORMAT format);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t vertex_count, uint32_t vertex_size);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, Gpu::Resources* resources, uint32_t vertex_count, DXGI_FORMAT format);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, Gpu::Resources* resources, uint32_t vertex_count, uint32_t vertex_size);
     void* QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource);
-    void Destroy(GpuResources* resources);
+    void Destroy(Gpu::Resources* resources);
 };
 
 struct IndexBuffer {
@@ -29,9 +29,9 @@ struct IndexBuffer {
 	int descriptor = -1;
 
     static VertexAllocation GetAllocationSize(uint32_t index_count, DXGI_FORMAT format);
-	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t index_count, DXGI_FORMAT format);
+	void Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, Gpu::Resources* resources, uint32_t index_count, DXGI_FORMAT format);
     void* QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* resource);
-    void Destroy(GpuResources* resources);
+    void Destroy(Gpu::Resources* resources);
 };
 
 struct Mesh {
@@ -65,7 +65,7 @@ struct Mesh {
     uint32_t num_of_vertices = 0;
     uint32_t num_of_indices = 0;
 
-    GpuResources::Buffer buffer;
+    Gpu::Buffer buffer;
 
     IndexBuffer index;
     VertexBuffer position;
@@ -74,7 +74,7 @@ struct Mesh {
     VertexBuffer color;
     VertexBuffer joint_weight;
 
-    HRESULT Create(GpuResources* resources, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(Gpu::Resources* resources, const Desc* desc, const char* name = nullptr);
     void* QueueIndexUpdate(UploadBuffer* upload_buffer);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
@@ -82,7 +82,7 @@ struct Mesh {
     void* QueueTexcoord1Update(UploadBuffer* upload_buffer);
     void* QueueColorUpdate(UploadBuffer* upload_buffer);
     void* QueueJointWeightUpdate(UploadBuffer* upload_buffer);
-    void Destroy(GpuResources* resources);
+    void Destroy(Gpu::Resources* resources);
 };
 
 struct DynamicMesh {
@@ -101,16 +101,16 @@ struct DynamicMesh {
     uint32_t num_of_vertices = 0;
     int current_position_buffer = 0;
 
-    GpuResources::Buffer buffer;
+    Gpu::Buffer buffer;
 
     VertexBuffer position[2];
     VertexBuffer tangent_space;
 
-    HRESULT Create(GpuResources* resources, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(Gpu::Resources* resources, const Desc* desc, const char* name = nullptr);
     void Flip();
     VertexBuffer* GetCurrentPositionBuffer();
     VertexBuffer* GetPreviousPositionBuffer();
-    void Destroy(GpuResources* resources);
+    void Destroy(Gpu::Resources* resources);
 };
 
 struct MorphTarget {
@@ -128,13 +128,13 @@ struct MorphTarget {
     uint8_t flags = 0;
     uint32_t num_of_vertices = 0;
 
-    GpuResources::Buffer buffer;
+    Gpu::Buffer buffer;
     
     VertexBuffer position;
     VertexBuffer tangent_space;
 
-    HRESULT Create(GpuResources* resources, const Desc* desc, const char* name = nullptr);
+    HRESULT Create(Gpu::Resources* resources, const Desc* desc, const char* name = nullptr);
     void* QueuePositionUpdate(UploadBuffer* upload_buffer);
     void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
-    void Destroy(GpuResources* resources);
+    void Destroy(Gpu::Resources* resources);
 };

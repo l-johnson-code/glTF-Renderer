@@ -8,7 +8,7 @@
 
 #include "Memory.h"
 
-void RaytracingAccelerationStructure::Init(ID3D12Device5* device, GpuResources* resources, uint32_t max_blas_vertices, uint32_t max_tlas_instances)
+void RaytracingAccelerationStructure::Init(ID3D12Device5* device, Gpu::Resources* resources, uint32_t max_blas_vertices, uint32_t max_tlas_instances)
 {
 	HRESULT result = S_OK;
 
@@ -41,9 +41,9 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, GpuResources* 
 	max_blas_scratch_size = Align(blas_prebuild_info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
 
 	// Create scratch buffer for BLAS.
-	GpuResources::BufferDesc blas_scratch_desc = {
+	Gpu::BufferDesc blas_scratch_desc = {
 		.size = max_blas_scratch_size,
-		.flags = GpuResources::BUFFER_FLAG_UAV,
+		.flags = Gpu::BUFFER_FLAG_UAV,
 		.name = "BLAS Scratch",
 	};
 	result = blas_scratch.Create(resources, &blas_scratch_desc);
@@ -52,9 +52,9 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, GpuResources* 
 	// Create heaps for staging TLAS.
 	const int instance_desc_stride = Align(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), 16);
 	for (int i = 0; i < tlas_staging.Size(); i++) {
-		GpuResources::BufferDesc tlas_scratch_desc = {
+		Gpu::BufferDesc tlas_scratch_desc = {
 			.size = instance_desc_stride * max_tlas_instances,
-			.flags = (GpuResources::BufferFlags)(GpuResources::BUFFER_FLAG_UAV | GpuResources::BUFFER_FLAG_PERSISTENT_MAP),
+			.flags = (Gpu::BufferFlags)(Gpu::BUFFER_FLAG_UAV | Gpu::BUFFER_FLAG_PERSISTENT_MAP),
 			.heap_type = resources->allocator.SupportsGpuUploadHeap() ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD,
 			.name = "TLAS Staging",
 		};
@@ -74,18 +74,18 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, GpuResources* 
 	device->GetRaytracingAccelerationStructurePrebuildInfo(&tlas_inputs, &tlas_prebuild_info);
 
 	// Create scratch buffer for building the TLAS.
-	GpuResources::BufferDesc tlas_scratch_desc = {
+	Gpu::BufferDesc tlas_scratch_desc = {
 		.size = tlas_prebuild_info.ScratchDataSizeInBytes,
-		.flags = GpuResources::BUFFER_FLAG_UAV,
+		.flags = Gpu::BUFFER_FLAG_UAV,
 		.name = "TLAS Scratch",
 	};
 	result = resources->CreateBuffer(&tlas_scratch_desc, &this->tlas_scratch);
 	assert(result == S_OK);
 
 	// Create buffer to store the TLAS.
-	GpuResources::BufferDesc tlas_desc = {
+	Gpu::BufferDesc tlas_desc = {
 		.size = tlas_prebuild_info.ResultDataMaxSizeInBytes,
-		.flags = GpuResources::BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE,
+		.flags = Gpu::BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE,
 		.name = "TLAS",
 	};
 	result = resources->CreateBuffer(&tlas_desc, &this->tlas);
@@ -220,7 +220,7 @@ D3D12_GPU_VIRTUAL_ADDRESS RaytracingAccelerationStructure::GetAccelerationStruct
 	return tlas.Resource()->GetGPUVirtualAddress();
 }
 
-void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, GpuResources::Buffer* blas_buffer, uint64_t* update_scratch_size)
+void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Gpu::Buffer* blas_buffer, uint64_t* update_scratch_size)
 {
 	D3D12_RAYTRACING_GEOMETRY_DESC geometry = {
 		.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES, 
@@ -253,9 +253,9 @@ void RaytracingAccelerationStructure::BuildBlas(ID3D12GraphicsCommandList4* comm
 		*update_scratch_size = prebuild_info.UpdateScratchDataSizeInBytes;
 	}
 
-	GpuResources::BufferDesc blas_desc = {
+	Gpu::BufferDesc blas_desc = {
 		.size = prebuild_info.ResultDataMaxSizeInBytes,
-		.flags = GpuResources::BUFFER_FLAG_UAV,
+		.flags = Gpu::BUFFER_FLAG_UAV,
 		.initial_state = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
 		.name = "BLAS",
 	};

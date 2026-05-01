@@ -4,7 +4,7 @@
 #include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_core.h>
 
-void Rasterizer::Init(GpuResources* gpu_resources, uint16_t width, uint16_t height)
+void Rasterizer::Init(Gpu::Resources* gpu_resources, uint16_t width, uint16_t height)
 {
 	this->gpu_resources = gpu_resources;
     Resize(width, height);
@@ -21,34 +21,34 @@ void Rasterizer::Resize(uint16_t width, uint16_t height)
 
 	HRESULT result;
 
-	GpuResources::TextureDesc depth_target_desc = {
+	Gpu::TextureDesc depth_target_desc = {
 		.format = DXGI_FORMAT_D32_FLOAT,
 		.width = width,
 		.height = height,
 		.mip_levels = 1,
 		.clear_depth = 0.0f,
-		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_DEPTH_TARGET),
+		.flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_DEPTH_TARGET),
 		.name = "Depth",
 	};
     result = gpu_resources->CreateTexture(&depth_target_desc, &this->depth);
 
-	GpuResources::TextureDesc motion_vectors_desc = {
+	Gpu::TextureDesc motion_vectors_desc = {
 		.format = DXGI_FORMAT_R16G16_FLOAT,
 		.width = width,
 		.height = height,
 		.mip_levels = 1,
 		.clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
-		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_RENDER_TARGET),
+		.flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_RENDER_TARGET),
 		.name = "Motion Vectors",
 	};
 	result = gpu_resources->CreateTexture(&motion_vectors_desc, &this->motion_vectors);
 
-	GpuResources::TextureDesc transmission_desc = {
+	Gpu::TextureDesc transmission_desc = {
 		.format = DXGI_FORMAT_R16G16B16A16_FLOAT,
 		.width = width,
 		.height = height,
 		.mip_levels = 0,
-		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_SRV_PER_MIP),
+		.flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_SRV_PER_MIP),
 		.name = "Transmission",
 	};
 	result = gpu_resources->CreateTexture(&transmission_desc, &this->transmission);

@@ -24,7 +24,7 @@ float EnvironmentMap::MipToRoughness(int mip_level, int mip_count)
     return result;
 }
 
-void EnvironmentMap::Init(GpuResources* resources)
+void EnvironmentMap::Init(Gpu::Resources* resources)
 {
     HRESULT result;
 
@@ -46,30 +46,30 @@ void EnvironmentMap::Init(GpuResources* resources)
     // Create the pipelines.
     D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {};
     pipeline_desc.pRootSignature = this->root_signature.Get();
-    pipeline_desc.CS = GpuResources::LoadShader("Shaders/ConvertEquirectangularToCubemap.cs.bin");
+    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/ConvertEquirectangularToCubemap.cs.bin");
     result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_cubemap_pipeline_state, "Convert Equirectangular To Cubemap");
     assert(result == S_OK);
-    GpuResources::FreeShader(pipeline_desc.CS);
+    Gpu::Resources::FreeShader(pipeline_desc.CS);
 
-    pipeline_desc.CS = GpuResources::LoadShader("Shaders/GenerateMipLevelArray.cs.bin");
+    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/GenerateMipLevelArray.cs.bin");
 	result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_cube_mip_pipeline_state, "Generate Mip Level Array");
 	assert(result == S_OK);
-    GpuResources::FreeShader(pipeline_desc.CS);
+    Gpu::Resources::FreeShader(pipeline_desc.CS);
 
-    pipeline_desc.CS = GpuResources::LoadShader("Shaders/GenerateEnvironmentImportanceMap.cs.bin");
+    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/GenerateEnvironmentImportanceMap.cs.bin");
     result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_importance_map_pipeline_state, "Generate Environment Importance Map");
     assert(result == S_OK);
-    GpuResources::FreeShader(pipeline_desc.CS);
+    Gpu::Resources::FreeShader(pipeline_desc.CS);
 
-    pipeline_desc.CS = GpuResources::LoadShader("Shaders/GenerateEnvironmentImportanceMapLevel.cs.bin");
+    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/GenerateEnvironmentImportanceMapLevel.cs.bin");
     result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_importance_map_level_pipeline_state, "Generate Environment Importance Map Level");
     assert(result == S_OK);
-    GpuResources::FreeShader(pipeline_desc.CS);
+    Gpu::Resources::FreeShader(pipeline_desc.CS);
 
-    pipeline_desc.CS = GpuResources::LoadShader("Shaders/FilterEnvironmentCubeMap.cs.bin");
+    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/FilterEnvironmentCubeMap.cs.bin");
     result = resources->CreateComputePipelineState(&pipeline_desc, &this->filter_cube_map_pipeline_state, "Filter Environment Cube Map");
     assert(result == S_OK);
-    GpuResources::FreeShader(pipeline_desc.CS);
+    Gpu::Resources::FreeShader(pipeline_desc.CS);
 }
 
 void EnvironmentMap::LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const char* filepath, Map* map)
@@ -82,18 +82,18 @@ void EnvironmentMap::LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const 
     }
 }
 
-void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, GpuResources::Texture* equirectangular_image, Map* map)
+void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, Gpu::Texture* equirectangular_image, Map* map)
 {
     HRESULT result = S_OK;
 
 	// Create the destination cubemap.
     uint16_t cube_map_resolution = std::max(((int)equirectangular_image->Width() / 4) / 2, 1) + 1; // TODO: I dont think this is correct.
-	GpuResources::TextureDesc cubemap_desc = 
+	Gpu::TextureDesc cubemap_desc = 
     {
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = cube_map_resolution,
         .height = cube_map_resolution,
-        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_CUBE),
+        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE),
         .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         .name = "Environment Cube",
     };
@@ -103,12 +103,12 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, GpuResources:
 	// Create the ggx map.
 	const int smallest_mip = 4;
 	uint8_t ggx_mips = std::max((int)std::floorf(std::log2f(cube_map_resolution)) + 1 - smallest_mip, 1);
-    GpuResources::TextureDesc ggx_desc = {
+    Gpu::TextureDesc ggx_desc = {
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = cube_map_resolution,
         .height = cube_map_resolution,
         .mip_levels = ggx_mips,
-        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_CUBE),
+        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE),
         .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         .name = "Environment GGX",
     };
@@ -117,12 +117,12 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, GpuResources:
 
 	// Create the diffuse map.
 	const uint16_t diffuse_resolution = 256;
-    GpuResources::TextureDesc diffuse_desc = {
+    Gpu::TextureDesc diffuse_desc = {
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = diffuse_resolution,
         .height = diffuse_resolution,
         .mip_levels = 1,
-        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_CUBE),
+        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE),
         .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         .name = "Environment Diffuse",
     };
@@ -214,12 +214,12 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
 	x = exr_image.width;
 	y = exr_image.height;
 	
-    GpuResources::TextureDesc desc = {
+    Gpu::TextureDesc desc = {
         .format = format,
         .width = x,
         .height = y,
         .mip_levels = 1,
-        .flags = GpuResources::TEXTURE_FLAG_SRV,
+        .flags = Gpu::TEXTURE_FLAG_SRV,
         .name = "Environment Map",
     };
     result = resources->CreateTexture(&desc, &this->equirectangular_image);
@@ -288,12 +288,12 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
         return;
     }
 
-	GpuResources::TextureDesc desc = {
+	Gpu::TextureDesc desc = {
         .format = format,
         .width = (uint16_t)x,
         .height = (uint16_t)y,
         .mip_levels = 1,
-        .flags = GpuResources::TEXTURE_FLAG_SRV,
+        .flags = Gpu::TEXTURE_FLAG_SRV,
         .name = "Environment Map",
     };
     result = resources->CreateTexture(&desc, &this->equirectangular_image);
@@ -320,7 +320,7 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
     stbi_image_free(image);
 }
 
-void EnvironmentMap::GenerateCubemap(CommandContext* context, GpuResources::Texture* equirectangular_image, GpuResources::Texture* cubemap)
+void EnvironmentMap::GenerateCubemap(CommandContext* context, Gpu::Texture* equirectangular_image, Gpu::Texture* cubemap)
 {
     // Convert the equirectangular map to a cubemap.
     context->command_list->SetComputeRootSignature(this->root_signature.Get());
@@ -366,7 +366,7 @@ void EnvironmentMap::GenerateCubemap(CommandContext* context, GpuResources::Text
 	context->SubmitBarriers();
 }
 
-void EnvironmentMap::FilterCube(CommandContext* context, GpuResources::Texture* cubemap, Bsdf bsdf, float mip_bias, int num_of_samples, GpuResources::Texture* filtered_cube_map)
+void EnvironmentMap::FilterCube(CommandContext* context, Gpu::Texture* cubemap, Bsdf bsdf, float mip_bias, int num_of_samples, Gpu::Texture* filtered_cube_map)
 {
     int mip_count = filtered_cube_map->MipLevels();
     int resolution = filtered_cube_map->Width();
@@ -403,12 +403,12 @@ void EnvironmentMap::FilterCube(CommandContext* context, GpuResources::Texture* 
     context->SubmitBarriers();
 }
 
-void EnvironmentMap::GenerateGgxCube(CommandContext* context, GpuResources::Texture* cubemap, GpuResources::Texture* ggx_cube_map)
+void EnvironmentMap::GenerateGgxCube(CommandContext* context, Gpu::Texture* cubemap, Gpu::Texture* ggx_cube_map)
 {
     FilterCube(context, cubemap, BSDF_GGX, 2, 256, ggx_cube_map);
 }
 
-void EnvironmentMap::GenerateDiffuseCube(CommandContext* context, GpuResources::Texture* cubemap, GpuResources::Texture* diffuse_cube_map)
+void EnvironmentMap::GenerateDiffuseCube(CommandContext* context, Gpu::Texture* cubemap, Gpu::Texture* diffuse_cube_map)
 {
     FilterCube(context, cubemap, BSDF_DIFFUSE, 3, 512, diffuse_cube_map);
 }
@@ -551,9 +551,9 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
     }
 
     // Create the alias table resource.
-    GpuResources::BufferDesc alias_desc = {
+    Gpu::BufferDesc alias_desc = {
         .size = alias_table_size * sizeof(AliasMap),
-        .flags = GpuResources::BUFFER_FLAG_GENERATE_DESCRIPTOR,
+        .flags = Gpu::BUFFER_FLAG_GENERATE_DESCRIPTOR,
         .structured_byte_stride = sizeof(AliasMap),
         .name = "Alias Table",
     };
@@ -561,12 +561,12 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
 	assert(result == S_OK);
 
     // Create the PDF texture.
-	GpuResources::TextureDesc pdf_desc = {
+	Gpu::TextureDesc pdf_desc = {
         .format = DXGI_FORMAT_R16_FLOAT,
         .width = pdf_size,
         .height = pdf_size,
         .mip_levels = 1,
-        .flags = GpuResources::TEXTURE_FLAG_SRV,
+        .flags = Gpu::TEXTURE_FLAG_SRV,
         .name = "PDF",
     };
     resources->CreateTexture(&pdf_desc, &map->pdf);

@@ -9,7 +9,7 @@
 
 #include "GpuResources.h"
 
-void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuffer* upload_buffer)
+void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBuffer* upload_buffer)
 {
     HRESULT result = S_OK;
 
@@ -49,7 +49,7 @@ void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuff
 
     // Shader code.
     D3D12_DXIL_LIBRARY_DESC dxil_library_desc = {
-        .DXILLibrary = GpuResources::LoadShader("Shaders/PathTracer.lib.bin"),
+        .DXILLibrary = Gpu::Resources::LoadShader("Shaders/PathTracer.lib.bin"),
         .NumExports = 0,
         .pExports = nullptr,
     };
@@ -99,7 +99,7 @@ void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuff
 
     // Create the shader table.
     uint64_t shader_table_size = ShaderTableCollectionBuilder::CalculateRequiredSize(1, 1, 0);
-    GpuResources::BufferDesc shader_table_buffer_desc = {
+    Gpu::BufferDesc shader_table_buffer_desc = {
         .size = shader_table_size,
         .name = "Shader Table",
     };
@@ -128,7 +128,7 @@ void Pathtracer::Init(ID3D12Device5* device, GpuResources* resources, UploadBuff
     acceleration_structure.Init(device, resources, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
 
     // Cleanup.
-    GpuResources::FreeShader(dxil_library_desc.DXILLibrary);
+    Gpu::Resources::FreeShader(dxil_library_desc.DXILLibrary);
 }
 
 void Pathtracer::Shutdown()

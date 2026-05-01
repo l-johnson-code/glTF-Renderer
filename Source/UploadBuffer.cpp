@@ -9,14 +9,14 @@
 #include <directx/d3dx12_property_format_table.h>
 #include <directx/dxgiformat.h>
 
-void UploadBuffer::Create(ID3D12Device* device, GpuResources* gpu_resources, size_t capacity, D3D12_COMMAND_QUEUE_PRIORITY command_queue_priority, int max_queued_uploads)
+void UploadBuffer::Create(ID3D12Device* device, Gpu::Resources* gpu_resources, size_t capacity, D3D12_COMMAND_QUEUE_PRIORITY command_queue_priority, int max_queued_uploads)
 {
 	HRESULT result = S_OK;
 
 	// Create a ring buffer.
-	GpuResources::BufferDesc buffer_desc = {
+	Gpu::BufferDesc buffer_desc = {
 		.size = capacity,
-		.flags = GpuResources::BUFFER_FLAG_PERSISTENT_MAP,
+		.flags = Gpu::BUFFER_FLAG_PERSISTENT_MAP,
 		.heap_type = D3D12_HEAP_TYPE_UPLOAD,
 		.name = "Upload Buffer",
 	};

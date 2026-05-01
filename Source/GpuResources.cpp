@@ -14,7 +14,9 @@
 #include "File.h"
 #include "Profiling.h"
 
-void GpuResources::Create(ID3D12Device* device)
+namespace Gpu {
+
+void Resources::Create(ID3D12Device* device)
 {
 	ProfileZoneScoped();
 	HRESULT result = S_OK;
@@ -68,7 +70,7 @@ void GpuResources::Create(ID3D12Device* device)
 	allocator.Init(this->device.Get());
 }
 
-HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
+HRESULT Resources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 {
 	HRESULT result = S_OK;
 
@@ -125,7 +127,7 @@ HRESULT GpuResources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 	return S_OK;
 }
 
-void GpuResources::FreeBuffer(Buffer* buffer)
+void Resources::FreeBuffer(Buffer* buffer)
 {
 	if (buffer->resource) {
 		buffer->resource->Release();
@@ -137,7 +139,7 @@ void GpuResources::FreeBuffer(Buffer* buffer)
 	buffer->srv = -1;
 }
 
-HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
+HRESULT Resources::CreateTexture(const TextureDesc* desc, Texture* texture)
 {
 	HRESULT result = S_OK;
 
@@ -261,7 +263,7 @@ HRESULT GpuResources::CreateTexture(const TextureDesc* desc, Texture* texture)
 	return S_OK;
 }
 
-void GpuResources::FreeTexture(Texture* texture)
+void Resources::FreeTexture(Texture* texture)
 {
 	if (texture->resource) {
 		texture->resource->Release();
@@ -282,7 +284,7 @@ void GpuResources::FreeTexture(Texture* texture)
 	}
 }
 
-HRESULT GpuResources::CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name)
+HRESULT Resources::CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name)
 {
 	ProfileZoneScoped();
 	HRESULT result = S_OK;
@@ -301,7 +303,7 @@ HRESULT GpuResources::CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc,
 	return result;
 }
 
-HRESULT GpuResources::CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
+HRESULT Resources::CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
 {
 	ProfileZoneScoped();
 	HRESULT result = device->CreateComputePipelineState(desc, IID_PPV_ARGS(pipeline_state));
@@ -315,7 +317,7 @@ HRESULT GpuResources::CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_ST
 	return result;
 }
 
-HRESULT GpuResources::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
+HRESULT Resources::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
 {
 	ProfileZoneScoped();
 	HRESULT result = device->CreateGraphicsPipelineState(desc, IID_PPV_ARGS(pipeline_state));
@@ -329,7 +331,7 @@ HRESULT GpuResources::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_
 	return result;
 }
 
-HRESULT GpuResources::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name)
+HRESULT Resources::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name)
 {
 	ProfileZoneScoped();
 	Microsoft::WRL::ComPtr<ID3D12Device5> device_5;
@@ -349,17 +351,17 @@ HRESULT GpuResources::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3
 	return result;
 }
 
-int GpuResources::CreateShaderResourceView(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* desc)
+int Resources::CreateShaderResourceView(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* desc)
 {
 	return this->cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(resource, desc);
 }
 
-void GpuResources::FreeResourceDescriptor(int descriptor)
+void Resources::FreeResourceDescriptor(int descriptor)
 {
 	this->cbv_uav_srv_dynamic_allocator.Free(descriptor);
 }
 
-D3D12_SHADER_BYTECODE GpuResources::LoadShader(const char* filepath)
+D3D12_SHADER_BYTECODE Resources::LoadShader(const char* filepath)
 {
 	ProfileZoneScoped();
     D3D12_SHADER_BYTECODE shader_bytecode = {};
@@ -367,10 +369,12 @@ D3D12_SHADER_BYTECODE GpuResources::LoadShader(const char* filepath)
     return shader_bytecode;
 }
 
-void GpuResources::FreeShader(D3D12_SHADER_BYTECODE bytecode)
+void Resources::FreeShader(D3D12_SHADER_BYTECODE bytecode)
 {
 	ProfileZoneScoped();
 	if (bytecode.pShaderBytecode) {
     	File::Free((void*)bytecode.pShaderBytecode);
 	}
+}
+
 }

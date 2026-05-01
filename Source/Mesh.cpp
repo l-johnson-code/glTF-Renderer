@@ -28,7 +28,7 @@ VertexAllocation VertexBuffer::GetAllocationSize(uint32_t vertex_count, uint32_t
 	return {vertex_count * element_size, element_size};
 }
 
-void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t vertex_count, DXGI_FORMAT format)
+void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, Gpu::Resources* resources, uint32_t vertex_count, DXGI_FORMAT format)
 {
 	UINT vertex_size = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 		
@@ -45,7 +45,7 @@ void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS bu
 	this->descriptor = resources->CreateShaderResourceView(resource, &srv_desc);
 }
 
-void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t vertex_count, uint32_t vertex_size)
+void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, Gpu::Resources* resources, uint32_t vertex_count, uint32_t vertex_size)
 {	
 	// Create a vertex buffer view.
 	view = {
@@ -66,7 +66,7 @@ void* VertexBuffer::QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* res
 	return upload_buffer->QueueBufferUpload(this->view.SizeInBytes, resource, offset);
 }
 
-void VertexBuffer::Destroy(GpuResources* resources)
+void VertexBuffer::Destroy(Gpu::Resources* resources)
 {
 	view = {};
 	resources->FreeResourceDescriptor(descriptor);
@@ -79,7 +79,7 @@ VertexAllocation IndexBuffer::GetAllocationSize(uint32_t index_count, DXGI_FORMA
 	return {index_count * index_size, index_size};
 }
 
-void IndexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, GpuResources* resources, uint32_t index_count, DXGI_FORMAT format)
+void IndexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS buffer, Gpu::Resources* resources, uint32_t index_count, DXGI_FORMAT format)
 {
 	UINT index_size = D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(format) / 8;
 	
@@ -101,14 +101,14 @@ void* IndexBuffer::QueueUpdate(UploadBuffer* upload_buffer, ID3D12Resource* reso
 	return upload_buffer->QueueBufferUpload(this->view.SizeInBytes, resource, offset);
 }
 
-void IndexBuffer::Destroy(GpuResources* resources)
+void IndexBuffer::Destroy(Gpu::Resources* resources)
 {
 	view = {};
 	resources->FreeResourceDescriptor(descriptor);
 	descriptor = -1;
 }
 
-HRESULT Mesh::Create(GpuResources* resources, const Desc* desc, const char* name)
+HRESULT Mesh::Create(Gpu::Resources* resources, const Desc* desc, const char* name)
 {
 	ProfileZoneScoped();
 	this->topology = desc->topology;
@@ -132,7 +132,7 @@ HRESULT Mesh::Create(GpuResources* resources, const Desc* desc, const char* name
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
 	
 	// Allocate a buffer for indices and vertices.
-	GpuResources::BufferDesc buffer_desc = {
+	Gpu::BufferDesc buffer_desc = {
 		.size = size,
 		.name = name ? name : "Mesh",
 	};
@@ -207,7 +207,7 @@ void* Mesh::QueueJointWeightUpdate(UploadBuffer* upload_buffer)
 	return joint_weight.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
-void Mesh::Destroy(GpuResources* resources)
+void Mesh::Destroy(Gpu::Resources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
 	index.Destroy(resources);
@@ -219,7 +219,7 @@ void Mesh::Destroy(GpuResources* resources)
 	joint_weight.Destroy(resources);
 }
 
-HRESULT DynamicMesh::Create(GpuResources* resources, const Desc* desc, const char* name)
+HRESULT DynamicMesh::Create(Gpu::Resources* resources, const Desc* desc, const char* name)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -236,9 +236,9 @@ HRESULT DynamicMesh::Create(GpuResources* resources, const Desc* desc, const cha
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
 	
 	// Allocate a buffer for vertices.
-	GpuResources::BufferDesc buffer_desc = {
+	Gpu::BufferDesc buffer_desc = {
 		.size = size,
-		.flags = GpuResources::BUFFER_FLAG_UAV,
+		.flags = Gpu::BUFFER_FLAG_UAV,
 		.name = name ? name : "Dynamic Mesh",
 	};
 	HRESULT result = resources->CreateBuffer(&buffer_desc, &this->buffer);
@@ -259,7 +259,7 @@ HRESULT DynamicMesh::Create(GpuResources* resources, const Desc* desc, const cha
 	return S_OK;
 }
 
-void DynamicMesh::Destroy(GpuResources* resources)
+void DynamicMesh::Destroy(Gpu::Resources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
 	position[0].Destroy(resources);
@@ -282,7 +282,7 @@ VertexBuffer* DynamicMesh::GetPreviousPositionBuffer()
 	return &position[(current_position_buffer - 1) % 1];
 }
 
-HRESULT MorphTarget::Create(GpuResources* resources, const Desc* desc, const char* name)
+HRESULT MorphTarget::Create(Gpu::Resources* resources, const Desc* desc, const char* name)
 {
 	this->flags = desc->flags;
 	this->num_of_vertices = desc->num_of_vertices;
@@ -298,7 +298,7 @@ HRESULT MorphTarget::Create(GpuResources* resources, const Desc* desc, const cha
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
 	
 	// Allocate a resource for vertices.
-	GpuResources::BufferDesc buffer_desc = {
+	Gpu::BufferDesc buffer_desc = {
 		.size = size,
 		.name = name ? name : "Morph Target",
 	};
@@ -330,7 +330,7 @@ void* MorphTarget::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
 	return tangent_space.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
-void MorphTarget::Destroy(GpuResources* resources)
+void MorphTarget::Destroy(Gpu::Resources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
 	position.Destroy(resources);

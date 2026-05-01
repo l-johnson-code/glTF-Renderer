@@ -136,7 +136,7 @@ void Gltf::Unload()
 			dynamic_mesh.Destroy(this->gpu_resources);
 		}
 	}
-	for (GpuResources::Texture& texture: textures) {
+	for (Gpu::Texture& texture: textures) {
 		gpu_resources->FreeTexture(&texture);
 	}
 	// We can free all dynamic samplers at once because this is the only class that uses them.
@@ -155,7 +155,7 @@ void Gltf::Unload()
     textures.clear();
 }
 
-void Gltf::LoadMeshes(tinygltf::Model* gltf, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
+void Gltf::LoadMeshes(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	// Create meshes.
@@ -165,7 +165,7 @@ void Gltf::LoadMeshes(tinygltf::Model* gltf, GpuResources* gpu_resources, Upload
 	}
 }
 
-void Gltf::LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, GpuResources* gpu_resources, UploadBuffer* upload_buffer, Mesh* mesh)
+void Gltf::LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, Mesh* mesh)
 {
 	mesh->name = gltf_mesh->name;
 	mesh->primitives.resize(gltf_mesh->primitives.size());
@@ -178,7 +178,7 @@ void Gltf::LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, GpuResourc
 	}
 }
 
-void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primitive, GpuResources* gpu_resources, UploadBuffer* upload_buffer, Primitive* primitive)
+void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primitive, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, Primitive* primitive)
 {
 	::Mesh::Desc desc = {};
 
@@ -319,7 +319,7 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 	}
 }
 
-void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, GpuResources* gpu_resources, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target)
+void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target)
 {
 	ProfileZoneScoped();
 
@@ -396,7 +396,7 @@ void Gltf::GetTextureTransform(tinygltf::Value* gltf_value, int* tex_coord, glm:
 	}
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_index, int tex_coord, tinygltf::Value* texture_transform, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_index, int tex_coord, tinygltf::Value* texture_transform, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	Material::Texture material_texture;
 	if (texture_index != -1) {
@@ -420,23 +420,23 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 	return material_texture;
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], srgb, gpu_resources, upload_buffer);
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	*scale = texture_info->scale;
 	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], false, gpu_resources, upload_buffer);
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], false, gpu_resources, upload_buffer);
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	Material::Texture desc;
 
@@ -463,7 +463,7 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::
 	return GetTexture(gltf, index, tex_coord, &transform_extension, srgb, gpu_resources, upload_buffer);
 }
 
-void Gltf::LoadMaterials(tinygltf::Model* gltf, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
+void Gltf::LoadMaterials(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	materials.resize(gltf->materials.size() + 1);
@@ -880,12 +880,12 @@ void Gltf::LoadLights(tinygltf::Model* gltf)
 	}
 }
 
-void Gltf::Init(GpuResources* gpu_resources)
+void Gltf::Init(Gpu::Resources* gpu_resources)
 {
 	this->gpu_resources = gpu_resources;
 }
 
-bool Gltf::LoadFromGltf(const char* filepath, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
+bool Gltf::LoadFromGltf(const char* filepath, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	tinygltf::TinyGLTF gltf;
@@ -944,7 +944,7 @@ bool Gltf::LoadFromGltf(const char* filepath, GpuResources* gpu_resources, Uploa
 	return true;
 }
 
-void Gltf::CreateDynamicMesh(GpuResources* gpu_resources)
+void Gltf::CreateDynamicMesh(Gpu::Resources* gpu_resources)
 {
 	ProfileZoneScoped();
 	// Create dynamic mesh instances for any meshes that are skinned or have morph weights.
@@ -1043,7 +1043,7 @@ void Gltf::ReserveTextures(tinygltf::Model* gltf)
 	this->textures.resize(gltf->images.size());
 }
 
-void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuResources* gpu_resources, UploadBuffer* upload_buffer)
+void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	this->textures.reserve(slot + 1);
@@ -1054,12 +1054,12 @@ void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, GpuResources*
 	assert(image.bits == 8);
 	
 	// Create the texture.
-	GpuResources::TextureDesc texture_desc = {
+	Gpu::TextureDesc texture_desc = {
 		.format = srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM,
 		.width = (uint16_t)image.width,
 		.height = (uint16_t)image.height,
 		.mip_levels = 1,
-		.flags = GpuResources::TEXTURE_FLAG_SRV,
+		.flags = Gpu::TEXTURE_FLAG_SRV,
 		.name = image.name.data(),
 	};
 	HRESULT result = gpu_resources->CreateTexture(&texture_desc, &textures[slot]);

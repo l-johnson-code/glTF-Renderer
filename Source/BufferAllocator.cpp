@@ -7,7 +7,7 @@
 
 #include "Memory.h"
 
-HRESULT LinearBuffer::Create(GpuResources* resources, const GpuResources::BufferDesc* buffer_desc)
+HRESULT LinearBuffer::Create(Gpu::Resources* resources, const Gpu::BufferDesc* buffer_desc)
 {
     this->size = 0;
 
@@ -20,7 +20,7 @@ HRESULT LinearBuffer::Create(GpuResources* resources, const GpuResources::Buffer
     return result;
 }
 
-void LinearBuffer::Destroy(GpuResources* resources)
+void LinearBuffer::Destroy(Gpu::Resources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
     this->size = 0;
@@ -79,7 +79,7 @@ D3D12_GPU_VIRTUAL_ADDRESS CpuMappedLinearBuffer::Copy(const void* data, uint64_t
     return gpu_ptr;
 }
 
-HRESULT CircularBuffer::Create(GpuResources* resources, const GpuResources::BufferDesc* buffer_desc)
+HRESULT CircularBuffer::Create(Gpu::Resources* resources, const Gpu::BufferDesc* buffer_desc)
 {
     this->size = 0;
 
@@ -160,7 +160,7 @@ ID3D12Resource* CircularBuffer::Resource()
     return this->buffer.Resource();
 }
 
-void CircularBuffer::Destroy(GpuResources* resources)
+void CircularBuffer::Destroy(Gpu::Resources* resources)
 {
     resources->FreeBuffer(&this->buffer);
     this->write = 0;

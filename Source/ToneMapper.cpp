@@ -9,7 +9,7 @@
 #include "DirectXHelpers.h"
 #include "GpuResources.h"
 
-void ToneMapper::Create(GpuResources* resources)
+void ToneMapper::Create(Gpu::Resources* resources)
 {
 	HRESULT result;
 
@@ -28,8 +28,8 @@ void ToneMapper::Create(GpuResources* resources)
 	};
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {
 		.pRootSignature = this->root_signature.Get(),
-		.VS = GpuResources::LoadShader("Shaders/FullscreenTriangle.vs.bin"),
-		.PS = GpuResources::LoadShader("Shaders/ToneMapper.ps.bin"),
+		.VS = Gpu::Resources::LoadShader("Shaders/FullscreenTriangle.vs.bin"),
+		.PS = Gpu::Resources::LoadShader("Shaders/ToneMapper.ps.bin"),
 		.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT()),
 		.SampleMask = UINT_MAX,
 		.RasterizerState = {
@@ -63,8 +63,8 @@ void ToneMapper::Create(GpuResources* resources)
 	assert(result == S_OK);
 
     // Cleanup.
-	GpuResources::FreeShader(pipeline_desc.VS);
-	GpuResources::FreeShader(pipeline_desc.PS);
+	Gpu::Resources::FreeShader(pipeline_desc.VS);
+	Gpu::Resources::FreeShader(pipeline_desc.PS);
 }
 
 void ToneMapper::Run(CommandContext* context, D3D12_GPU_DESCRIPTOR_HANDLE input_descriptor, const Config* config)

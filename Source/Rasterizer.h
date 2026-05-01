@@ -25,10 +25,10 @@ class Rasterizer {
         D3D12_GPU_VIRTUAL_ADDRESS gpu_lights = 0;
         int light_count = 0;
         EnvironmentMap::Map* environment_map = nullptr;
-        GpuResources::Texture* output;
+        Gpu::Texture* output;
     };
 
-    void Init(GpuResources* gpu_resources, uint16_t width, uint16_t height);
+    void Init(Gpu::Resources* gpu_resources, uint16_t width, uint16_t height);
     void Resize(uint16_t width, uint16_t height);
 	void DrawScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params);
     void Shutdown();
@@ -45,16 +45,16 @@ class Rasterizer {
 		int material_id;
 	};
 
-    GpuResources* gpu_resources = nullptr;
+    Gpu::Resources* gpu_resources = nullptr;
 
     uint32_t width;
     uint32_t height;
     glm::mat4x4 previous_world_to_clip;
 
     // Render targets and resolution dependent resources.
-    GpuResources::Texture depth;
-    GpuResources::Texture motion_vectors;
-	GpuResources::Texture transmission;
+    Gpu::Texture depth;
+    Gpu::Texture motion_vectors;
+	Gpu::Texture transmission;
     
     std::vector<RenderObject> opaque_render_objects;
 	std::vector<RenderObject> alpha_mask_render_objects;

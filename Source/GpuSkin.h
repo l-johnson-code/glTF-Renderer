@@ -14,7 +14,7 @@ class GpuSkin {
         glm::mat4x4 inverse_transpose;
     };
 
-    void Create(GpuResources* resources);
+    void Create(Gpu::Resources* resources);
     void Bind(CommandContext* context);
     void Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D12_GPU_VIRTUAL_ADDRESS bones, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights);
 

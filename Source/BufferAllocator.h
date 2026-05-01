@@ -10,14 +10,14 @@
 class LinearBuffer {
     public:
     
-    HRESULT Create(GpuResources* resources, const GpuResources::BufferDesc* buffer_desc);
-    void Destroy(GpuResources* resources);
+    HRESULT Create(Gpu::Resources* resources, const Gpu::BufferDesc* buffer_desc);
+    void Destroy(Gpu::Resources* resources);
     uint64_t Size();
     uint64_t Capacity();
     void Reset();
     D3D12_GPU_VIRTUAL_ADDRESS Allocate(uint64_t size, uint64_t alignment);
     D3D12_GPU_VIRTUAL_ADDRESS GetGpuAddress(uint64_t offset);
-    GpuResources::Buffer buffer;
+    Gpu::Buffer buffer;
     
     protected:
     
@@ -40,7 +40,7 @@ class CpuMappedLinearBuffer : public LinearBuffer {
 class CircularBuffer {
     public:
 
-    HRESULT Create(GpuResources* resources, const GpuResources::BufferDesc* buffer_desc);
+    HRESULT Create(Gpu::Resources* resources, const Gpu::BufferDesc* buffer_desc);
     uint64_t Allocate(uint64_t size, uint64_t alignment);
     uint64_t GetMarker();
     void Free(uint64_t marker);
@@ -50,11 +50,11 @@ class CircularBuffer {
     ID3D12Resource* Resource();
     uint64_t Size();
     uint64_t Capacity();
-    void Destroy(GpuResources* resources);
+    void Destroy(Gpu::Resources* resources);
 
     private:
     
-    GpuResources::Buffer buffer;
+    Gpu::Buffer buffer;
     uint64_t write = 0;
     uint64_t size = 0;
 };

@@ -14,15 +14,15 @@ class RaytracingAccelerationStructure {
     public:
 
     struct Blas {
-        GpuResources::Buffer buffer;
+        Gpu::Buffer buffer;
     };
 
     struct DynamicBlas {
-        GpuResources::Buffer buffer;
+        Gpu::Buffer buffer;
         uint64_t update_scratch_size;
     };
     
-    void Init(ID3D12Device5* device, GpuResources* resources, uint32_t max_blas_vertices, uint32_t max_tlas_instances);
+    void Init(ID3D12Device5* device, Gpu::Resources* resources, uint32_t max_blas_vertices, uint32_t max_tlas_instances);
     
     void BuildStaticBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Blas* blas);
     void BuildDynamicBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, DynamicBlas* blas);
@@ -38,7 +38,7 @@ class RaytracingAccelerationStructure {
     
     private:
     
-    GpuResources* resources;
+    Gpu::Resources* resources;
 
     Microsoft::WRL::ComPtr<ID3D12Device5> device;
 
@@ -48,9 +48,9 @@ class RaytracingAccelerationStructure {
     uint32_t instance_count = 0;
     uint32_t max_tlas_instances = 0;
     MultiBuffer<CpuMappedLinearBuffer, Config::FRAME_COUNT> tlas_staging;
-    GpuResources::Buffer tlas_scratch;
-    GpuResources::Buffer tlas;
+    Gpu::Buffer tlas_scratch;
+    Gpu::Buffer tlas;
 
-    void BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, GpuResources::Buffer* buffer, uint64_t* update_scratch_size = nullptr);
+    void BuildBlas(ID3D12GraphicsCommandList4* command_list, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Gpu::Buffer* buffer, uint64_t* update_scratch_size = nullptr);
     bool AddTlasInstance(D3D12_GPU_VIRTUAL_ADDRESS blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags);
 };

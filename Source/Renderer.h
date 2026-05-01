@@ -39,7 +39,7 @@ public:
 	};
 
 	Microsoft::WRL::ComPtr<ID3D12Device5> device;
-	GpuResources resources;
+	Gpu::Resources resources;
 	UploadBuffer upload_buffer;
 	EnvironmentMap environment_map;
     EnvironmentMap::Map map;
@@ -181,7 +181,7 @@ private:
 	RenderSettings settings;
 
 	// Render targets and resolution dependent resources.
-    GpuResources::Texture display;
+    Gpu::Texture display;
 	
 	const int MAX_LIGHTS = 10;
 	std::vector<GpuLight> lights;
@@ -190,11 +190,11 @@ private:
 	D3D12_GPU_VIRTUAL_ADDRESS gpu_materials;
     
     // Lookup tables.
-	GpuResources::Texture sheen_e;
+	Gpu::Texture sheen_e;
 
 	uint64_t frame = 0;
 
-	MultiBuffer<std::vector<GpuResources::Texture>, Config::FRAME_COUNT> deferred_release;
+	MultiBuffer<std::vector<Gpu::Texture>, Config::FRAME_COUNT> deferred_release;
 
 	Swapchain swapchain;
 	MultiBuffer<CpuMappedLinearBuffer, Config::FRAME_COUNT> frame_allocators;

@@ -7,7 +7,7 @@
 #include "DirectXHelpers.h"
 #include "GpuResources.h"
 
-void Bloom::Create(GpuResources* resources, uint16_t width, uint16_t height, uint8_t max_iterations)
+void Bloom::Create(Gpu::Resources* resources, uint16_t width, uint16_t height, uint8_t max_iterations)
 {
     HRESULT result = S_OK;
 
@@ -29,15 +29,15 @@ void Bloom::Create(GpuResources* resources, uint16_t width, uint16_t height, uin
 		.pRootSignature = root_signature.Get(),
 	};
 
-    pipeline_desc.CS = GpuResources::LoadShader("Shaders/BloomDownsample.cs.bin");
+    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/BloomDownsample.cs.bin");
 	result = resources->CreateComputePipelineState(&pipeline_desc, &this->downsample_pipeline_state, "Bloom Downsample");
 	assert(result == S_OK);
-	GpuResources::FreeShader(pipeline_desc.CS);
+	Gpu::Resources::FreeShader(pipeline_desc.CS);
     	
-    pipeline_desc.CS = GpuResources::LoadShader("Shaders/BloomUpsample.cs.bin");
+    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/BloomUpsample.cs.bin");
 	result = resources->CreateComputePipelineState(&pipeline_desc, &this->upsample_pipeline_state, "Bloom Upsample");
 	assert(result == S_OK);
-	GpuResources::FreeShader(pipeline_desc.CS);
+	Gpu::Resources::FreeShader(pipeline_desc.CS);
 }
 
 void Bloom::Resize(uint16_t width, uint16_t height, uint8_t max_iterations)
@@ -47,12 +47,12 @@ void Bloom::Resize(uint16_t width, uint16_t height, uint8_t max_iterations)
     height = NextMipSize(height);
     this->max_iterations = std::min(MipCount(width, height), (uint16_t)max_iterations);
 
-    GpuResources::TextureDesc desc = {
+    Gpu::TextureDesc desc = {
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = width,
         .height = height,
         .mip_levels = this->max_iterations,
-        .flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_SRV | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_SRV_PER_MIP),
+        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_SRV_PER_MIP),
         .initial_state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
         .name = "Bloom Mip Chain"
     };
@@ -60,7 +60,7 @@ void Bloom::Resize(uint16_t width, uint16_t height, uint8_t max_iterations)
     assert(result == S_OK);
 }
 
-void Bloom::Execute(CommandContext* context, GpuResources::Texture* input, D3D12_RESOURCE_STATES input_resource_states, uint8_t iterations, float strength)
+void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE_STATES input_resource_states, uint8_t iterations, float strength)
 {
     iterations = std::min(this->max_iterations, iterations);
 

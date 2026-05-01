@@ -12,7 +12,7 @@
 
 #include "DirectXHelpers.h"
 
-void ForwardPass::Create(GpuResources* resources)
+void ForwardPass::Create(Gpu::Resources* resources)
 {
     HRESULT result;
 
@@ -33,21 +33,21 @@ void ForwardPass::Create(GpuResources* resources)
 	assert(result == S_OK);
 
 	// Load shaders.
-	D3D12_SHADER_BYTECODE vertex_shader = GpuResources::LoadShader("Shaders/Forward.vs.bin");
-	D3D12_SHADER_BYTECODE pixel_shader = GpuResources::LoadShader("Shaders/Forward.ps.bin");
+	D3D12_SHADER_BYTECODE vertex_shader = Gpu::Resources::LoadShader("Shaders/Forward.vs.bin");
+	D3D12_SHADER_BYTECODE pixel_shader = Gpu::Resources::LoadShader("Shaders/Forward.ps.bin");
 
 	for (uint32_t permutation = 0; permutation < std::size(pipeline_states); permutation++) {
 		CreatePipeline(resources, vertex_shader, pixel_shader, permutation, root_signature.Get());
 	}
 
-	GpuResources::FreeShader(vertex_shader);
-	GpuResources::FreeShader(pixel_shader);
+	Gpu::Resources::FreeShader(vertex_shader);
+	Gpu::Resources::FreeShader(pixel_shader);
 
 	CreateBackgroundRenderer(resources);
 	CreateTranmissionMipPipeline(resources);
 }
 
-void ForwardPass::CreatePipeline(GpuResources* resources, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature)
+void ForwardPass::CreatePipeline(Gpu::Resources* resources, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature)
 {
 	HRESULT result;
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
@@ -241,7 +241,7 @@ void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, gl
     }
 }
 
-void ForwardPass::CreateBackgroundRenderer(GpuResources* resources)
+void ForwardPass::CreateBackgroundRenderer(Gpu::Resources* resources)
 {
 	HRESULT result;
 
@@ -263,8 +263,8 @@ void ForwardPass::CreateBackgroundRenderer(GpuResources* resources)
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
 
-	pipeline_desc.VS = GpuResources::LoadShader("Shaders/Background.vs.bin");
-	pipeline_desc.PS = GpuResources::LoadShader("Shaders/Background.ps.bin");
+	pipeline_desc.VS = Gpu::Resources::LoadShader("Shaders/Background.vs.bin");
+	pipeline_desc.PS = Gpu::Resources::LoadShader("Shaders/Background.ps.bin");
 
 	pipeline_desc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
 	pipeline_desc.SampleMask = UINT_MAX;
@@ -302,8 +302,8 @@ void ForwardPass::CreateBackgroundRenderer(GpuResources* resources)
 	result = resources->CreateGraphicsPipelineState(&pipeline_desc, &this->background_pipeline_state, "Background Pipeline");
 	assert(result == S_OK);
 
-	GpuResources::FreeShader(pipeline_desc.VS);
-	GpuResources::FreeShader(pipeline_desc.PS);
+	Gpu::Resources::FreeShader(pipeline_desc.VS);
+	Gpu::Resources::FreeShader(pipeline_desc.PS);
 }
 
 void ForwardPass::DrawBackground(CommandContext* context, glm::mat4x4 clip_to_world, float environment_intensity, int environment_descriptor)
@@ -335,7 +335,7 @@ void ForwardPass::DrawBackground(CommandContext* context, glm::mat4x4 clip_to_wo
     context->command_list->DrawInstanced(3, 1, 0, 0);
 }
 
-void ForwardPass::GenerateTransmissionMips(CommandContext* context, GpuResources::Texture* input, GpuResources::Texture* output, int sample_pattern)
+void ForwardPass::GenerateTransmissionMips(CommandContext* context, Gpu::Texture* input, Gpu::Texture* output, int sample_pattern)
 {
 	// Create mip 0.
 	context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST, 0);
@@ -378,7 +378,7 @@ void ForwardPass::GenerateTransmissionMips(CommandContext* context, GpuResources
 	context->SubmitBarriers();
 }
 
-void ForwardPass::CreateTranmissionMipPipeline(GpuResources* resources)
+void ForwardPass::CreateTranmissionMipPipeline(Gpu::Resources* resources)
 {
 	HRESULT result = S_OK;
 	CD3DX12_ROOT_PARAMETER root_parameter;
@@ -390,9 +390,9 @@ void ForwardPass::CreateTranmissionMipPipeline(GpuResources* resources)
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {
 		.pRootSignature = transmission_mips_root_signature.Get(),
-		.CS = GpuResources::LoadShader("Shaders/TransmissionDownsample.cs.bin"),
+		.CS = Gpu::Resources::LoadShader("Shaders/TransmissionDownsample.cs.bin"),
 	};
 	result = resources->CreateComputePipelineState(&pipeline_desc, &this->transmission_mips_pipeline_state, "Transmission Downsample");
 	assert(result == S_OK);
-	GpuResources::FreeShader(pipeline_desc.CS);
+	Gpu::Resources::FreeShader(pipeline_desc.CS);
 }

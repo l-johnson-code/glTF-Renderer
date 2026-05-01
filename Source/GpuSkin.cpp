@@ -10,7 +10,7 @@
 #include "Config.h"
 #include "GpuResources.h"
 
-void GpuSkin::Create(GpuResources* resources)
+void GpuSkin::Create(Gpu::Resources* resources)
 {
     HRESULT result = S_OK;
 
@@ -39,13 +39,13 @@ void GpuSkin::Create(GpuResources* resources)
     // Create the pipeline.
 	D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {
 		.pRootSignature = this->root_signature.Get(),
-		.CS = GpuResources::LoadShader("Shaders/Skin.cs.bin"),
+		.CS = Gpu::Resources::LoadShader("Shaders/Skin.cs.bin"),
 	};
 	result = resources->CreateComputePipelineState(&pipeline_desc, &this->pipeline_state, "Skin");
 	assert(result == S_OK);
 
     // Cleanup.
-	GpuResources::FreeShader(pipeline_desc.CS);
+	Gpu::Resources::FreeShader(pipeline_desc.CS);
 }
 
 void GpuSkin::Bind(CommandContext* context)

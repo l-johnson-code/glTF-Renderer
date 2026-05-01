@@ -44,7 +44,7 @@ class ForwardPass {
         uint32_t render_flags;
     };
 
-    void Create(GpuResources* resources);
+    void Create(Gpu::Resources* resources);
     void Destroy();
     void SetRootSignature(CommandContext* context);
     void SetConfig(CommandContext* context, const Config* config);
@@ -52,7 +52,7 @@ class ForwardPass {
     void BindPipeline(CommandContext* context, uint32_t pipeline_flags);
     void Draw(CommandContext* context, Mesh* model, int material_id, glm::mat4x4 model_to_world, glm::mat4x4 model_to_world_normals, glm::mat4x4 previous_model_to_world, DynamicMesh* dynamic_mesh = nullptr);
     void DrawBackground(CommandContext* context, glm::mat4x4 clip_to_world, float environment_intensity, int environment_descriptor);
-    void GenerateTransmissionMips(CommandContext* context, GpuResources::Texture* input, GpuResources::Texture* output, int sample_pattern);
+    void GenerateTransmissionMips(CommandContext* context, Gpu::Texture* input, Gpu::Texture* output, int sample_pattern);
 
     private:
 
@@ -78,7 +78,7 @@ class ForwardPass {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> transmission_mips_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> transmission_mips_pipeline_state;
 
-    void CreatePipeline(GpuResources* resources, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature);
-    void CreateBackgroundRenderer(GpuResources* resources);
-    void CreateTranmissionMipPipeline(GpuResources* resources);
+    void CreatePipeline(Gpu::Resources* resources, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature);
+    void CreateBackgroundRenderer(Gpu::Resources* resources);
+    void CreateTranmissionMipPipeline(Gpu::Resources* resources);
 };

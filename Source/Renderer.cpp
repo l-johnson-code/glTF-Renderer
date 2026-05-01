@@ -151,9 +151,9 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	upload_buffer.Create(this->device.Get(), &this->resources, ::Config::UPLOAD_BUFFER_CAPACITY, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, ::Config::FRAME_COUNT);
 
 	for (int i = 0; i < frame_allocators.Size(); i++) {
-		GpuResources::BufferDesc buffer_desc = {
+		Gpu::BufferDesc buffer_desc = {
 			.size = ::Config::FRAME_HEAP_CAPACITY,
-			.flags = GpuResources::BUFFER_FLAG_PERSISTENT_MAP,
+			.flags = Gpu::BUFFER_FLAG_PERSISTENT_MAP,
 			.heap_type = resources.allocator.SupportsGpuUploadHeap() ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD,
 			.name = "Transient Resources",
 		};
@@ -410,19 +410,19 @@ void Renderer::LoadLookupTables(UploadBuffer* upload_buffer)
 		x = exr_image.width;
 		y = exr_image.height;
 
-		GpuResources::TextureDesc texture_desc = {
+		Gpu::TextureDesc texture_desc = {
 			.format = DXGI_FORMAT_R16_FLOAT,
 			.width = (uint16_t)x,
 			.height = (uint16_t)y,
 			.mip_levels = 1,
-			.flags = GpuResources::TEXTURE_FLAG_SRV,
+			.flags = Gpu::TEXTURE_FLAG_SRV,
 			.name = "Sheen E Lookup Table",
 		};
 		result = resources.CreateTexture(&texture_desc, &this->sheen_e);
 		assert(result == S_OK);
 
 		// TODO: Use the SRV created with the texture instead of this. Remove static descriptors altogether.
-		D3D12_CPU_DESCRIPTOR_HANDLE descriptor_cpu_handle = resources.cbv_uav_srv_allocator.GetCpuHandle(GpuResources::STATIC_DESCRIPTOR_SRV_SHEEN_E);
+		D3D12_CPU_DESCRIPTOR_HANDLE descriptor_cpu_handle = resources.cbv_uav_srv_allocator.GetCpuHandle(Gpu::Resources::STATIC_DESCRIPTOR_SRV_SHEEN_E);
 		D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {
 			.Format = DXGI_FORMAT_R16_FLOAT,
 			.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
@@ -450,13 +450,13 @@ void Renderer::CreateRenderTargets()
 {
 	HRESULT result = S_OK;
 
-	GpuResources::TextureDesc desc = {
+	Gpu::TextureDesc desc = {
 		.format = this->settings.renderer_type == RENDERER_TYPE_PATHTRACER ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT,
 		.width = (uint16_t)display_width,
 		.height = (uint16_t)display_height,
 		.mip_levels = 1,
 		.clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
-		.flags = (GpuResources::TextureFlags)(GpuResources::TEXTURE_FLAG_RENDER_TARGET | GpuResources::TEXTURE_FLAG_UAV | GpuResources::TEXTURE_FLAG_SRV),
+		.flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_RENDER_TARGET | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_SRV),
 		.name = "Display",
 	};
 	this->resources.CreateTexture(&desc, &this->display);
