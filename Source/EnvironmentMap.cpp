@@ -323,8 +323,8 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
 void EnvironmentMap::GenerateCubemap(CommandContext* context, Gpu::Texture* equirectangular_image, Gpu::Texture* cubemap)
 {
     // Convert the equirectangular map to a cubemap.
-    context->command_list->SetComputeRootSignature(this->root_signature.Get());
-    context->command_list->SetPipelineState(this->generate_cubemap_pipeline_state.Get());
+    context->SetComputeRootSignature(this->root_signature.Get());
+    context->SetPipelineState(this->generate_cubemap_pipeline_state.Get());
     struct {
         int environment;
         int cube;
@@ -334,13 +334,13 @@ void EnvironmentMap::GenerateCubemap(CommandContext* context, Gpu::Texture* equi
         .environment = equirectangular_image->Srv(),
         .cube = cubemap->Uav(),
     };
-    context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+    context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
     uint32_t thread_groups_x = ((cubemap->Width() * 6) + 7) / 8;
     uint32_t thread_groups_y = (cubemap->Height() + 7) / 8;
-    context->command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
+    context->Dispatch(thread_groups_x, thread_groups_y, 1);
 
     // Generate the mips.
-    context->command_list->SetPipelineState(this->generate_cube_mip_pipeline_state.Get());
+    context->SetPipelineState(this->generate_cube_mip_pipeline_state.Get());
     for (int i = 1; i < cubemap->MipLevels(); i++) {
         struct {
             int input_descriptor;
@@ -353,10 +353,10 @@ void EnvironmentMap::GenerateCubemap(CommandContext* context, Gpu::Texture* equi
             .output_descriptor = cubemap->Uav(i),
         };
 
-        context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+        context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
         uint32_t thread_groups_x = ((output_width * 6) + 7) / 8;
         uint32_t thread_groups_y = (output_width + 7) / 8;
-        context->command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
+        context->Dispatch(thread_groups_x, thread_groups_y, 1);
 
         context->PushUavBarrier(cubemap->Resource());
         context->SubmitBarriers();
@@ -386,15 +386,15 @@ void EnvironmentMap::FilterCube(CommandContext* context, Gpu::Texture* cubemap, 
         .mip_bias = mip_bias,
         .bsdf = bsdf,
     };
-    context->command_list->SetComputeRootSignature(this->root_signature.Get());
-    context->command_list->SetPipelineState(this->filter_cube_map_pipeline_state.Get());
+    context->SetComputeRootSignature(this->root_signature.Get());
+    context->SetPipelineState(this->filter_cube_map_pipeline_state.Get());
     for (int i = 0; i < mip_count; i++) {
         constant_buffer.output = filtered_cube_map->Uav(i);
         constant_buffer.roughness = MipToRoughness(i, mip_count);
-        context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+        context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
         uint32_t thread_groups_x = (resolution * 6 + 7) / 8;
         uint32_t thread_groups_y = (resolution + 7) / 8;
-        context->command_list->Dispatch(thread_groups_x, thread_groups_y, 1);
+        context->Dispatch(thread_groups_x, thread_groups_y, 1);
         resolution /= 2;
         // TODO: Are there missing UAV barriers here?
     }

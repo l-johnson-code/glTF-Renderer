@@ -126,7 +126,7 @@ void ForwardPass::Destroy()
 
 void ForwardPass::SetRootSignature(CommandContext* context)
 {
-	context->command_list->SetGraphicsRootSignature(this->root_signature.Get());
+	context->SetGraphicsRootSignature(this->root_signature.Get());
 }
 
 void ForwardPass::SetConfig(CommandContext* context, const Config* config)
@@ -165,10 +165,10 @@ void ForwardPass::SetConfig(CommandContext* context, const Config* config)
 		.transmission_descriptor = config->transmission_descriptor,
 	};
 	
-	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME, context->CreateConstantBuffer(&cb_vertex));
-	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_FRAME, context->CreateConstantBuffer(&cb_pixel));
-	context->command_list->SetGraphicsRootShaderResourceView(ROOT_PARAMETER_SRV_LIGHTS, config->lights);
-	context->command_list->SetGraphicsRootShaderResourceView(ROOT_PARAMETER_SRV_MATERIALS, config->materials);
+	context->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME, context->CreateConstantBuffer(&cb_vertex));
+	context->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_FRAME, context->CreateConstantBuffer(&cb_pixel));
+	context->SetGraphicsRootShaderResourceView(ROOT_PARAMETER_SRV_LIGHTS, config->lights);
+	context->SetGraphicsRootShaderResourceView(ROOT_PARAMETER_SRV_MATERIALS, config->materials);
 }
 
 void ForwardPass::BindRenderTargets(CommandContext* context, D3D12_CPU_DESCRIPTOR_HANDLE render, D3D12_CPU_DESCRIPTOR_HANDLE motion_vectors, D3D12_CPU_DESCRIPTOR_HANDLE depth)
@@ -177,14 +177,14 @@ void ForwardPass::BindRenderTargets(CommandContext* context, D3D12_CPU_DESCRIPTO
         render,
 		motion_vectors,
     };
-	context->command_list->OMSetRenderTargets(2, rtv_handles, false, &depth);
+	context->SetRenderTargets(2, rtv_handles, &depth);
 }
 
 void ForwardPass::BindPipeline(CommandContext* context, uint32_t flags)
 {
 	assert(flags < std::size(pipeline_states));
 	flags &= PIPELINE_FLAGS_BITMASK;
-    context->command_list->SetPipelineState(pipeline_states[flags].Get());
+    context->SetPipelineState(pipeline_states[flags].Get());
 }
 
 void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, glm::mat4x4 model_to_world, glm::mat4x4 model_to_world_normals, glm::mat4x4 previous_model_to_world, DynamicMesh* dynamic_mesh)
@@ -201,7 +201,7 @@ void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, gl
 		.model_to_world_normals = glm::inverseTranspose(model_to_world),
 		.previous_model_to_world = previous_model_to_world,
 	};
-	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL, context->CreateConstantBuffer(&vertex_per_model));
+	context->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL, context->CreateConstantBuffer(&vertex_per_model));
 	
 	struct {
 		uint32_t mesh_flags;
@@ -214,10 +214,10 @@ void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, gl
 		.material_index = material_id,
     	.model_to_world = model_to_world,
 	};
-	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL, context->CreateConstantBuffer(&pixel_per_model));
+	context->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL, context->CreateConstantBuffer(&pixel_per_model));
 
 	if (model->topology != this->current_topology) {
-		context->command_list->IASetPrimitiveTopology(model->topology);
+		context->SetPrimitiveTopology(model->topology);
 		this->current_topology = model->topology;
 	}
 	
@@ -231,13 +231,13 @@ void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, gl
 		// TODO: We don't always want to use the previous position buffer, such as on a new frame.
 		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_POSITION) ? dynamic_mesh->GetPreviousPositionBuffer()->view : model->position.view
 	};
-	context->command_list->IASetVertexBuffers(0, std::size(vertex_buffers), vertex_buffers);
+	context->SetVertexBuffers(0, std::size(vertex_buffers), vertex_buffers);
 
     if (model->num_of_indices > 0) {
-        context->command_list->IASetIndexBuffer(&model->index.view);
-        context->command_list->DrawIndexedInstanced(model->num_of_indices, 1, 0, 0, 0);
+        context->SetIndexBuffer(&model->index.view);
+        context->DrawIndexedInstanced(model->num_of_indices, 1, 0, 0, 0);
     } else {
-        context->command_list->DrawInstanced(model->num_of_vertices, 1, 0, 0);
+        context->DrawInstanced(model->num_of_vertices, 1, 0, 0);
     }
 }
 
@@ -308,9 +308,9 @@ void ForwardPass::CreateBackgroundRenderer(Gpu::Resources* resources)
 
 void ForwardPass::DrawBackground(CommandContext* context, glm::mat4x4 clip_to_world, float environment_intensity, int environment_descriptor)
 {
-	context->command_list->SetGraphicsRootSignature(this->background_root_signature.Get());
-    context->command_list->SetPipelineState(this->background_pipeline_state.Get());
-	context->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->SetGraphicsRootSignature(this->background_root_signature.Get());
+    context->SetPipelineState(this->background_pipeline_state.Get());
+	context->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	struct {
 		glm::mat4x4 clip_to_world;
@@ -319,7 +319,7 @@ void ForwardPass::DrawBackground(CommandContext* context, glm::mat4x4 clip_to_wo
 	cb_vertex = {
 		.clip_to_world = clip_to_world,
 	};
-	context->command_list->SetGraphicsRootConstantBufferView(0, context->CreateConstantBuffer(&cb_vertex));
+	context->SetGraphicsRootConstantBufferView(0, context->CreateConstantBuffer(&cb_vertex));
 	
 	struct {
     	float environment_intensity;
@@ -330,9 +330,9 @@ void ForwardPass::DrawBackground(CommandContext* context, glm::mat4x4 clip_to_wo
 		.environment_intensity = environment_intensity,
 		.environment_descriptor = environment_descriptor,
 	};
-	context->command_list->SetGraphicsRootConstantBufferView(1, context->CreateConstantBuffer(&cb_pixel));
+	context->SetGraphicsRootConstantBufferView(1, context->CreateConstantBuffer(&cb_pixel));
 
-    context->command_list->DrawInstanced(3, 1, 0, 0);
+    context->DrawInstanced(3, 1, 0, 0);
 }
 
 void ForwardPass::GenerateTransmissionMips(CommandContext* context, Gpu::Texture* input, Gpu::Texture* output, int sample_pattern)
@@ -343,12 +343,12 @@ void ForwardPass::GenerateTransmissionMips(CommandContext* context, Gpu::Texture
 
 	const CD3DX12_TEXTURE_COPY_LOCATION copy_dest(output->Resource());
 	const CD3DX12_TEXTURE_COPY_LOCATION copy_source(input->Resource());
-	context->command_list->CopyTextureRegion(&copy_dest, 0, 0, 0, &copy_source, nullptr);
+	context->CopyTextureRegion(&copy_dest, &copy_source);
 	context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
 
 	// Generate the mips.
-	context->command_list->SetComputeRootSignature(this->transmission_mips_root_signature.Get());
-	context->command_list->SetPipelineState(this->transmission_mips_pipeline_state.Get());
+	context->SetComputeRootSignature(this->transmission_mips_root_signature.Get());
+	context->SetPipelineState(this->transmission_mips_pipeline_state.Get());
 
 	struct {
 		int input_descriptor;
@@ -370,8 +370,8 @@ void ForwardPass::GenerateTransmissionMips(CommandContext* context, Gpu::Texture
 		context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
 		context->SubmitBarriers();
 
-		context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
-		context->command_list->Dispatch((width + 7) / 8, (height + 7) / 8, 1);
+		context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+		context->Dispatch((width + 7) / 8, (height + 7) / 8, 1);
 		context->PushUavBarrier(output->Resource());
 		context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i);
 	}

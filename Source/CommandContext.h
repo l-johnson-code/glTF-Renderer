@@ -62,6 +62,37 @@ class CommandContext
     void PushUavBarrier(ID3D12Resource* resource);
     void SubmitBarriers();
 
+    // Shared.
+    void CopyTextureRegion(const D3D12_TEXTURE_COPY_LOCATION* destination, const D3D12_TEXTURE_COPY_LOCATION* source);
+    void SetPipelineState(ID3D12PipelineState* pipeline_state);
+    
+    // Compute.
+    void SetComputeRootSignature(ID3D12RootSignature* root_signature);
+    void SetComputeRootConstantBufferView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address);
+    void SetComputeRootShaderResourceView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address);
+    void SetComputeRootUnorderedAccessView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address);
+    void Dispatch(uint32_t thread_groups_x, uint32_t thread_groups_y, uint32_t thread_groups_z);
+    
+    // Graphics.
+    void SetGraphicsRootSignature(ID3D12RootSignature* root_signature);
+	void SetGraphicsRootDescriptorTable(uint32_t index, D3D12_GPU_DESCRIPTOR_HANDLE descriptor_start);
+	void SetGraphicsRootConstantBufferView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address);
+    void SetGraphicsRootShaderResourceView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address);
+    void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY primitive_topology);
+    void SetIndexBuffer(const D3D12_INDEX_BUFFER_VIEW* view);
+    void SetVertexBuffers(uint32_t start_slot, uint32_t view_count, const D3D12_VERTEX_BUFFER_VIEW* views);
+    void SetViewports(uint32_t count, const D3D12_VIEWPORT* viewports);
+    void SetScissorRects(uint32_t count, const D3D12_RECT* rects);
+    void ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE render_target_view, const float* color);
+    void ClearDepthStencilView(D3D12_CPU_DESCRIPTOR_HANDLE depth_stencil_view, float depth);
+    void SetRenderTargets(uint32_t render_target_count, const D3D12_CPU_DESCRIPTOR_HANDLE* render_targets, const D3D12_CPU_DESCRIPTOR_HANDLE* depth_stencil);
+	void DrawInstanced(uint32_t vertex_count_per_instance, uint32_t instance_count, uint32_t vertex_start_location, uint32_t instance_start_location);
+	void DrawIndexedInstanced(uint32_t index_count_per_instance, uint32_t instance_count, uint32_t index_start_location, int base_vertex_location, uint32_t instance_start_location);
+    
+    // Raytracing.
+    void SetPipelineState(ID3D12StateObject* state_object);
+    void DispatchRays(const D3D12_DISPATCH_RAYS_DESC* desc);
+
     // Allocations.
     void* Allocate(uint64_t size, uint64_t alignment, D3D12_GPU_VIRTUAL_ADDRESS* gpu_ptr);
     D3D12_GPU_VIRTUAL_ADDRESS AllocateAndCopy(const void* data, uint64_t size, uint64_t alignment);

@@ -64,10 +64,10 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
 {
     iterations = std::min(this->max_iterations, iterations);
 
-    context->command_list->SetComputeRootSignature(this->root_signature.Get());
+    context->SetComputeRootSignature(this->root_signature.Get());
 
     // Downsample and blur.
-    context->command_list->SetPipelineState(this->downsample_pipeline_state.Get());
+    context->SetPipelineState(this->downsample_pipeline_state.Get());
     uint16_t width = input->Width();
 	uint16_t height = input->Height();
 
@@ -86,8 +86,8 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
     constant_buffer.input_descriptor = input->Srv();
     constant_buffer.output_descriptor = mip_chain.Uav();
 
-    context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
-	context->command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
+    context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+	context->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 
     context->PushUavBarrier(mip_chain.Resource());
     context->PushTransitionBarrier(mip_chain.Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
@@ -103,8 +103,8 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
         constant_buffer.input_descriptor = mip_chain.Srv(i - 1);
         constant_buffer.output_descriptor = mip_chain.Uav(i);
 
-		context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
-		context->command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
+		context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+		context->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 
 		context->PushUavBarrier(mip_chain.Resource());
 		context->PushTransitionBarrier(mip_chain.Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i);
@@ -118,7 +118,7 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
     } upsample_constant_buffer;
 
     // Upsample and reconstruct.
-    context->command_list->SetPipelineState(this->upsample_pipeline_state.Get());
+    context->SetPipelineState(this->upsample_pipeline_state.Get());
     for (int i = iterations - 1; i > 0; i--) {
 		width = MipSize(input->Width(), i);
 		height = MipSize(input->Height(), i);
@@ -131,8 +131,8 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
 		context->PushTransitionBarrier(mip_chain.Resource(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i - 1);
 		context->SubmitBarriers();
 
-		context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&upsample_constant_buffer));
-		context->command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
+		context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&upsample_constant_buffer));
+		context->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 
 		context->PushUavBarrier(mip_chain.Resource());
 		context->PushTransitionBarrier(mip_chain.Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i - 1);
@@ -148,6 +148,6 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
 
     context->PushTransitionBarrier(input->Resource(), input_resource_states, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0);
     context->SubmitBarriers();
-    context->command_list->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&upsample_constant_buffer));
-    context->command_list->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
+    context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&upsample_constant_buffer));
+    context->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 }

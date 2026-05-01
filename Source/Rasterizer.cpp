@@ -125,9 +125,9 @@ void Rasterizer::DrawRenderObjects(CommandContext* context, Gltf* gltf, const st
 void Rasterizer::SetViewportAndScissorRects(CommandContext* context, int width, int height)
 {
 	CD3DX12_VIEWPORT viewport(0.0f, 0.0f, width, height);
-	context->command_list->RSSetViewports(1, &viewport);
+	context->SetViewports(1, &viewport);
 	CD3DX12_RECT scissor_rect(0, 0, width, height);
-	context->command_list->RSSetScissorRects(1, &scissor_rect);
+	context->SetScissorRects(1, &scissor_rect);
 }
 
 void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params)
@@ -164,9 +164,9 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	context->SubmitBarriers();
 	
 	float clear_color[4] = {0., 0., 0., 0.};
-	context->command_list->ClearRenderTargetView(render_rtv, clear_color, 0, nullptr);
-	context->command_list->ClearRenderTargetView(motion_vectors.Rtv(), motion_vectors.ClearColor(), 0, nullptr);
-	context->command_list->ClearDepthStencilView(depth.Dsv(), D3D12_CLEAR_FLAG_DEPTH, depth.ClearDepth(), 0, 0, nullptr);
+	context->ClearRenderTargetView(render_rtv, clear_color);
+	context->ClearRenderTargetView(motion_vectors.Rtv(), motion_vectors.ClearColor());
+	context->ClearDepthStencilView(depth.Dsv(), depth.ClearDepth());
 	
 	SetViewportAndScissorRects(context, this->width, this->height);
 
@@ -188,7 +188,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 		.render_flags = settings->render_flags,
 	};
 	D3D12_PRIMITIVE_TOPOLOGY primitive_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	context->command_list->IASetPrimitiveTopology(primitive_topology);
+	context->SetPrimitiveTopology(primitive_topology);
 	forward.SetRootSignature(context);
 	forward.SetConfig(context, &config);
 	forward.BindRenderTargets(context, render_rtv, motion_vectors.Rtv(), depth.Dsv());

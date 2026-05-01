@@ -84,9 +84,9 @@ void ToneMapper::Run(CommandContext* context, D3D12_GPU_DESCRIPTOR_HANDLE input_
 	};
 	D3D12_GPU_VIRTUAL_ADDRESS constant_buffer_gpu = context->CreateConstantBuffer(&constant_buffer);
 
-	context->command_list->SetPipelineState(this->pipeline_state.Get());
-	context->command_list->SetGraphicsRootSignature(this->root_signature.Get());
-	context->command_list->SetGraphicsRootDescriptorTable(ROOT_PARAMETER_INPUT, input_descriptor);
-	context->command_list->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONFIG, constant_buffer_gpu);
-	context->command_list->DrawInstanced(3, 1, 0, 0);
+	context->SetPipelineState(this->pipeline_state.Get());
+	context->SetGraphicsRootSignature(this->root_signature.Get());
+	context->SetGraphicsRootDescriptorTable(ROOT_PARAMETER_INPUT, input_descriptor);
+	context->SetGraphicsRootConstantBufferView(ROOT_PARAMETER_CONFIG, constant_buffer_gpu);
+	context->DrawInstanced(3, 1, 0, 0);
 }

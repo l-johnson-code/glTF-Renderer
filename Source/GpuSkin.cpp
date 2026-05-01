@@ -50,8 +50,8 @@ void GpuSkin::Create(Gpu::Resources* resources)
 
 void GpuSkin::Bind(CommandContext* context)
 {
-    context->command_list->SetPipelineState(this->pipeline_state.Get());
-    context->command_list->SetComputeRootSignature(this->root_signature.Get());
+    context->SetPipelineState(this->pipeline_state.Get());
+    context->SetComputeRootSignature(this->root_signature.Get());
 }
 
 void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D12_GPU_VIRTUAL_ADDRESS bones, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights)
@@ -94,18 +94,18 @@ void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D
 		constant_buffer.input_mesh_flags &= !Mesh::FLAG_JOINT_WEIGHT;
 	}
 
-    context->command_list->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
+    context->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
 
-    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_VERTEX_INPUT, input->position.view.BufferLocation);
-    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_TANGENT_SPACE_INPUT, input->tangent_space.view.BufferLocation);
+    context->SetComputeRootShaderResourceView(ROOT_PARAMETER_VERTEX_INPUT, input->position.view.BufferLocation);
+    context->SetComputeRootShaderResourceView(ROOT_PARAMETER_TANGENT_SPACE_INPUT, input->tangent_space.view.BufferLocation);
 	
-    context->command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_VERTEX_OUTPUT, output->GetCurrentPositionBuffer()->view.BufferLocation);
-    context->command_list->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_TANGENT_SPACE_OUTPUT, output->tangent_space.view.BufferLocation);
+    context->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_VERTEX_OUTPUT, output->GetCurrentPositionBuffer()->view.BufferLocation);
+    context->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_TANGENT_SPACE_OUTPUT, output->tangent_space.view.BufferLocation);
 
-    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_SKIN, input->joint_weight.view.BufferLocation);
-    context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_BONES, bones);
+    context->SetComputeRootShaderResourceView(ROOT_PARAMETER_SKIN, input->joint_weight.view.BufferLocation);
+    context->SetComputeRootShaderResourceView(ROOT_PARAMETER_BONES, bones);
 
-    context->command_list->Dispatch((constant_buffer.num_of_vertices + THREAD_GROUP_SIZE - 1) / THREAD_GROUP_SIZE, 1, 1);
+    context->Dispatch((constant_buffer.num_of_vertices + THREAD_GROUP_SIZE - 1) / THREAD_GROUP_SIZE, 1, 1);
 
 	// Transition output from UAV to vertex buffer and shader resource view state.
 	context->PushUavBarrier(output->buffer.Resource());

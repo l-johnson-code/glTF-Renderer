@@ -339,14 +339,14 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
 
         D3D12_GPU_VIRTUAL_ADDRESS constant_buffer = context->CreateConstantBuffer(&constants);
 
-        context->command_list->SetComputeRootSignature(this->root_signature.Get());
-        context->command_list->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
-        context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_ACCELERATION_STRUCTURE, this->acceleration_structure.GetAccelerationStructure());
-        context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, this->gpu_mesh_instances);
-        context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, execute_params->gpu_materials);
-        context->command_list->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, execute_params->gpu_lights);
+        context->SetComputeRootSignature(this->root_signature.Get());
+        context->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
+        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_ACCELERATION_STRUCTURE, this->acceleration_structure.GetAccelerationStructure());
+        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, this->gpu_mesh_instances);
+        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, execute_params->gpu_materials);
+        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, execute_params->gpu_lights);
 
-        context->command_list->SetPipelineState1(this->state_object.Get());
+        context->SetPipelineState(this->state_object.Get());
 
         D3D12_DISPATCH_RAYS_DESC desc = {
             .RayGenerationShaderRecord = this->shader_tables.ray_generation_shader_record,
@@ -357,7 +357,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .Height = execute_params->height,
             .Depth = 1,
         };
-        context->command_list->DispatchRays(&desc);
+        context->DispatchRays(&desc);
 
         if (settings->flags & FLAG_ACCUMULATE) {
             this->accumulated_frames++;

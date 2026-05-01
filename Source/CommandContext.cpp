@@ -44,6 +44,121 @@ void CommandContext::SubmitBarriers()
     barriers->resize(0);
 }
 
+void CommandContext::CopyTextureRegion(const D3D12_TEXTURE_COPY_LOCATION* destination, const D3D12_TEXTURE_COPY_LOCATION* source)
+{
+    this->command_list->CopyTextureRegion(destination, 0, 0, 0, source, nullptr);
+}
+
+void CommandContext::SetPipelineState(ID3D12PipelineState* pipeline_state)
+{
+    this->command_list->SetPipelineState(pipeline_state);
+}
+
+void CommandContext::SetComputeRootSignature(ID3D12RootSignature* root_signature)
+{
+    this->command_list->SetComputeRootSignature(root_signature);
+}
+
+void CommandContext::SetComputeRootConstantBufferView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address)
+{
+    this->command_list->SetComputeRootConstantBufferView(index, gpu_address);
+}
+
+void CommandContext::SetComputeRootShaderResourceView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address)
+{
+    this->command_list->SetComputeRootShaderResourceView(index, gpu_address);
+}
+
+void CommandContext::SetComputeRootUnorderedAccessView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address)
+{
+    this->command_list->SetComputeRootUnorderedAccessView(index, gpu_address);
+}
+
+void CommandContext::Dispatch(uint32_t thread_groups_x, uint32_t thread_groups_y, uint32_t thread_groups_z)
+{
+    this->command_list->Dispatch(thread_groups_x, thread_groups_y, thread_groups_z);
+}
+
+void CommandContext::SetGraphicsRootSignature(ID3D12RootSignature* root_signature)
+{
+    this->command_list->SetGraphicsRootSignature(root_signature);
+}
+
+void CommandContext::SetGraphicsRootDescriptorTable(uint32_t index, D3D12_GPU_DESCRIPTOR_HANDLE descriptor_start)
+{
+    this->command_list->SetGraphicsRootDescriptorTable(index, descriptor_start);
+}
+
+void CommandContext::SetGraphicsRootConstantBufferView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address)
+{
+    this->command_list->SetGraphicsRootConstantBufferView(index, gpu_address);
+}
+
+void CommandContext::SetGraphicsRootShaderResourceView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address)
+{
+    this->command_list->SetGraphicsRootShaderResourceView(index, gpu_address);
+}
+
+void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY primitive_topology)
+{
+    this->command_list->IASetPrimitiveTopology(primitive_topology);
+}
+
+void CommandContext::SetIndexBuffer(const D3D12_INDEX_BUFFER_VIEW* view)
+{
+    this->command_list->IASetIndexBuffer(view);
+}
+
+void CommandContext::SetVertexBuffers(uint32_t start_slot, uint32_t view_count, const D3D12_VERTEX_BUFFER_VIEW* views)
+{
+    this->command_list->IASetVertexBuffers(start_slot, view_count, views);
+}
+
+void CommandContext::SetViewports(uint32_t count, const D3D12_VIEWPORT* viewports)
+{
+    this->command_list->RSSetViewports(count, viewports);
+}
+
+void CommandContext::SetScissorRects(uint32_t count, const D3D12_RECT* rects)
+{
+    this->command_list->RSSetScissorRects(count, rects);
+}
+
+void CommandContext::ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE render_target_view, const float* color)
+{
+    this->command_list->ClearRenderTargetView(render_target_view, color, 0, nullptr);
+}
+
+void CommandContext::ClearDepthStencilView(D3D12_CPU_DESCRIPTOR_HANDLE depth_stencil_view, float depth)
+{
+    this->command_list->ClearDepthStencilView(depth_stencil_view, D3D12_CLEAR_FLAG_DEPTH, depth, 0, 0, nullptr);
+}
+
+void CommandContext::SetRenderTargets(uint32_t render_target_count, const D3D12_CPU_DESCRIPTOR_HANDLE* render_targets, const D3D12_CPU_DESCRIPTOR_HANDLE* depth_stencil)
+{
+    this->command_list->OMSetRenderTargets(render_target_count, render_targets, false, depth_stencil);
+}
+
+void CommandContext::DrawInstanced(uint32_t vertex_count_per_instance, uint32_t instance_count, uint32_t vertex_start_location, uint32_t instance_start_location)
+{
+    this->command_list->DrawInstanced(vertex_count_per_instance, instance_count, vertex_start_location, instance_start_location);
+}
+
+void CommandContext::DrawIndexedInstanced(uint32_t index_count_per_instance, uint32_t instance_count, uint32_t index_start_location, int base_vertex_location, uint32_t instance_start_location)
+{
+    this->command_list->DrawIndexedInstanced(index_count_per_instance, instance_count, index_start_location, base_vertex_location, instance_start_location);
+}
+
+void CommandContext::SetPipelineState(ID3D12StateObject* state_object)
+{
+    this->command_list->SetPipelineState1(state_object);
+}
+
+void CommandContext::DispatchRays(const D3D12_DISPATCH_RAYS_DESC* desc)
+{
+    this->command_list->DispatchRays(desc);
+}
+
 void* CommandContext::Allocate(uint64_t size, uint64_t alignment, D3D12_GPU_VIRTUAL_ADDRESS* gpu_address)
 {
     return this->transient_allocator->Allocate(size, alignment, gpu_address);
