@@ -99,8 +99,7 @@ class Pathtracer {
         D3D12_GPU_VIRTUAL_ADDRESS gpu_lights = 0;
         int light_count = 0;;
         EnvironmentMap::Map* environment_map = nullptr;
-        int output_descriptor = -1;
-        ID3D12Resource* output_resource = nullptr;
+        Gpu::Texture* output = nullptr;
     };
 
     static constexpr int MAX_BOUNCES = 5;
@@ -178,11 +177,15 @@ class Pathtracer {
     Gpu::Texture v_buffer_depth;
     uint16_t width;
     uint16_t height;
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> background_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> background_pipeline;
     
     glm::mat4x4 previous_world_to_clip;
     int accumulated_frames = 0;
 
-    void CreateVBufferPipeline(ID3D12Device* device);
+    void CreateVBufferPipeline();
+    void CreateBackgroundRenderer();
     void BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure);

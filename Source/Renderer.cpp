@@ -351,8 +351,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.gpu_lights = this->gpu_lights,
         	.light_count = (int)this->lights.size(),
         	.environment_map = environment_map_loaded ? &map : nullptr,
-        	.output_descriptor = this->display.Uav(),
-        	.output_resource = this->display.Resource(),
+        	.output = &this->display,
 		};
 		pathtracer.PathtraceScene(&command_context, &settings->pathtracer, &params);
 	}

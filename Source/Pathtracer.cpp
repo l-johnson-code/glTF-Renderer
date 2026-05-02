@@ -128,7 +128,8 @@ void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBu
     acceleration_structure.Init(device, resources, Config::MAX_BLAS_VERTICES, Config::MAX_TLAS_INSTANCES);
 
     Resize(width, height);
-    CreateVBufferPipeline(device);
+    CreateVBufferPipeline();
+    CreateBackgroundRenderer();
 
     // Cleanup.
     Gpu::Resources::FreeShader(dxil_library_desc.DXILLibrary);
@@ -192,7 +193,7 @@ void Pathtracer::Shutdown()
     }
 }
 
-void Pathtracer::CreateVBufferPipeline(ID3D12Device* device)
+void Pathtracer::CreateVBufferPipeline()
 {
     HRESULT result = S_OK;
 
@@ -526,7 +527,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .max_ray_length = 1000,
             .min_bounces = std::clamp(settings->min_bounces, 0, MAX_BOUNCES),
             .max_bounces = std::clamp(settings->max_bounces, 0, MAX_BOUNCES),
-            .output_descriptor = execute_params->output_descriptor,
+            .output_descriptor = execute_params->output->Uav(),
             .environment_map_descriptor_id = execute_params->environment_map ? execute_params->environment_map->cube.Srv() : -1,
             .environment_alias_table_id = execute_params->environment_map ? execute_params->environment_map->alias.Srv() : -1,
             .environment_pdf = execute_params->environment_map ? execute_params->environment_map->pdf.Srv() : -1,
@@ -565,10 +566,106 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             this->accumulated_frames = 0;
         }
 		
-		context->PushUavBarrier(execute_params->output_resource);
-		context->SubmitBarriers();
         context->EndEvent();
+        
+        // Draw the background.
+		context->PushTransitionBarrier(execute_params->output->Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		context->SubmitBarriers();
+        context->SetGraphicsRootSignature(this->background_root_signature.Get());
+        context->SetPipelineState(this->background_pipeline.Get());
+	    context->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        D3D12_CPU_DESCRIPTOR_HANDLE rtv = execute_params->output->Rtv();
+        context->SetRenderTargets(1, &rtv, &dsv);
+
+        struct {
+            glm::mat4x4 clip_to_world;
+        } cb_vertex;
+
+        cb_vertex = {
+            .clip_to_world = clip_to_world,
+        };
+        context->SetGraphicsRootConstantBufferView(0, context->CreateConstantBuffer(&cb_vertex));
+        
+        struct {
+            float environment_intensity;
+            int environment_descriptor;
+        } cb_pixel;
+
+        cb_pixel = {
+            .environment_intensity = 1.0f,
+            .environment_descriptor = execute_params->environment_map ? execute_params->environment_map->cube.Srv() : -1,
+        };
+        context->SetGraphicsRootConstantBufferView(1, context->CreateConstantBuffer(&cb_pixel));
+
+        context->DrawInstanced(3, 1, 0, 0);
+        context->PushTransitionBarrier(execute_params->output->Resource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		context->SubmitBarriers();
 	}
 
 	previous_world_to_clip = world_to_clip;
+}
+
+void Pathtracer::CreateBackgroundRenderer()
+{
+	HRESULT result;
+
+	CD3DX12_ROOT_PARAMETER root_parameters[2];
+	root_parameters[0].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	root_parameters[1].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+	CD3DX12_STATIC_SAMPLER_DESC static_samplers[] = {
+		CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP)
+	};
+	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(
+		std::size(root_parameters),
+		root_parameters,
+		std::size(static_samplers),
+		static_samplers, 
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
+	);
+	result = resources->CreateRootSignature(&root_signature_desc, &this->background_root_signature, "Background Signature");
+	assert(result == S_OK);
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
+
+	pipeline_desc.VS = Gpu::Resources::LoadShader("Shaders/Background.vs.bin");
+	pipeline_desc.PS = Gpu::Resources::LoadShader("Shaders/Background.ps.bin");
+
+	pipeline_desc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
+	pipeline_desc.SampleMask = UINT_MAX;
+
+	pipeline_desc.RasterizerState = {
+		.FillMode = D3D12_FILL_MODE_SOLID,
+		.CullMode = D3D12_CULL_MODE_NONE,
+		.FrontCounterClockwise = TRUE,
+		.DepthClipEnable = TRUE,
+	};
+
+	pipeline_desc.DepthStencilState = {
+		.DepthEnable = TRUE,
+		.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+		.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
+		.StencilEnable = FALSE,
+	};
+
+	// Create input layout.
+ 	D3D12_INPUT_ELEMENT_DESC input_layout[] = {
+		{"SV_VERTEXID", 0, DXGI_FORMAT_R32_UINT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+	};
+	pipeline_desc.InputLayout.pInputElementDescs = input_layout;
+	pipeline_desc.InputLayout.NumElements = std::size(input_layout);
+	pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+	pipeline_desc.NumRenderTargets = 1;
+	pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R32G32B32_FLOAT;
+	pipeline_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+	pipeline_desc.SampleDesc.Count = 1;
+	pipeline_desc.SampleDesc.Quality = 0;
+
+	pipeline_desc.pRootSignature = this->background_root_signature.Get();
+
+	result = resources->CreateGraphicsPipelineState(&pipeline_desc, &this->background_pipeline, "Background Pipeline");
+	assert(result == S_OK);
+
+	Gpu::Resources::FreeShader(pipeline_desc.VS);
+	Gpu::Resources::FreeShader(pipeline_desc.PS);
 }
