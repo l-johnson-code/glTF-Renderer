@@ -203,6 +203,8 @@ set(SHADER_SOURCE_FILES
     "Source/Shaders/Vertex.hlsli"
     "Source/Shaders/Visibility.ps.hlsl"
     "Source/Shaders/Visibility.vs.hlsl"
+    "Source/Shaders/VisibilityAlphaTested.ps.hlsl"
+    "Source/Shaders/VisibilityAlphaTested.vs.hlsl"
 )
 
 set(SHADER_HEADER_FILES ${SHADER_SOURCE_FILES})

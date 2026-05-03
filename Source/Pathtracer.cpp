@@ -129,6 +129,7 @@ void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBu
 
     Resize(width, height);
     CreateVBufferPipeline();
+    CreateVBufferAlphaTestedPipeline();
     CreateBackgroundRenderer();
 
     // Cleanup.
@@ -263,6 +264,80 @@ void Pathtracer::CreateVBufferPipeline()
 	Gpu::Resources::FreeShader(pixel_shader);
 }
 
+void Pathtracer::CreateVBufferAlphaTestedPipeline()
+{
+    HRESULT result = S_OK;
+
+	// Create the root signature.
+	CD3DX12_ROOT_PARAMETER root_parameters[VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_COUNT] = {};
+	root_parameters[VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	root_parameters[VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	root_parameters[VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+	root_parameters[VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_MATERIALS].InitAsShaderResourceView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+
+	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_COUNT, root_parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED | D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
+	result = this->resources->CreateRootSignature(&root_signature_desc, &this->v_buffer_alpha_tested_root_signature, "Visibility Alpha Tested Signature");
+	assert(result == S_OK);
+
+	// Load shaders.
+	D3D12_SHADER_BYTECODE vertex_shader = Gpu::Resources::LoadShader("Shaders/VisibilityAlphaTested.vs.bin");
+	D3D12_SHADER_BYTECODE pixel_shader = Gpu::Resources::LoadShader("Shaders/VisibilityAlphaTested.ps.bin");
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc = {};
+
+	// Shaders.
+	pipeline_desc.VS = vertex_shader;
+	pipeline_desc.PS = pixel_shader;
+
+	// Blend state.
+	pipeline_desc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
+	pipeline_desc.SampleMask = UINT_MAX;
+
+	pipeline_desc.RasterizerState = {
+		.FillMode = D3D12_FILL_MODE_SOLID,
+		.CullMode = D3D12_CULL_MODE_NONE,
+		.FrontCounterClockwise = TRUE,
+		.DepthClipEnable = TRUE,
+		.MultisampleEnable = FALSE,
+		.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+	};
+
+	pipeline_desc.DepthStencilState = {
+		.DepthEnable = TRUE,
+		.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+		.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
+		.StencilEnable = FALSE,
+	};
+
+    D3D12_INPUT_ELEMENT_DESC input_layout[] = {
+		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"COLOR", 0, DXGI_FORMAT_R16G16B16A16_UNORM, 3, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+	};
+	pipeline_desc.InputLayout = {
+		.pInputElementDescs = input_layout,
+		.NumElements = std::size(input_layout),
+	};
+	pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+	// Render target formats.
+	pipeline_desc.NumRenderTargets = 2;
+	pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R32_UINT;
+	pipeline_desc.RTVFormats[1] = DXGI_FORMAT_R32_UINT;
+	pipeline_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+	pipeline_desc.SampleDesc.Count = 1;
+	pipeline_desc.SampleDesc.Quality = 0;
+
+	// Root signature.
+	pipeline_desc.pRootSignature = this->v_buffer_alpha_tested_root_signature.Get();
+	result = this->resources->CreateGraphicsPipelineState(&pipeline_desc, &this->v_buffer_alpha_tested_pipeline, "Visibility Alpha Tested Pipeline");
+	assert(result == S_OK);
+
+    Gpu::Resources::FreeShader(vertex_shader);
+	Gpu::Resources::FreeShader(pixel_shader);
+}
+
 void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
 {
     for (int i = 0; i < gltf->nodes.size(); i++) {
@@ -314,6 +389,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 {
 	mesh_instances.clear();
     vertex_buffers.clear();
+    alpha_vertex_buffers.clear();
     acceleration_structure->BeginTlasBuild();
 
 	// TODO: Define this somewhere else?
@@ -344,10 +420,10 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 				};
 				unsigned int flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
 				if (material.flags & Gltf::Material::FLAG_DOUBLE_SIDED) {
-					flags |=  D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
+					flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
 				}
 				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
-					flags |=  D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+					flags |= D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
 				}
 				unsigned int instance_mask = 0;
 				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_BLEND) {
@@ -369,12 +445,26 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 							gpu_mesh_instance.tangent_space_descriptor = dynamic_mesh.tangent_space.descriptor;
 						}
                         if (tlas_added) {
-                            vertex_buffers.push_back({
-                                .index_count = mesh.num_of_indices,
-                                .vertex_count = mesh.num_of_vertices,
-                                .index = mesh.index.view,
-                                .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionBuffer()->view : mesh.position.view,
-                            });
+                            if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
+                                alpha_vertex_buffers.push_back({
+                                    .instance_id = (uint32_t)mesh_instances.size(),
+                                    .index_count = mesh.num_of_indices,
+                                    .vertex_count = mesh.num_of_vertices,
+                                    .index = mesh.index.view,
+                                    .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionBuffer()->view : mesh.position.view,
+                                    .tex_coords = { mesh.texcoords[0].view, mesh.texcoords[1].view },
+                                    .color = mesh.color.view,
+                                    .material_id = primitives[i].material_id,
+                                });
+                            } else {
+                                vertex_buffers.push_back({
+                                    .instance_id = (uint32_t)mesh_instances.size(),
+                                    .index_count = mesh.num_of_indices,
+                                    .vertex_count = mesh.num_of_vertices,
+                                    .index = mesh.index.view,
+                                    .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionBuffer()->view : mesh.position.view,
+                                });
+                            }
                         }
 					}
 				} else {
@@ -382,12 +472,26 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 					RaytracingAccelerationStructure::Blas& blas = primitives[i].blas;
 					tlas_added = acceleration_structure->AddTlasInstance(&blas, node.global_transform, instance_mask, flags);
                     if (tlas_added) {
-                        vertex_buffers.push_back({
-                            .index_count = mesh.num_of_indices,
-                            .vertex_count = mesh.num_of_vertices,
-                            .index = mesh.index.view,
-                            .vertices = mesh.position.view,
-                        });
+                        if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
+                            alpha_vertex_buffers.push_back({
+                                .instance_id = (uint32_t)mesh_instances.size(),
+                                .index_count = mesh.num_of_indices,
+                                .vertex_count = mesh.num_of_vertices,
+                                .index = mesh.index.view,
+                                .vertices = mesh.position.view,
+                                .tex_coords = { mesh.texcoords[0].view, mesh.texcoords[1].view },
+                                .color = mesh.color.view,
+                                .material_id = primitives[i].material_id,
+                            });
+                        } else {
+                            vertex_buffers.push_back({
+                                .instance_id = (uint32_t)mesh_instances.size(),
+                                .index_count = mesh.num_of_indices,
+                                .vertex_count = mesh.num_of_vertices,
+                                .index = mesh.index.view,
+                                .vertices = mesh.position.view,
+                            });
+                        }
                     }
 				}
 				if (tlas_added) {
@@ -429,6 +533,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
         context->EndEvent();
 
         // Rasterize camera rays.
+        context->BeginEvent("V Buffer");
         context->PushTransitionBarrier(this->v_buffer_instance.Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
         context->PushTransitionBarrier(this->v_buffer_primitive.Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
         context->SubmitBarriers();
@@ -458,25 +563,64 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
         };
         context->SetGraphicsRootConstantBufferView(VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME, context->CreateConstantBuffer(&cb_per_frame));
         
-        for (int i = 0; i < vertex_buffers.size(); i++) {
+        for (const Vertices& vertices : vertex_buffers) {
             struct {
                 glm::mat4x4 model_to_world;
             } cb_vertex;
-            cb_vertex.model_to_world = mesh_instances[i].transform;
+            cb_vertex.model_to_world = mesh_instances[vertices.instance_id].transform;
             context->SetGraphicsRootConstantBufferView(VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL, context->CreateConstantBuffer(&cb_vertex));
             struct {
-                uint32_t instance;
+                uint32_t instance_id;
             } cb_pixel;
-            cb_pixel.instance = i;
+            cb_pixel.instance_id = vertices.instance_id;
             context->SetGraphicsRootConstantBufferView(VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL, context->CreateConstantBuffer(&cb_pixel));
-            context->SetVertexBuffers(0, 1, &vertex_buffers[i].vertices);
-            if (vertex_buffers[i].index_count > 0) {
-                context->SetIndexBuffer(&vertex_buffers[i].index);
-                context->DrawIndexedInstanced(vertex_buffers[i].index_count, 1, 0, 0, 0);
+            context->SetVertexBuffers(0, 1, &vertices.vertices);
+            if (vertices.index_count > 0) {
+                context->SetIndexBuffer(&vertices.index);
+                context->DrawIndexedInstanced(vertices.index_count, 1, 0, 0, 0);
             } else {
-                context->DrawInstanced(vertex_buffers[i].vertex_count, 1, 0, 0);
+                context->DrawInstanced(vertices.vertex_count, 1, 0, 0);
             }
         }
+        context->EndEvent();
+
+        // Alpha tested geometry.
+        context->BeginEvent("V Buffer Alpha Tested");
+        context->SetGraphicsRootSignature(this->v_buffer_alpha_tested_root_signature.Get());
+        context->SetPipelineState(this->v_buffer_alpha_tested_pipeline.Get());
+        context->SetGraphicsRootConstantBufferView(VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME, context->CreateConstantBuffer(&cb_per_frame));
+        context->SetGraphicsRootShaderResourceView(VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_MATERIALS, execute_params->gpu_materials);
+        for (const AlphaVertices& alpha_vertex: alpha_vertex_buffers) {
+            struct {
+                glm::mat4x4 model_to_world;
+            } cb_vertex;
+            cb_vertex.model_to_world = mesh_instances[alpha_vertex.instance_id].transform;
+            context->SetGraphicsRootConstantBufferView(VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL, context->CreateConstantBuffer(&cb_vertex));
+            struct {
+                uint32_t instance_id;
+                uint32_t vertex_color;
+                int material_id;
+            } cb_pixel;
+            cb_pixel.instance_id = alpha_vertex.instance_id;
+            cb_pixel.vertex_color = alpha_vertex.color.BufferLocation != 0 ? 1 : 0;
+            cb_pixel.material_id = alpha_vertex.material_id;
+            context->SetGraphicsRootConstantBufferView(VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL, context->CreateConstantBuffer(&cb_pixel));
+            D3D12_VERTEX_BUFFER_VIEW vertex_views[] = {
+                alpha_vertex.vertices,
+                alpha_vertex.tex_coords[0],
+                alpha_vertex.tex_coords[1],
+                alpha_vertex.color,
+            };
+            context->SetVertexBuffers(0, std::size(vertex_views), vertex_views);
+            if (alpha_vertex.index_count > 0) {
+                context->SetIndexBuffer(&alpha_vertex.index);
+                context->DrawIndexedInstanced(alpha_vertex.index_count, 1, 0, 0, 0);
+            } else {
+                context->DrawInstanced(alpha_vertex.vertex_count, 1, 0, 0);
+            }
+        }
+        context->EndEvent();
+
         // TODO: Do we need to set render targets to null before accessing them as an SRV in a shader?
         context->PushTransitionBarrier(this->v_buffer_instance.Resource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         context->PushTransitionBarrier(this->v_buffer_primitive.Resource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

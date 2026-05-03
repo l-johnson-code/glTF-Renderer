@@ -138,6 +138,14 @@ class Pathtracer {
         VISIBILITY_ROOT_PARAMETER_COUNT,
     };
 
+    enum VisibilityAlphaTestedRootParameter {
+        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME,
+        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL,
+        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL,
+        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_MATERIALS,
+        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_COUNT,
+    };
+
     struct GpuMeshInstance {
 		glm::mat4x4 transform;
 		glm::mat4x4 normal_transform;
@@ -150,13 +158,26 @@ class Pathtracer {
 	};
 
     struct Vertices {
+        uint32_t instance_id;
         uint32_t index_count;
         uint32_t vertex_count;
         D3D12_INDEX_BUFFER_VIEW index;
         D3D12_VERTEX_BUFFER_VIEW vertices;
     };
 
+    struct AlphaVertices {
+        uint32_t instance_id;
+        uint32_t index_count;
+        uint32_t vertex_count;
+        D3D12_INDEX_BUFFER_VIEW index;
+        D3D12_VERTEX_BUFFER_VIEW vertices;
+        D3D12_VERTEX_BUFFER_VIEW tex_coords[2];
+        D3D12_VERTEX_BUFFER_VIEW color;
+        int material_id;
+    };
+
     std::vector<Vertices> vertex_buffers;
+    std::vector<AlphaVertices> alpha_vertex_buffers;
     
     Gpu::Resources* resources = nullptr;
 
@@ -172,6 +193,8 @@ class Pathtracer {
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> v_buffer_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> v_buffer_pipeline;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> v_buffer_alpha_tested_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> v_buffer_alpha_tested_pipeline;
     Gpu::Texture v_buffer_instance;
     Gpu::Texture v_buffer_primitive;
     Gpu::Texture v_buffer_depth;
@@ -185,6 +208,7 @@ class Pathtracer {
     int accumulated_frames = 0;
 
     void CreateVBufferPipeline();
+    void CreateVBufferAlphaTestedPipeline();
     void CreateBackgroundRenderer();
     void BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
