@@ -1,6 +1,7 @@
 struct PSIn {
 	float4 pos: SV_POSITION;
 	uint primitive_id: SV_PrimitiveID;
+	bool front_face: SV_IsFrontFace;
 };
 
 struct PSOut {
@@ -18,6 +19,7 @@ PSOut main(PSIn input)
 {
 	PSOut output;
 	output.instance_id = g_per_model.instance_id + 1;
+	output.instance_id |= input.front_face ? 1u << 31 : 0;
 	output.primitive_id = input.primitive_id + 1;
 	return output;
 }

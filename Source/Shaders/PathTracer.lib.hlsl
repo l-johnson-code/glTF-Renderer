@@ -302,6 +302,13 @@ void GetRemainingVertexAttributes(Instance instance, float3 indices, float3 pos_
     }
 }
 
+void FlipNormals(in out VertexAttributes attributes)
+{
+    attributes.geometric_normal = -attributes.geometric_normal;
+    attributes.normal = -attributes.normal;
+    attributes.tangent = -attributes.tangent; // TODO: Is this necessary? Only significant if winding order is important.
+}
+
 VertexAttributes GetVertexAttributes(Instance instance, uint primitive_index, float3 barycentric_weights)
 {
     VertexAttributes attributes;
@@ -801,6 +808,7 @@ void RayGeneration()
     float3 ray_origin = 0.xxx;
     float3 ray_direction = float3(0, -1, 0);
     uint ray_flags = g_scene_constants.flags & FLAG_CULL_BACKFACE ? RAY_FLAG_CULL_BACK_FACING_TRIANGLES : 0;
+    bool back_facing = false;
     uint instance_mask = 0xff;
     int random_count = 0;
     float4 u = 0.xxxx;
@@ -811,7 +819,8 @@ void RayGeneration()
     Texture2D<uint> v_buffer_primitive_id = ResourceDescriptorHeap[g_scene_constants.v_buffer_primitive_id];
     Texture2D<uint> v_buffer_instance = ResourceDescriptorHeap[g_scene_constants.v_buffer_instance];
     uint primitive_id = v_buffer_primitive_id[pixel];
-    uint instance_index = v_buffer_instance[pixel];
+    uint instance_index = v_buffer_instance[pixel] & 0x7fffffffu;
+    back_facing = !(bool)(v_buffer_instance[pixel] & 0x80000000u);
     if (primitive_id == 0 || instance_index == 0) {
         return;
     }
@@ -820,6 +829,9 @@ void RayGeneration()
 
     Instance instance = g_instances[instance_index];
     VertexAttributes vertex_attributes = GetVertexAttributesFromVisibilityBuffer(pixel, g_scene_constants.resolution, instance, primitive_id, g_scene_constants.world_to_clip);
+    if (back_facing) {
+        FlipNormals(vertex_attributes);
+    }
 
     RayDesc ray = {g_scene_constants.camera_pos, 0, normalize(vertex_attributes.position - g_scene_constants.camera_pos), 1.0f};
 
@@ -827,7 +839,7 @@ void RayGeneration()
 
         // Vertex attribute debug outputs.
         if (g_scene_constants.debug_output == DEBUG_OUTPUT_HIT_KIND) {
-            //color = geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_BACK_FACE ? float3(1, 0, 0) : float3(0, 1, 0); TODO: Find a way to get this to work.
+            color = back_facing ? float3(1, 0, 0) : float3(0, 1, 0);
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_VERTEX_COLOR) {
             color = vertex_attributes.color.rgb;
@@ -1034,10 +1046,9 @@ void RayGeneration()
         vertex_attributes = GetVertexAttributes(instance, geometry_payload.primitive_index, barycentric_weights);
 
         // Flip normals if we hit the back side of the triangle.
-        if (geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_BACK_FACE) {
-            vertex_attributes.geometric_normal = -vertex_attributes.geometric_normal;
-            vertex_attributes.normal = -vertex_attributes.normal;
-            vertex_attributes.tangent = -vertex_attributes.tangent; // TODO: Is this neccessary? Only significant if winding order is important.
+        back_facing = geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_BACK_FACE;
+        if (back_facing) {
+            FlipNormals(vertex_attributes);
         }
     }
 
