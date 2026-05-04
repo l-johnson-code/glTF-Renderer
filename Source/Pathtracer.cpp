@@ -9,6 +9,39 @@
 
 #include "GpuResources.h"
 
+static uint8_t ReverseBits8(uint8_t bits)
+{
+    bits = (bits << 4) | (bits >> 4);
+    bits = ((bits & 0x33) << 2) | ((bits & 0xcc) >> 2);
+    bits = ((bits & 0x55) << 1) | ((bits & 0xaa) >> 1);
+    return bits;
+}
+
+static uint16_t ReverseBits16(uint16_t bits)
+{
+    return (ReverseBits8(bits) << 8) | ReverseBits8(bits >> 8);
+}
+
+static float RadicalInverseBase3(uint16_t number)
+{
+    float result = 0.0f;
+    float inverse_base = 1.0f / 3.0f;
+    while (number > 0) {
+        result += (float)(number % 3) * inverse_base;
+        inverse_base *= inverse_base;
+        number /= 3;
+    }
+    return result;
+}
+
+static glm::vec2 HaltonSequence(uint16_t i)
+{
+    glm::vec2 result;
+    result.x = ReverseBits16(i) * 0x1p-16f;
+    result.y = RadicalInverseBase3(i);
+    return result;
+}
+
 void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBuffer* upload_buffer, uint32_t width, uint32_t height)
 {
     HRESULT result = S_OK;
@@ -507,13 +540,22 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 
 void Pathtracer::PathtraceScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params)
 {
-	glm::mat4x4 world_to_view = execute_params->camera->GetWorldToView();
-	glm::mat4x4 world_to_clip = execute_params->camera->GetViewToClip() * world_to_view;
+    glm::mat4x4 world_to_view = execute_params->camera->GetWorldToView();
+	glm::mat4x4 view_to_clip = execute_params->camera->GetViewToClip();
+    glm::mat4x4 world_to_clip = view_to_clip * world_to_view;
+    bool reset = (world_to_clip != previous_world_to_clip) || (settings->reset);
+    previous_world_to_clip = world_to_clip;
+    
+    // Apply jitter.
+    if (settings->jitter_matrix) {
+        glm::vec2 jitter = (HaltonSequence((execute_params->frame % 256) + 1) * 2.0f - 1.0f) / glm::vec2(this->width, this->height);
+        world_to_clip = glm::translate(glm::identity<glm::mat4x4>(), glm::vec3(jitter, 0.0f)) * world_to_clip;
+    }
+
 	glm::mat4x4 view_to_world = glm::affineInverse(world_to_view);
 	glm::mat4x4 clip_to_world = glm::inverse(world_to_clip);
 	glm::vec3 camera_pos = view_to_world[3];
 
-    bool reset = (world_to_clip != previous_world_to_clip) || (settings->reset);
     // Reset accumulation if the camera position has changed.
     if (reset) {
         this->accumulated_frames = 0;
@@ -558,6 +600,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
 
         struct {
             glm::mat4x4 world_to_clip;
+            glm::vec2 jitter;
         } cb_per_frame = {
             .world_to_clip = world_to_clip,
         };
@@ -745,8 +788,6 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
         context->PushTransitionBarrier(execute_params->output->Resource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		context->SubmitBarriers();
 	}
-
-	previous_world_to_clip = world_to_clip;
 }
 
 void Pathtracer::CreateBackgroundRenderer()

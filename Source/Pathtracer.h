@@ -81,6 +81,7 @@ class Pathtracer {
 		float environment_intensity = 1;
 		bool use_frame_as_seed = true;
 		uint32_t seed = 0;
+        bool jitter_matrix = true;
 		float luminance_clamp = 1000.0;
 		float min_russian_roulette_continue_prob = 0.1;
 		float max_russian_roulette_continue_prob = 0.9;

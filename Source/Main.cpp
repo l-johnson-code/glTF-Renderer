@@ -306,6 +306,8 @@ void DrawGraphicsTab()
 			ImGui::BeginDisabled(g_render_settings.pathtracer.use_frame_as_seed);
 			g_render_settings.pathtracer.reset |= ImGui::InputScalar("Seed", ImGuiDataType_U32, &g_render_settings.pathtracer.seed);
 			ImGui::EndDisabled();
+			
+			g_render_settings.pathtracer.reset |= ImGui::Checkbox("Jitter Matrix", &g_render_settings.pathtracer.jitter_matrix);
 
 			g_render_settings.pathtracer.reset |= BitflagCheckbox("Enable Point Lights", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_POINT_LIGHTS);
 			g_render_settings.pathtracer.reset |= BitflagCheckbox("Shadow Rays", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHADOW_RAYS);
