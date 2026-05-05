@@ -260,7 +260,7 @@ float2 GetTexcoord(int texcoord_descriptor, uint3 vertex, float3 barycentric_wei
 {
     float2 texcoord;
     if (texcoord_descriptor != -1) {
-        Buffer<float2> texcoord_buffer = ResourceDescriptorHeap[NonUniformResourceIndex(texcoord_descriptor)];
+        StructuredBuffer<float2> texcoord_buffer = ResourceDescriptorHeap[NonUniformResourceIndex(texcoord_descriptor)];
         float2 texcoord_0 = texcoord_buffer[vertex.x];
         float2 texcoord_1 = texcoord_buffer[vertex.y];
         float2 texcoord_2 = texcoord_buffer[vertex.z];
