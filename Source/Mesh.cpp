@@ -56,7 +56,7 @@ void VertexBuffer::Create(ID3D12Resource* resource, D3D12_GPU_VIRTUAL_ADDRESS bu
 
 	// Create a descriptor.
 	uint64_t first_element = (buffer - resource->GetGPUVirtualAddress()) / vertex_size;
-	CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::StructuredBuffer(vertex_count, vertex_size);
+	CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::StructuredBuffer(vertex_count, vertex_size, first_element);
 	this->descriptor = resources->CreateShaderResourceView(resource, &srv_desc);
 }
 
