@@ -140,6 +140,16 @@ float4 GenerateNextRandom(in out int count)
     return random / 4294967295.0.xxxx;
 }
 
+float3 GenerateCameraRay(uint2 pixel, uint2 resolution, float4x4 clip_to_world, float3 camera_pos)
+{
+    float2 clip_space = (((float2)pixel + 0.5) / (float2)resolution) * 2 - 1;
+    clip_space.y = -clip_space.y;
+    float4 clip_end = float4(clip_space, 0, 1);
+    float4 end = mul(clip_to_world, clip_end);
+    float3 destination = end.xyz / end.w;
+    return destination - camera_pos;
+}
+
 float3 CalculateBarycentrics(float2 tri_0, float2 tri_1, float2 tri_2, float2 pos)
 {
     float2 v0 = tri_1 - tri_0;
@@ -812,6 +822,10 @@ void RayGeneration()
     uint instance_mask = 0xff;
     int random_count = 0;
     float4 u = 0.xxxx;
+    bool loop = false;
+    VertexAttributes vertex_attributes;
+    Instance instance;
+    RayDesc ray;
 
     // Get data from visibility buffer.
     uint2 pixel = DispatchRaysIndex().xy;
@@ -822,20 +836,31 @@ void RayGeneration()
     uint instance_index = v_buffer_instance[pixel] & 0x7fffffffu;
     back_facing = !(bool)(v_buffer_instance[pixel] & 0x80000000u);
     if (primitive_id == 0 || instance_index == 0) {
-        return;
+        // If no geometry was hit, sample the environment.
+        if (g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) {
+            TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
+            float3 direction = GenerateCameraRay(pixel, g_scene_constants.resolution, g_scene_constants.clip_to_world, g_scene_constants.camera_pos);
+            color = g_scene_constants.environment_intensity * environment_map.SampleLevel(g_sampler_linear_wrap, direction, 0).rgb;
+        } else {
+            color = g_scene_constants.environment_intensity * g_scene_constants.environment_color;
+        }
+        loop = false;
+    } else {
+        primitive_id--;
+        instance_index--;
+        instance = g_instances[instance_index];
+        vertex_attributes = GetVertexAttributesFromVisibilityBuffer(pixel, g_scene_constants.resolution, instance, primitive_id, g_scene_constants.world_to_clip);
+        if (back_facing) {
+            FlipNormals(vertex_attributes);
+        }
+        ray.Origin = g_scene_constants.camera_pos;
+        ray.TMin = 0.0f;
+        ray.Direction = normalize(vertex_attributes.position - g_scene_constants.camera_pos);
+        ray.TMax = 1.0f;
+        loop = true;
     }
-    primitive_id--;
-    instance_index--;
 
-    Instance instance = g_instances[instance_index];
-    VertexAttributes vertex_attributes = GetVertexAttributesFromVisibilityBuffer(pixel, g_scene_constants.resolution, instance, primitive_id, g_scene_constants.world_to_clip);
-    if (back_facing) {
-        FlipNormals(vertex_attributes);
-    }
-
-    RayDesc ray = {g_scene_constants.camera_pos, 0, normalize(vertex_attributes.position - g_scene_constants.camera_pos), 1.0f};
-
-    while (true) {
+    while (loop) {
 
         // Vertex attribute debug outputs.
         if (g_scene_constants.debug_output == DEBUG_OUTPUT_HIT_KIND) {

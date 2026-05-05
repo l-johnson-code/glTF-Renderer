@@ -201,16 +201,12 @@ class Pathtracer {
     Gpu::Texture v_buffer_depth;
     uint16_t width;
     uint16_t height;
-
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> background_root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> background_pipeline;
     
     glm::mat4x4 previous_world_to_clip;
     int accumulated_frames = 0;
 
     void CreateVBufferPipeline();
     void CreateVBufferAlphaTestedPipeline();
-    void CreateBackgroundRenderer();
     void BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure);
