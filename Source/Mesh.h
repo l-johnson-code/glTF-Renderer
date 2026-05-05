@@ -38,6 +38,11 @@ struct Mesh {
 
     static constexpr int MAX_TEXCOORDS = 2;
 
+    struct PositionAndTangentSpace {
+        glm::vec3 position;
+        glm::uint32_t encoded_tangent_space;
+    };
+
     struct JointWeight {
         glm::u16vec4 joints;
         glm::u16vec4 weights;
@@ -68,16 +73,17 @@ struct Mesh {
     Gpu::Buffer buffer;
 
     IndexBuffer index;
-    VertexBuffer position;
-    VertexBuffer tangent_space;
+    VertexBuffer position_and_tangent_space;
     VertexBuffer texcoords[MAX_TEXCOORDS];
     VertexBuffer color;
     VertexBuffer joint_weight;
 
+    static uint32_t EncodeNormal(glm::vec3 normal);
+    static uint32_t EncodeTangentSpace(glm::vec3 normal, glm::vec4 tangent);
+
     HRESULT Create(Gpu::Resources* resources, const Desc* desc, const char* name = nullptr);
     void* QueueIndexUpdate(UploadBuffer* upload_buffer);
-    void* QueuePositionUpdate(UploadBuffer* upload_buffer);
-    void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
+    void* QueuePositionAndTangentSpaceUpdate(UploadBuffer* upload_buffer);
     void* QueueTexcoord0Update(UploadBuffer* upload_buffer);
     void* QueueTexcoord1Update(UploadBuffer* upload_buffer);
     void* QueueColorUpdate(UploadBuffer* upload_buffer);
@@ -103,13 +109,12 @@ struct DynamicMesh {
 
     Gpu::Buffer buffer;
 
-    VertexBuffer position[2];
-    VertexBuffer tangent_space;
+    VertexBuffer position_and_tangent_space[2];
 
     HRESULT Create(Gpu::Resources* resources, const Desc* desc, const char* name = nullptr);
     void Flip();
-    VertexBuffer* GetCurrentPositionBuffer();
-    VertexBuffer* GetPreviousPositionBuffer();
+    VertexBuffer* GetCurrentPositionAndTangentSpaceBuffer();
+    VertexBuffer* GetPreviousPositionAndTangentSpaceBuffer();
     void Destroy(Gpu::Resources* resources);
 };
 
@@ -117,7 +122,8 @@ struct MorphTarget {
 
     enum Flags {
         FLAG_POSITION = 1 << 0,
-        FLAG_TANGENT_SPACE = 1 << 1,
+        FLAG_NORMAL = 1 << 1,
+        FLAG_TANGENT = 1 << 2,
     };
 
     struct Desc {
@@ -130,11 +136,9 @@ struct MorphTarget {
 
     Gpu::Buffer buffer;
     
-    VertexBuffer position;
-    VertexBuffer tangent_space;
+    VertexBuffer position_and_tangent_space;
 
     HRESULT Create(Gpu::Resources* resources, const Desc* desc, const char* name = nullptr);
-    void* QueuePositionUpdate(UploadBuffer* upload_buffer);
-    void* QueueTangentSpaceUpdate(UploadBuffer* upload_buffer);
+    void* QueuePositionAndTangentSpaceUpdate(UploadBuffer* upload_buffer);
     void Destroy(Gpu::Resources* resources);
 };

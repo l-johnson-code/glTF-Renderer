@@ -2,9 +2,93 @@
 
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
+#include <glm/gtc/constants.hpp>
 
 #include "Memory.h"
 #include "Profiling.h"
+
+static glm::vec2 EncodeOctahedralMap(glm::vec3 normal)
+{
+	// Project onto the octahedron.
+	glm::vec3 octahedral = normal / (glm::abs(normal.x) + glm::abs(normal.y) + glm::abs(normal.z));
+	// Flatten onto square with coordinates in range [-1, 1].
+	glm::vec2 result;
+	if (octahedral.z >= 0.f) {
+		result = glm::vec2(octahedral.x, octahedral.y);
+	} else {
+		result.x = (octahedral.x >= 0.f ? 1.f : -1.f) * (1.f - glm::abs(octahedral.y));
+		result.y = (octahedral.y >= 0.f ? 1.f : -1.f) * (1.f - glm::abs(octahedral.x));
+	}
+	return result;
+}
+
+static glm::vec3 DecodeOctahedralMap(glm::vec2 encoded)
+{
+	glm::vec3 result;
+	// Find point on octahedron.
+	result.z = 1. - glm::abs(encoded.x) - glm::abs(encoded.y);
+	if (result.z >= 0.) {
+		result.x = encoded.x;
+		result.y = encoded.y;
+	} else {
+		result.x = (encoded.x >= 0.f ? 1.f : -1.f) * (1.f - glm::abs(encoded.y));
+		result.y = (encoded.y >= 0.f ? 1.f : -1.f) * (1.f - glm::abs(encoded.x));
+	}
+	// Project onto sphere.
+	result = glm::normalize(result);
+	return result;
+}
+
+// From the paper "Building an Orthonormal Basis, Revisited".
+static void CreateBasis(glm::vec3 normal, glm::vec3* tangent, glm::vec3* bitangent)
+{
+	const float sign = normal.z >= 0.0f ? 1.0f : -1.0f;
+	const float a = -1.0f / (sign + normal.z);
+	const float b = normal.x * normal.y * a;
+	*tangent = glm::vec3(1.0f + sign * normal.x * normal.x * a, sign * b, -sign * normal.x);
+	*bitangent = glm::vec3(b, sign + normal.y * normal.y * a, -normal.y);
+}
+
+uint32_t Mesh::EncodeNormal(glm::vec3 normal)
+{
+	glm::vec4 encoded;
+
+    // Encode normal.
+    glm::vec2 encoded_normal = 0.5f * EncodeOctahedralMap(normal) + 0.5f;
+	glm::u32vec2 quantized_normal = glm::clamp(encoded_normal, 0.0f, 1.0f) * 1023.0f + 0.5f;
+
+    // Encode winding.
+    uint32_t quantized_winding = 3;
+
+    return quantized_normal.x | (quantized_normal.y << 10) | (quantized_winding << 30);
+}
+
+uint32_t Mesh::EncodeTangentSpace(glm::vec3 normal, glm::vec4 tangent)
+{
+	glm::vec4 encoded;
+
+    // Encode and quantize normal.
+    glm::vec2 encoded_normal = 0.5f * EncodeOctahedralMap(normal) + 0.5f;
+	glm::u32vec2 quantized_normal = glm::clamp(encoded_normal, 0.0f, 1.0f) * 1023.0f + 0.5f;
+
+	// Decode normal to use in basis calculation.
+	// This is to prevent numerical issues due to quantization.
+	glm::vec2 unpacked_encoded_normal = glm::vec2(quantized_normal) / 1023.0f;
+	normal = DecodeOctahedralMap(2.0f * unpacked_encoded_normal - 1.0f);
+
+    // Encode tangent.
+    glm::vec3 canonical_tangent;
+    glm::vec3 canonical_bitangent;
+    CreateBasis(normal, &canonical_tangent, &canonical_bitangent);
+    float angle = std::atan2(glm::dot(glm::vec3(tangent), canonical_bitangent), glm::dot(glm::vec3(tangent), canonical_tangent));
+    float encoded_tangent = (angle / glm::two_pi<float>()) + 0.5f;
+	uint32_t quantized_tangent = glm::clamp(encoded_tangent, 0.0f, 1.0f) * 1023.0f + 0.5f;
+
+    // Encode winding.
+    uint32_t quantized_winding = tangent.w == 1.0f ? 3 : 0;
+
+    return quantized_normal.x | (quantized_normal.y << 10) | (quantized_tangent << 20) | (quantized_winding << 30);
+}
 
 static uint64_t CalculateTotalAllocationSize(int allocation_count, const VertexAllocation* allocations, uint64_t* offsets)
 {
@@ -121,8 +205,7 @@ HRESULT Mesh::Create(Gpu::Resources* resources, const Desc* desc, const char* na
 	VertexAllocation null_allocation = {};
 	VertexAllocation allocations[] = {
 		desc->flags & FLAG_INDEX ? IndexBuffer::GetAllocationSize(num_of_indices, desc->index_format) : null_allocation,
-		VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT),
-		desc->flags & FLAG_TANGENT_SPACE ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
+		VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(PositionAndTangentSpace)),
 		desc->flags & FLAG_TEXCOORD_0 ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32_FLOAT) : null_allocation,
 		desc->flags & FLAG_TEXCOORD_1 ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32_FLOAT) : null_allocation,
 		desc->flags & FLAG_COLOR ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM) : null_allocation,
@@ -146,21 +229,18 @@ HRESULT Mesh::Create(Gpu::Resources* resources, const Desc* desc, const char* na
 	if (desc->flags & FLAG_INDEX) {
     	index.Create(buffer.Resource(), base_address + offsets[0], resources, num_of_indices, desc->index_format);
 	}
-	position.Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-    if (desc->flags & FLAG_TANGENT_SPACE) {
-		tangent_space.Create(buffer.Resource(), base_address + offsets[2], resources, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
-	}
+	position_and_tangent_space.Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, sizeof(PositionAndTangentSpace));
     if (desc->flags & FLAG_TEXCOORD_0) {
-		texcoords[0].Create(buffer.Resource(), base_address + offsets[3], resources, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
+		texcoords[0].Create(buffer.Resource(), base_address + offsets[2], resources, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
 	}
     if (desc->flags & FLAG_TEXCOORD_1) {
-		texcoords[1].Create(buffer.Resource(), base_address + offsets[4], resources, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
+		texcoords[1].Create(buffer.Resource(), base_address + offsets[3], resources, num_of_vertices, DXGI_FORMAT_R32G32_FLOAT);
 	}
     if (desc->flags & FLAG_COLOR) {
-		color.Create(buffer.Resource(), base_address + offsets[5], resources, num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM);
+		color.Create(buffer.Resource(), base_address + offsets[4], resources, num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM);
 	}
     if (desc->flags & FLAG_JOINT_WEIGHT) {
-		joint_weight.Create(buffer.Resource(), base_address + offsets[6], resources, num_of_vertices, sizeof(JointWeight));
+		joint_weight.Create(buffer.Resource(), base_address + offsets[5], resources, num_of_vertices, sizeof(JointWeight));
 	}
 
 	return S_OK;
@@ -172,15 +252,9 @@ void* Mesh::QueueIndexUpdate(UploadBuffer* upload_buffer)
 	return index.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
-void* Mesh::QueuePositionUpdate(UploadBuffer* upload_buffer)
+void* Mesh::QueuePositionAndTangentSpaceUpdate(UploadBuffer* upload_buffer)
 {
-	return position.QueueUpdate(upload_buffer, buffer.Resource());
-}
-
-void* Mesh::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
-{
-	assert(flags & FLAG_TANGENT_SPACE);
-	return tangent_space.QueueUpdate(upload_buffer, buffer.Resource());
+	return position_and_tangent_space.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void* Mesh::QueueTexcoord0Update(UploadBuffer* upload_buffer)
@@ -211,8 +285,7 @@ void Mesh::Destroy(Gpu::Resources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
 	index.Destroy(resources);
-	position.Destroy(resources);
-	tangent_space.Destroy(resources);
+	position_and_tangent_space.Destroy(resources);
 	texcoords[0].Destroy(resources);
 	texcoords[1].Destroy(resources);
 	color.Destroy(resources);
@@ -228,9 +301,8 @@ HRESULT DynamicMesh::Create(Gpu::Resources* resources, const Desc* desc, const c
 	uint64_t size = 0;
 	VertexAllocation null_allocation = {};
 	VertexAllocation allocations[] = {
-		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_TANGENT_SPACE ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
+		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(Mesh::PositionAndTangentSpace)) : null_allocation,
+		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(Mesh::PositionAndTangentSpace)) : null_allocation,
 	};
 	uint64_t offsets[std::size(allocations)];
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
@@ -249,11 +321,8 @@ HRESULT DynamicMesh::Create(Gpu::Resources* resources, const Desc* desc, const c
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.Resource()->GetGPUVirtualAddress();
 	if (desc->flags & FLAG_POSITION) {
-		position[0].Create(buffer.Resource(), base_address + offsets[0], resources, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-		position[1].Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-	}
-    if (desc->flags & FLAG_TANGENT_SPACE) {
-		tangent_space.Create(buffer.Resource(), base_address + offsets[2], resources, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
+		position_and_tangent_space[0].Create(buffer.Resource(), base_address + offsets[0], resources, num_of_vertices, sizeof(Mesh::PositionAndTangentSpace));
+		position_and_tangent_space[1].Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, sizeof(Mesh::PositionAndTangentSpace));
 	}
 
 	return S_OK;
@@ -262,9 +331,8 @@ HRESULT DynamicMesh::Create(Gpu::Resources* resources, const Desc* desc, const c
 void DynamicMesh::Destroy(Gpu::Resources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
-	position[0].Destroy(resources);
-	position[1].Destroy(resources);
-	tangent_space.Destroy(resources);
+	position_and_tangent_space[0].Destroy(resources);
+	position_and_tangent_space[1].Destroy(resources);
 }
 
 void DynamicMesh::Flip()
@@ -272,14 +340,14 @@ void DynamicMesh::Flip()
 	this->current_position_buffer = (this->current_position_buffer + 1) % 1;
 }
 
-VertexBuffer* DynamicMesh::GetCurrentPositionBuffer()
+VertexBuffer* DynamicMesh::GetCurrentPositionAndTangentSpaceBuffer()
 {
-	return &position[current_position_buffer];
+	return &position_and_tangent_space[current_position_buffer];
 }
 
-VertexBuffer* DynamicMesh::GetPreviousPositionBuffer()
+VertexBuffer* DynamicMesh::GetPreviousPositionAndTangentSpaceBuffer()
 {
-	return &position[(current_position_buffer - 1) % 1];
+	return &position_and_tangent_space[(current_position_buffer - 1) % 1];
 }
 
 HRESULT MorphTarget::Create(Gpu::Resources* resources, const Desc* desc, const char* name)
@@ -290,9 +358,7 @@ HRESULT MorphTarget::Create(Gpu::Resources* resources, const Desc* desc, const c
 	uint64_t size = 0;
 	VertexAllocation null_allocation = {};
 	VertexAllocation allocations[] = {
-		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT) : null_allocation,
-		desc->flags & FLAG_TANGENT_SPACE ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM) : null_allocation,
+		VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(Mesh::PositionAndTangentSpace)),
 	};
 	uint64_t offsets[std::size(allocations)];
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
@@ -309,30 +375,18 @@ HRESULT MorphTarget::Create(Gpu::Resources* resources, const Desc* desc, const c
 	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS base_address = buffer.Resource()->GetGPUVirtualAddress();
-	if (desc->flags & FLAG_POSITION) {
-		position.Create(buffer.Resource(), base_address + offsets[0], resources, num_of_vertices, DXGI_FORMAT_R32G32B32_FLOAT);
-	}
-    if (desc->flags & FLAG_TANGENT_SPACE) {
-		tangent_space.Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, DXGI_FORMAT_R10G10B10A2_UNORM);
-	}
+	position_and_tangent_space.Create(buffer.Resource(), base_address + offsets[0], resources, num_of_vertices, sizeof(Mesh::PositionAndTangentSpace));
 
 	return S_OK;
 }
 
-void* MorphTarget::QueuePositionUpdate(UploadBuffer* upload_buffer)
+void* MorphTarget::QueuePositionAndTangentSpaceUpdate(UploadBuffer* upload_buffer)
 {
-	return position.QueueUpdate(upload_buffer, buffer.Resource());
-}
-
-void* MorphTarget::QueueTangentSpaceUpdate(UploadBuffer* upload_buffer)
-{
-	assert(flags & FLAG_TANGENT_SPACE);
-	return tangent_space.QueueUpdate(upload_buffer, buffer.Resource());
+	return position_and_tangent_space.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void MorphTarget::Destroy(Gpu::Resources* resources)
 {
 	resources->FreeBuffer(&this->buffer);
-	position.Destroy(resources);
-	tangent_space.Destroy(resources);
+	position_and_tangent_space.Destroy(resources);
 }

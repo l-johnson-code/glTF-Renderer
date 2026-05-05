@@ -386,12 +386,12 @@ void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAcc
 					gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases.resize(gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes.size());
 					RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases[j];
 					if (!dynamic_blas.buffer.Resource()) {
-						acceleration_structure->BuildDynamicBlas(context, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
+						acceleration_structure->BuildDynamicBlas(context, primitive.mesh.position_and_tangent_space.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
 					}
 				} else {
 					// Static.
 					if (!primitive.blas.buffer.Resource()) {
-						acceleration_structure->BuildStaticBlas(context, primitive.mesh.position.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
+						acceleration_structure->BuildStaticBlas(context, primitive.mesh.position_and_tangent_space.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &primitive.blas);
 					}
 				}
 			}
@@ -410,7 +410,7 @@ void Pathtracer::UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAc
 			std::vector<Gltf::Primitive>& primitives = gltf->meshes[mesh_id].primitives; 
 			Gltf::DynamicPrimitives& dynamic_primitives = gltf->dynamic_primitives[skin_id];
 			for (int j = 0; j < dynamic_primitives.dynamic_blases.size(); j++) {
-				acceleration_structure->UpdateDynamicBlas(context, &dynamic_primitives.dynamic_blases[j], dynamic_primitives.dynamic_meshes[j].GetCurrentPositionBuffer()->view.BufferLocation, primitives[j].mesh.num_of_vertices, primitives[j].mesh.index.view, primitives[j].mesh.num_of_indices);
+				acceleration_structure->UpdateDynamicBlas(context, &dynamic_primitives.dynamic_blases[j], dynamic_primitives.dynamic_meshes[j].GetCurrentPositionAndTangentSpaceBuffer()->view.BufferLocation, primitives[j].mesh.num_of_vertices, primitives[j].mesh.index.view, primitives[j].mesh.num_of_indices);
 			}
         }
     }
@@ -441,8 +441,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 					.transform = node.global_transform,
 					.normal_transform = glm::inverseTranspose(node.global_transform),
 					.index_descriptor = mesh.index.descriptor,
-					.position_descriptor = mesh.position.descriptor,
-					.tangent_space_descriptor = mesh.tangent_space.descriptor,
+					.position_and_tangent_space_descriptor = mesh.position_and_tangent_space.descriptor,
 					.texcoord_descriptors = {
 						mesh.texcoords[0].descriptor,
 						mesh.texcoords[1].descriptor,
@@ -471,10 +470,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 						RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases[i];
 						tlas_added = acceleration_structure->AddTlasInstance(&dynamic_blas, node.global_transform, instance_mask, flags);
 						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_POSITION) {
-							gpu_mesh_instance.position_descriptor = dynamic_mesh.GetCurrentPositionBuffer()->descriptor;
-						}
-						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_TANGENT_SPACE) {
-							gpu_mesh_instance.tangent_space_descriptor = dynamic_mesh.tangent_space.descriptor;
+							gpu_mesh_instance.position_and_tangent_space_descriptor = dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->descriptor;
 						}
                         if (tlas_added) {
                             if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
@@ -483,7 +479,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
                                     .index_count = mesh.num_of_indices,
                                     .vertex_count = mesh.num_of_vertices,
                                     .index = mesh.index.view,
-                                    .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionBuffer()->view : mesh.position.view,
+                                    .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->view : mesh.position_and_tangent_space.view,
                                     .tex_coords = { mesh.texcoords[0].view, mesh.texcoords[1].view },
                                     .color = mesh.color.view,
                                     .material_id = primitives[i].material_id,
@@ -494,7 +490,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
                                     .index_count = mesh.num_of_indices,
                                     .vertex_count = mesh.num_of_vertices,
                                     .index = mesh.index.view,
-                                    .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionBuffer()->view : mesh.position.view,
+                                    .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->view : mesh.position_and_tangent_space.view,
                                 });
                             }
                         }
@@ -510,7 +506,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
                                 .index_count = mesh.num_of_indices,
                                 .vertex_count = mesh.num_of_vertices,
                                 .index = mesh.index.view,
-                                .vertices = mesh.position.view,
+                                .vertices = mesh.position_and_tangent_space.view,
                                 .tex_coords = { mesh.texcoords[0].view, mesh.texcoords[1].view },
                                 .color = mesh.color.view,
                                 .material_id = primitives[i].material_id,
@@ -521,7 +517,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
                                 .index_count = mesh.num_of_indices,
                                 .vertex_count = mesh.num_of_vertices,
                                 .index = mesh.index.view,
-                                .vertices = mesh.position.view,
+                                .vertices = mesh.position_and_tangent_space.view,
                             });
                         }
                     }

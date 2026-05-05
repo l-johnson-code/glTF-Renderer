@@ -7,43 +7,6 @@
 #include "Sampling.hlsli"
 #include "Vertex.hlsli"
 
-struct SceneConstants {
-    float4x4 clip_to_world;
-    float4x4 world_to_clip;
-    float3 camera_pos;
-    int num_of_lights;
-    uint2 resolution;
-    uint32_t seed;
-    int accumulated_frames;
-    float3 environment_color;
-    float environment_intensity;
-    int debug_output;
-    uint32_t flags;
-    float max_ray_length;
-    int min_bounces;
-    int max_bounces;
-    int output_descriptor;
-    int environment_map_descriptor_id;
-    int environment_alias_table;
-    int environment_pdf;
-    float luminance_clamp;
-    float min_russian_roulette_continue_prob;
-    float max_russian_roulette_continue_prob;
-    int v_buffer_primitive_id;
-    int v_buffer_instance;
-};
-
-struct Instance {
-	float4x4 transform;
-	float4x4 normal_transform;
-	int index_descriptor;
-	int position_descriptor;
-	int tangent_space_descriptor;
-	int texcoord_descriptors[2];
-	int color_descriptor;
-	int material_id;
-};
-
 enum DebugOutput {
     DEBUG_OUTPUT_NONE,
     DEBUG_OUTPUT_HIT_KIND,
@@ -115,6 +78,31 @@ enum GeometryPayloadFlags {
     GEOMETRY_PAYLOAD_FLAG_BACK_FACE = 1 << 1,
 };
 
+struct Instance {
+	float4x4 transform;
+	float4x4 normal_transform;
+	int index_descriptor;
+	int position_and_tangent_space_descriptor;
+	int texcoord_descriptors[2];
+	int color_descriptor;
+	int material_id;
+};
+
+struct VertexAttributes {
+    float3 position;
+    float3 geometric_normal;
+    float3 normal;
+    float4 tangent;
+    float3 bitangent;
+    float4 color;
+    float2 texcoords[2];
+};
+
+struct PositionAndTangentSpace {
+    float3 position;
+    uint tangent_space;
+};
+
 struct GeometryPayload {
     uint flags;
     uint instance_index;
@@ -124,6 +112,32 @@ struct GeometryPayload {
 
 struct ShadowPayload {
     float transmission;
+};
+
+struct SceneConstants {
+    float4x4 clip_to_world;
+    float4x4 world_to_clip;
+    float3 camera_pos;
+    int num_of_lights;
+    uint2 resolution;
+    uint32_t seed;
+    int accumulated_frames;
+    float3 environment_color;
+    float environment_intensity;
+    int debug_output;
+    uint32_t flags;
+    float max_ray_length;
+    int min_bounces;
+    int max_bounces;
+    int output_descriptor;
+    int environment_map_descriptor_id;
+    int environment_alias_table;
+    int environment_pdf;
+    float luminance_clamp;
+    float min_russian_roulette_continue_prob;
+    float max_russian_roulette_continue_prob;
+    int v_buffer_primitive_id;
+    int v_buffer_instance;
 };
 
 ConstantBuffer<SceneConstants> g_scene_constants: register(b0);
@@ -180,16 +194,6 @@ float3 CalculateFlatNormal(float3 p_0, float3 p_1, float3 p_2)
     return normalize(cross(p_1 - p_0, p_2 - p_0));
 }
 
-float3 GenerateTangent(float3 normal)
-{
-    // Create a local coordinate system based on normal.
-	float3 helper = float3(1, 0, 0);
-	if (abs(normal.x) > abs(normal.y)) {
-		helper = float3(0, 1, 0);
-	}
-    return normalize(cross(helper, normal));
-}
-
 uint3 GetIndices(int index_descriptor, uint primitive_index)
 {
     uint3 v = uint3(primitive_index * 3, primitive_index * 3 + 1, primitive_index * 3 + 2);
@@ -200,42 +204,36 @@ uint3 GetIndices(int index_descriptor, uint primitive_index)
     return v;
 }
 
-float3 GetPositions(int position_descriptor, uint3 vertex, float3 barycentric_weights, out float3 pos_0, out float3 pos_1, out float3 pos_2)
-{
-    Buffer<float3> position_buffer = ResourceDescriptorHeap[NonUniformResourceIndex(position_descriptor)];
-    pos_0 = position_buffer[vertex.x];
-    pos_1 = position_buffer[vertex.y];
-    pos_2 = position_buffer[vertex.z];
-    float3 pos = BarycentricInterpolate(pos_0, pos_1, pos_2, barycentric_weights);
-    return pos;
-}
-
 float3 GetGeometricNormal(float3 pos_0, float3 pos_1, float3 pos_2)
 {
     return cross(pos_1 - pos_0, pos_2 - pos_0);
 }
 
-void GetVertexNormalAndTangent(int tangent_space_descriptor, uint3 vertex, float3 barycentric_weights, float3 geometric_normal, out float3 normal, out float4 tangent)
+void GetPositionAndTangentSpace(int position_and_tangent_space_descriptor, uint3 indices, float3 barycentric_weights, in out VertexAttributes attributes)
 {
-    if (tangent_space_descriptor != -1) {
-        Buffer<float4> tangent_space_buffer = ResourceDescriptorHeap[NonUniformResourceIndex(tangent_space_descriptor)];
-        float3 normal_0;
-        float4 tangent_0;
-        DecodeTangentSpace(tangent_space_buffer[vertex.x], normal_0, tangent_0);
-        float3 normal_1;
-        float4 tangent_1;
-        DecodeTangentSpace(tangent_space_buffer[vertex.y], normal_1, tangent_1);
-        float3 normal_2;
-        float4 tangent_2;
-        DecodeTangentSpace(tangent_space_buffer[vertex.z], normal_2, tangent_2);
-        normal = BarycentricInterpolate(normal_0, normal_1, normal_2, barycentric_weights);
-        tangent.xyz = BarycentricInterpolate(tangent_0.xyz, tangent_1.xyz, tangent_2.xyz, barycentric_weights);
-        tangent.w = tangent_0.w;
-    } else {
-        normal = geometric_normal;
-        tangent.xyz = GenerateTangent(geometric_normal);
-        tangent.w = 1;
-    }
+    StructuredBuffer<PositionAndTangentSpace> position_and_tangent_space = ResourceDescriptorHeap[NonUniformResourceIndex(position_and_tangent_space_descriptor)];
+    PositionAndTangentSpace pos_tan_0 = position_and_tangent_space[indices.x];
+    PositionAndTangentSpace pos_tan_1 = position_and_tangent_space[indices.y];
+    PositionAndTangentSpace pos_tan_2 = position_and_tangent_space[indices.z];
+
+    // Calculate position. 
+    attributes.position = barycentric_weights.x * pos_tan_0.position + barycentric_weights.y * pos_tan_1.position + barycentric_weights.z * pos_tan_2.position;
+
+    // Calculate normals and tangents.
+    float3 normal_0;
+    float4 tangent_0;
+    DecodeTangentSpace(pos_tan_0.tangent_space, normal_0, tangent_0);
+    float3 normal_1;
+    float4 tangent_1;
+    DecodeTangentSpace(pos_tan_1.tangent_space, normal_1, tangent_1);
+    float3 normal_2;
+    float4 tangent_2;
+    DecodeTangentSpace(pos_tan_2.tangent_space, normal_2, tangent_2);
+    attributes.normal = BarycentricInterpolate(normal_0, normal_1, normal_2, barycentric_weights);
+    attributes.tangent.xyz = BarycentricInterpolate(tangent_0.xyz, tangent_1.xyz, tangent_2.xyz, barycentric_weights);
+    attributes.tangent.w = tangent_0.w;
+
+    attributes.geometric_normal = GetGeometricNormal(pos_tan_0.position, pos_tan_1.position, pos_tan_2.position);
 }
 
 float3 CalculateBitangent(float3 normal, float4 tangent)
@@ -284,21 +282,8 @@ float3 OffsetRay(float3 position, float3 geometric_normal)
     return select(abs(position) < origin, position + float_scale * geometric_normal, p_i);
 }
 
-struct VertexAttributes {
-    float3 position;
-    float3 geometric_normal;
-    float3 normal;
-    float4 tangent;
-    float3 bitangent;
-    float4 color;
-    float2 texcoords[2];
-};
-
-void GetRemainingVertexAttributes(Instance instance, float3 indices, float3 pos_0, float3 pos_1, float3 pos_2, float3 barycentric_weights, in out VertexAttributes attributes)
+void GetRemainingVertexAttributes(Instance instance, float3 indices, float3 barycentric_weights, in out VertexAttributes attributes)
 {
-    attributes.geometric_normal = GetGeometricNormal(pos_0, pos_1, pos_2);
-    GetVertexNormalAndTangent(instance.tangent_space_descriptor, indices, barycentric_weights, attributes.geometric_normal, attributes.normal, attributes.tangent);
-
     // Transform into world space.
     attributes.position = mul(instance.transform, float4(attributes.position, 1)).xyz;
     attributes.geometric_normal = normalize(mul(instance.normal_transform, float4(attributes.geometric_normal, 0)).xyz); // TODO: Should normals and tangents be normalized before they are transformed?
@@ -323,11 +308,8 @@ VertexAttributes GetVertexAttributes(Instance instance, uint primitive_index, fl
 {
     VertexAttributes attributes;
     uint3 indices = GetIndices(instance.index_descriptor, primitive_index);
-
-    float3 pos_0, pos_1, pos_2;
-    attributes.position = GetPositions(instance.position_descriptor, indices, barycentric_weights, pos_0, pos_1, pos_2);
-    
-    GetRemainingVertexAttributes(instance, indices, pos_0, pos_1, pos_2, barycentric_weights, attributes);
+    GetPositionAndTangentSpace(instance.position_and_tangent_space_descriptor, indices, barycentric_weights, attributes);
+    GetRemainingVertexAttributes(instance, indices, barycentric_weights, attributes);
 
     return attributes;
 }
@@ -339,15 +321,16 @@ VertexAttributes GetVertexAttributesFromVisibilityBuffer(uint2 pixel, uint2 reso
     uint3 indices = GetIndices(instance.index_descriptor, primitive_id);
 
     // Get positions and use them to calculate barycentrics.
-    Buffer<float3> positions = ResourceDescriptorHeap[NonUniformResourceIndex(instance.position_descriptor)];
-    float3 pos_0 = positions[indices.x];
-    float3 pos_1 = positions[indices.y];
-    float3 pos_2 = positions[indices.z];
+    StructuredBuffer<PositionAndTangentSpace> position_and_tangent_space = ResourceDescriptorHeap[NonUniformResourceIndex(instance.position_and_tangent_space_descriptor)];
+    PositionAndTangentSpace pos_tan_0 = position_and_tangent_space[indices.x];
+    PositionAndTangentSpace pos_tan_1 = position_and_tangent_space[indices.y];
+    PositionAndTangentSpace pos_tan_2 = position_and_tangent_space[indices.z];
+    
     float4x4 model_to_clip = mul(world_to_clip, instance.transform);
 
-    float4 clip_pos_0 = mul(model_to_clip, float4(pos_0, 1));
-    float4 clip_pos_1 = mul(model_to_clip, float4(pos_1, 1));
-    float4 clip_pos_2 = mul(model_to_clip, float4(pos_2, 1));
+    float4 clip_pos_0 = mul(model_to_clip, float4(pos_tan_0.position, 1));
+    float4 clip_pos_1 = mul(model_to_clip, float4(pos_tan_1.position, 1));
+    float4 clip_pos_2 = mul(model_to_clip, float4(pos_tan_2.position, 1));
 
     float2 clip_space = (((float2)pixel + 0.5) / (float2)resolution) * 2 - 1;
     clip_space.y = -clip_space.y;
@@ -359,9 +342,27 @@ VertexAttributes GetVertexAttributesFromVisibilityBuffer(uint2 pixel, uint2 reso
     barycentric_weights /= float3(clip_pos_0.w, clip_pos_1.w, clip_pos_2.w);
     barycentric_weights /= barycentric_weights.x + barycentric_weights.y + barycentric_weights.z;
 
-    // Get vertex data.
-    attributes.position = barycentric_weights.x * pos_0 + barycentric_weights.y * pos_1 + barycentric_weights.z * pos_2;
-    GetRemainingVertexAttributes(instance, indices, pos_0, pos_1, pos_2, barycentric_weights, attributes);
+    // Calculate position. 
+    attributes.position = barycentric_weights.x * pos_tan_0.position + barycentric_weights.y * pos_tan_1.position + barycentric_weights.z * pos_tan_2.position;
+
+    // Calculate normals and tangents.
+    float3 normal_0;
+    float4 tangent_0;
+    DecodeTangentSpace(pos_tan_0.tangent_space, normal_0, tangent_0);
+    float3 normal_1;
+    float4 tangent_1;
+    DecodeTangentSpace(pos_tan_1.tangent_space, normal_1, tangent_1);
+    float3 normal_2;
+    float4 tangent_2;
+    DecodeTangentSpace(pos_tan_2.tangent_space, normal_2, tangent_2);
+    attributes.normal = BarycentricInterpolate(normal_0, normal_1, normal_2, barycentric_weights);
+    attributes.tangent.xyz = BarycentricInterpolate(tangent_0.xyz, tangent_1.xyz, tangent_2.xyz, barycentric_weights);
+    attributes.tangent.w = tangent_0.w;
+
+    attributes.geometric_normal = GetGeometricNormal(pos_tan_0.position, pos_tan_1.position, pos_tan_2.position);
+
+    // Get other vertex data.
+    GetRemainingVertexAttributes(instance, indices, barycentric_weights, attributes);
     
     return attributes;
 }

@@ -19,11 +19,9 @@ void GpuSkin::Create(Gpu::Resources* resources)
 	
     root_parameters[ROOT_PARAMETER_CONSTANT_BUFFER].InitAsConstantBufferView(0);
 	root_parameters[ROOT_PARAMETER_VERTEX_INPUT].InitAsShaderResourceView(0);
-	root_parameters[ROOT_PARAMETER_TANGENT_SPACE_INPUT].InitAsShaderResourceView(1);
-	root_parameters[ROOT_PARAMETER_SKIN].InitAsShaderResourceView(3);
-    root_parameters[ROOT_PARAMETER_BONES].InitAsShaderResourceView(4);
+	root_parameters[ROOT_PARAMETER_SKIN].InitAsShaderResourceView(1);
+    root_parameters[ROOT_PARAMETER_BONES].InitAsShaderResourceView(2);
     root_parameters[ROOT_PARAMETER_VERTEX_OUTPUT].InitAsUnorderedAccessView(0);
-    root_parameters[ROOT_PARAMETER_TANGENT_SPACE_OUTPUT].InitAsUnorderedAccessView(1);
 
     D3D12_ROOT_SIGNATURE_DESC root_signature_desc = {
 		.NumParameters = ROOT_PARAMETER_COUNT,
@@ -71,9 +69,10 @@ void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D
 		struct {
 			float weight;
 			int position_descriptor;
-			int tangent_space_descriptor;
+			uint32_t morph_flags;
+			uint32_t padding;
 		} morph_targets[Config::MAX_SIMULTANEOUS_MORPH_TARGETS];
-	} constant_buffer = {};
+	} constant_buffer;
 
 	constant_buffer = {
 		.num_of_vertices = output->num_of_vertices,
@@ -84,8 +83,8 @@ void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D
 	for (int i = 0; i < constant_buffer.num_of_morph_targets; i++) {
 		constant_buffer.morph_targets[i] = {
 			.weight = morph_weights[i],
-			.position_descriptor = morph_targets[i]->position.descriptor,
-			.tangent_space_descriptor = morph_targets[i]->tangent_space.descriptor,
+			.position_descriptor = morph_targets[i]->position_and_tangent_space.descriptor,
+			.morph_flags = morph_targets[i]->flags,
 		};
 	}
 
@@ -95,13 +94,8 @@ void GpuSkin::Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D
 	}
 
     context->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
-
-    context->SetComputeRootShaderResourceView(ROOT_PARAMETER_VERTEX_INPUT, input->position.view.BufferLocation);
-    context->SetComputeRootShaderResourceView(ROOT_PARAMETER_TANGENT_SPACE_INPUT, input->tangent_space.view.BufferLocation);
-	
-    context->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_VERTEX_OUTPUT, output->GetCurrentPositionBuffer()->view.BufferLocation);
-    context->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_TANGENT_SPACE_OUTPUT, output->tangent_space.view.BufferLocation);
-
+    context->SetComputeRootShaderResourceView(ROOT_PARAMETER_VERTEX_INPUT, input->position_and_tangent_space.view.BufferLocation);
+    context->SetComputeRootUnorderedAccessView(ROOT_PARAMETER_VERTEX_OUTPUT, output->GetCurrentPositionAndTangentSpaceBuffer()->view.BufferLocation);
     context->SetComputeRootShaderResourceView(ROOT_PARAMETER_SKIN, input->joint_weight.view.BufferLocation);
     context->SetComputeRootShaderResourceView(ROOT_PARAMETER_BONES, bones);
 

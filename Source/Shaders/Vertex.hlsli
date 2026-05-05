@@ -18,6 +18,18 @@ void DecodeTangentSpace(float4 encoded, out float3 normal, out float4 tangent)
 	tangent.w = encoded.w > 0 ? 1 : -1;
 }
 
+void DecodeTangentSpace(uint encoded, out float3 normal, out float4 tangent)
+{
+    float4 unpacked = float4(
+        (float)(encoded & 0x3ff) / 1023.0f, 
+        (float)((encoded >> 10) & 0x3ff) / 1023.0f, 
+        (float)((encoded >> 20) & 0x3ff) / 1023.0f, 
+        (float)((encoded >> 30) & 0x3) / 3.0f 
+    );
+    return DecodeTangentSpace(unpacked, normal, tangent);
+}
+
+
 uint EncodeTangentSpace(float3 normal, float4 tangent)
 {
     // Encode normal.

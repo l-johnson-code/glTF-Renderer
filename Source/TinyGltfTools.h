@@ -224,6 +224,8 @@ class RawIterator {
 
     public:
 
+    RawIterator() = default;
+
     RawIterator(const tinygltf::Model* model, tinygltf::Accessor* accessor)
     {
         this->accessor = accessor;
@@ -285,6 +287,8 @@ template<glm::length_t L, typename T, bool NORMALIZE = false>
 class Iterator: public RawIterator {
 
     public:
+
+    Iterator() = default;
 
     Iterator(const tinygltf::Model* model, tinygltf::Accessor* accessor): RawIterator(model, accessor)
     {

@@ -116,7 +116,7 @@ void RaytracingAccelerationStructure::UpdateDynamicBlas(CommandContext* command_
 			.IndexBuffer = indices.BufferLocation,
 			.VertexBuffer = {
 				.StartAddress = vertices,
-				.StrideInBytes = sizeof(glm::vec3),
+				.StrideInBytes = sizeof(glm::vec4),
 			}
 		}
 	};
@@ -234,7 +234,7 @@ void RaytracingAccelerationStructure::BuildBlas(CommandContext* command_context,
 			.IndexBuffer = indices.BufferLocation,
 			.VertexBuffer = {
 				.StartAddress = vertices,
-				.StrideInBytes = sizeof(glm::vec3),
+				.StrideInBytes = sizeof(glm::vec4),
 			}
 		}
 	};
