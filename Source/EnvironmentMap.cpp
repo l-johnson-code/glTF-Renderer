@@ -523,6 +523,7 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
             } else {
                 larger.push_back(alias_table.size() - 1);
             }
+            pdf[i] *= ((float)pdf_size * (float)pdf_size) / (4.0f * glm::pi<float>());
         }
     }
 
@@ -548,6 +549,12 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
         int smaller_i = smaller.back();
         smaller.pop_back();
         alias_table[smaller_i].prob = 1.0f;
+    }
+
+    for (int i = 0; i < alias_table.size(); i++) {
+        float pixel_prob = pdf[alias_table[i].pixel.y * pdf_size + alias_table[i].pixel.x];
+        float alias_prob = pdf[alias_table[i].alias.y * pdf_size + alias_table[i].alias.x];
+        alias_table[i].pdf = glm::packHalf2x16(glm::vec2(pixel_prob, alias_prob));
     }
 
     // Create the alias table resource.

@@ -41,6 +41,7 @@ class EnvironmentMap {
         float prob;
         glm::u16vec2 pixel;
         glm::u16vec2 alias;
+        uint32_t pdf;
     };
     
     Gpu::Resources* resources = nullptr;

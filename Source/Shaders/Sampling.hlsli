@@ -6,19 +6,23 @@
 
 struct AliasMap {
     float prob;
-    uint pixel;
-    uint alias;
+    vector<uint16_t, 2> pixel;
+    vector<uint16_t, 2> alias;
+    float16_t pixel_pdf;
+    float16_t alias_pdf;
 };
 
-uint2 SampleAliasMap(StructuredBuffer<AliasMap> alias_map, float u)
+vector<uint16_t, 2> SampleAliasMap(StructuredBuffer<AliasMap> alias_map, float u, out float pdf)
 {
     uint num_structs, stride;
     alias_map.GetDimensions(num_structs, stride);
     u *= num_structs;
     float remainder = frac(u);
     uint bin = clamp((uint)(u), 0, num_structs - 1);
-    uint pixel = remainder <= alias_map[bin].prob ? alias_map[bin].pixel : alias_map[bin].alias;
-    return uint2(pixel & 0xffff, pixel >> 16);
+    bool alias = remainder > alias_map[bin].prob;
+    vector<uint16_t, 2> pixel = alias ? alias_map[bin].alias : alias_map[bin].pixel;
+    pdf = alias ? alias_map[bin].alias_pdf : alias_map[bin].pixel_pdf;
+    return pixel;
 }
 
 float3 SampleHemisphere(float2 u) 

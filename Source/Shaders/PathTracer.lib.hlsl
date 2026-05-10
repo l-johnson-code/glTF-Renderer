@@ -743,17 +743,11 @@ LightRay SamplePointLight(float3 surface_pos, float u, out float pdf)
 LightRay SampleEnvironmentMap(float3 u, out float pdf)
 {
     StructuredBuffer<AliasMap> alias_table = ResourceDescriptorHeap[g_scene_constants.environment_alias_table];
-    Texture2D<float> pdf_texture = ResourceDescriptorHeap[g_scene_constants.environment_pdf];
     TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
 
-    uint pdf_width, pdf_height, pdf_levels;
-    pdf_texture.GetDimensions(0, pdf_width, pdf_height, pdf_levels);
-
     // Importance sample the environment map texture.
-    uint2 pixel = SampleAliasMap(alias_table, u.x);
-    float2 uv = ((float2)pixel + u.yz) / float2(pdf_width, pdf_height);
-
-    pdf = (pdf_texture[pixel] * (float)pdf_width * (float)pdf_height) / (4 * PI);
+    vector<uint16_t, 2> pixel = SampleAliasMap(alias_table, u.x, pdf);
+    float2 uv = ((float2)pixel + u.yz) / float2(1024, 1024);
     
     float3 direction = SquareToSphere(UvToUnitSquare(uv));
 
@@ -768,12 +762,10 @@ LightRay SampleEnvironmentMap(float3 u, out float pdf)
 float EnvironmentMapPdf(float3 l)
 {
     Texture2D<float> pdf_texture = ResourceDescriptorHeap[g_scene_constants.environment_pdf];
-    uint pdf_width, pdf_height, pdf_levels;
-    pdf_texture.GetDimensions(0, pdf_width, pdf_height, pdf_levels);
     float2 uv = UnitSquareToUv(SphereToSquare(l));
-    uint2 pixel = UVToPixel(uv, int2(pdf_width, pdf_height)); // TODO: Remove hardcoded size.
+    uint2 pixel = UVToPixel(uv, int2(1024, 1024)); // TODO: Remove hardcoded size.
     float pdf = pdf_texture[pixel];
-    return (pdf * (float)pdf_width * (float)pdf_height) / (4 * PI);
+    return pdf;
 }
 
 bool RussianRouletteTerminate(float min_continue_prob, float max_continue_prob, float u, in out float3 throughput) 
