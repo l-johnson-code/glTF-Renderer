@@ -96,7 +96,7 @@ HRESULT GpuAllocator::CreateResource(D3D12_HEAP_TYPE heap_type, const D3D12_RESO
     // TODO: Support tight alignment.
     D3D12_RESOURCE_ALLOCATION_INFO allocation_info = device->GetResourceAllocationInfo(0, 1, desc);
 
-    if ((heap_type != D3D12_HEAP_TYPE_DEFAULT) || (allocation_info.SizeInBytes > heap_size)) {
+    if ((heap_type != D3D12_HEAP_TYPE_DEFAULT) || (allocation_info.SizeInBytes > (heap_size / 2))) {
         
         CD3DX12_HEAP_PROPERTIES heap_properties(heap_type);
         result = device->CreateCommittedResource(&heap_properties, D3D12_HEAP_FLAG_NONE, desc, initial_state, optimized_clear_value, iid, resource);
