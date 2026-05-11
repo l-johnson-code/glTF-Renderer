@@ -147,7 +147,7 @@ HRESULT GpuAllocator::Allocate(uint64_t size, uint64_t alignment, int* heap_inde
     for (int i = 0; i < heaps.size(); i++) {
         TlsfHeap& heap = heaps[i];
         *allocation = heap.Allocate(size, alignment);
-        if (allocation->handle) {
+        if (allocation->handle != TlsfHeap::null_block_index) {
             *heap_index = i;
             return S_OK;
         }
@@ -157,7 +157,7 @@ HRESULT GpuAllocator::Allocate(uint64_t size, uint64_t alignment, int* heap_inde
     TlsfHeap& heap = heaps.emplace_back();
     heap.Init(this->device.Get(), this->heap_size, 65536);
     *allocation = heap.Allocate(size, alignment);
-    if (allocation->handle) {
+    if (allocation->handle != TlsfHeap::null_block_index) {
         *heap_index = heaps.size() - 1;
         return S_OK;
     }

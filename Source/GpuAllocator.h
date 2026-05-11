@@ -54,7 +54,7 @@ class GpuAllocation {
         this->resource->AddRef();
     }
 
-    GpuAllocation(GpuAllocator* allocator, ID3D12Resource* resource, int heap, void* handle)
+    GpuAllocation(GpuAllocator* allocator, ID3D12Resource* resource, int heap, TlsfHeap::NodeIndex handle)
     {
         this->is_committed = false;
         this->allocator = allocator;
@@ -75,6 +75,6 @@ class GpuAllocation {
     ID3D12Resource* resource = nullptr;
     bool is_committed = false;
     int heap = 0;
-    void* handle = nullptr;
+    TlsfHeap::NodeIndex handle = TlsfHeap::null_block_index;
 };
 

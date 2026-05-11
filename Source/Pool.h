@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 template<typename T>
@@ -14,45 +15,50 @@ class Pool {
         assert(nodes);
         if (!nodes) {
             this->capacity = 0;
-            free = nullptr;
+            free = std::numeric_limits<uint32_t>::max();
             return false;
         }
         this->capacity = capacity;
         for (int i = 0; i < (capacity - 1); i++) {
-            nodes[i].next = &nodes[i + 1];
+            nodes[i].next = i + 1;
         }
-        nodes[capacity - 1].next = nullptr;
-        free = &nodes[0];
+        nodes[capacity - 1].next = std::numeric_limits<uint32_t>::max();
+        free = 0;
         return true;
     }
 
     template<typename... Args>
-    T* Construct(Args&&... args)
+    uint32_t Construct(Args&&... args)
     {
-        if (free) {
-            Node* next = free->next;
-            T* element = new (&free->element) T (std::forward<Args>(args)...);
-            free = next;
-            return element;
+        if (free != std::numeric_limits<uint32_t>::max()) {
+            uint32_t index = free;
+            Node& node = nodes[index];
+            free = node.next;
+            node.element = T(std::forward<Args>(args)...);
+            return index;
         }
-        return nullptr;
+        return std::numeric_limits<uint32_t>::max();
     }
 
-    bool IsOwned(T* ptr)
+    bool IsOwned(uint32_t index)
     {
-        Node* node_ptr = reinterpret_cast<Node*>(ptr);
-        return (node_ptr >= this->nodes) && (node_ptr < (this->nodes + capacity));
+        return (index >= 0) && (index < capacity);
     }
 
-    void Destroy(T* ptr)
+    void Destroy(uint32_t index)
     {
-        if (ptr) {
-            assert(IsOwned(ptr));
-            ptr->~T();
-            Node* node_ptr = reinterpret_cast<Node*>(ptr);
-            node_ptr->next = free;
-            free = node_ptr;
+        if (index != std::numeric_limits<uint32_t>::max()) {
+            assert(IsOwned(index));
+            nodes[index].element.~T();
+            nodes[index].next = free;
+            free = index;
         }
+    }
+
+    T& operator[](uint32_t index)
+    {
+        assert(IsOwned(index));
+        return nodes[index].element;
     }
 
     void DeInit()
@@ -60,18 +66,18 @@ class Pool {
         capacity = 0;
         size = 0;
         delete[] nodes;
-        free = nullptr;
+        free = std::numeric_limits<uint32_t>::max();
     }
     
     private:
 
     union Node {
-        Node* next = nullptr;
-        alignas(T) std::byte element[sizeof(T)];
+        uint32_t next = std::numeric_limits<uint32_t>::max();
+        T element;
     };
 
     uint32_t capacity = 0;
     uint32_t size = 0;
     Node* nodes = nullptr;
-    Node* free = nullptr;
+    uint32_t free = std::numeric_limits<uint32_t>::max();
 };

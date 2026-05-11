@@ -52,7 +52,7 @@ static void DestroyHeap(ID3D12Heap* heap)
     }
 }
 
-void TlsfHeap::Init(ID3D12Device* device, uint64_t heap_size, uint32_t max_allocations)
+void TlsfHeap::Init(ID3D12Device* device, uint32_t heap_size, uint32_t max_allocations)
 {
     this->size = 0;
 
@@ -72,18 +72,20 @@ void TlsfHeap::Init(ID3D12Device* device, uint64_t heap_size, uint32_t max_alloc
     }
     for (int i = 0; i < first_level_bins; i++) {
         for (int j = 0; j < second_level_bins; j++) {
-            free_lists[i][j] = nullptr;
+            free_lists[i][j] = null_block_index;
         }
     }
 
     // Create an initial free block.
-    Block* initial_block = blocks.Construct();
-    initial_block->size = capacity;
-    initial_block->offset = 0;
-    initial_block->previous = nullptr;
-    initial_block->next = nullptr;
-    initial_block->is_occupied = false;
-    InsertFreeBlock(initial_block);
+    NodeIndex initial_block_index = blocks.Construct();
+    blocks[initial_block_index] = {
+        .offset = 0,
+        .size = capacity,
+        .next = null_block_index,
+        .previous = null_block_index,
+        .is_occupied = false,
+    };
+    InsertFreeBlock(initial_block_index);
 }
 
 void TlsfHeap::DeInit()
@@ -97,105 +99,107 @@ void TlsfHeap::DeInit()
     this->first_level_bitmap = 0;
 }
 
-TlsfHeap::Allocation TlsfHeap::Allocate(uint64_t size, uint64_t alignment)
+TlsfHeap::Allocation TlsfHeap::Allocate(uint32_t size, uint32_t alignment)
 {
     Allocation allocation = {
-        .handle = nullptr,
+        .handle = null_block_index,
         .offset = 0,
     };
 
     // Allocate extra space so that we can properly align the allocation.
-    uint64_t required_size = size + alignment - 1;
+    uint32_t required_size = size + alignment - 1;
     
     // Try to get a block from a free list.
-    Block* block = GetGoodFitBlock(required_size);
-    if (block) {
+    NodeIndex block_index = GetGoodFitBlock(required_size);
+    if (block_index != null_block_index) {
+        Block& block = blocks[block_index];
 
         // Remove this block from the free list and mark as occupied.
-        RemoveFreeBlock(block);
-        block->is_occupied = true;
+        RemoveFreeBlock(block_index);
+        block.is_occupied = true;
 
-        allocation.handle = block;
-        allocation.offset = AlignPowerOfTwo(block->offset, alignment);
+        allocation.handle = block_index;
+        allocation.offset = AlignPowerOfTwo(block.offset, alignment);
 
         // Create a or expand a free block to the left.
-        if (allocation.offset > block->offset) {
-            if (block->previous && !block->previous->is_occupied) {
+        if (allocation.offset > block.offset) {
+            if (block.previous != null_block_index && !blocks[block.previous].is_occupied) {
                 // Expand previous free block.
-                block->previous->size = allocation.offset - block->previous->offset;
+                blocks[block.previous].size = allocation.offset - blocks[block.previous].offset;
             } else {
                 // Create a free block.
-                Block* free_block = blocks.Construct();
-                free_block->size = allocation.offset - block->offset;
-                free_block->offset = block->offset;
-                free_block->is_occupied = false;
-                InsertBefore(block, free_block);
-                InsertFreeBlock(free_block);
+                NodeIndex free_block_index = blocks.Construct();
+                Block& free_block = blocks[free_block_index];
+                free_block.size = allocation.offset - block.offset;
+                free_block.offset = block.offset;
+                free_block.is_occupied = false;
+                InsertBefore(block_index, free_block_index);
+                InsertFreeBlock(free_block_index);
             }
             // Trim space off the beginning of the block.
-            block->size -= (allocation.offset - block->offset);
-            block->offset = allocation.offset;
+            block.size -= (allocation.offset - block.offset);
+            block.offset = allocation.offset;
         }
 
         // Create free block to the right.
-        if (block->size > required_size) {
+        if (block.size > required_size) {
             // Split the block into two.
-            Block* free_block = blocks.Construct();
-            free_block->offset = block->offset + size;
-            free_block->size = block->size - size;
-            free_block->is_occupied = false;
-            InsertAfter(block, free_block);
-            InsertFreeBlock(free_block);
+            NodeIndex free_block_index = blocks.Construct();
+            Block& free_block = blocks[free_block_index];
+            free_block.offset = block.offset + size;
+            free_block.size = block.size - size;
+            free_block.is_occupied = false;
+            InsertAfter(block_index, free_block_index);
+            InsertFreeBlock(free_block_index);
             // Trim space off the end of the block.
-            block->size = size;
+            block.size = size;
         }
     }
 
     return allocation;
 }
 
-void TlsfHeap::Free(void* handle)
+void TlsfHeap::Free(NodeIndex handle)
 {
-    if (handle) {
-        Block* block = reinterpret_cast<Block*>(handle);
-
-        assert(block->is_occupied);
-        block->is_occupied = false;
+    if (handle != null_block_index) {
+        Block& block = blocks[handle];
+        assert(block.is_occupied);
+        block.is_occupied = false;
 
         // Merge left.
-        Block* previous = block->previous;
-        if (previous && !previous->is_occupied) {
-            block->offset = previous->offset;
-            block->size += previous->size;
-            RemoveBlock(previous);
-            RemoveFreeBlock(previous);
-            blocks.Destroy(previous);
+        NodeIndex previous_index = block.previous;
+        if (previous_index != null_block_index && !blocks[previous_index].is_occupied) {
+            block.offset = blocks[previous_index].offset;
+            block.size += blocks[previous_index].size;
+            RemoveBlock(previous_index);
+            RemoveFreeBlock(previous_index);
+            blocks.Destroy(previous_index);
         }
 
         // Merge right.
-        Block* next = block->next;
-        if (next && !next->is_occupied) {
-            block->size += next->size;
-            RemoveBlock(next);
-            RemoveFreeBlock(next);
-            blocks.Destroy(next);
+        NodeIndex next_index = block.next;
+        if (next_index != null_block_index && !blocks[next_index].is_occupied) {
+            block.size += blocks[next_index].size;
+            RemoveBlock(next_index);
+            RemoveFreeBlock(next_index);
+            blocks.Destroy(next_index);
         }
 
-        InsertFreeBlock(block);
+        InsertFreeBlock(handle);
     }
 }
 
-uint8_t TlsfHeap::FirstLevelIndex(uint64_t size)
+uint8_t TlsfHeap::FirstLevelIndex(uint32_t size)
 {
     return MostSignificantBitIndex(size >> significand_bits);
 }
 
-uint8_t TlsfHeap::SecondLevelIndex(uint64_t size, uint32_t first_level_index)
+uint8_t TlsfHeap::SecondLevelIndex(uint32_t size, uint32_t first_level_index)
 {
     return (size >> first_level_index) - (1 << significand_bits);
 }
 
-TlsfHeap::Block* TlsfHeap::GetGoodFitBlock(uint64_t size)
+TlsfHeap::NodeIndex TlsfHeap::GetGoodFitBlock(uint32_t size)
 {
     // Get the indexes corresponding to the smallest bin that can contain our allocation.
     size = size < (1 << significand_bits) ? (1 << significand_bits) : size; // Round up size to smallest possible bin size.
@@ -217,72 +221,75 @@ TlsfHeap::Block* TlsfHeap::GetGoodFitBlock(uint64_t size)
         }
     }
 
-    return nullptr;
+    return null_block_index;
 }
 
-void TlsfHeap::InsertAfter(Block* block, Block* new_block)
+void TlsfHeap::InsertAfter(NodeIndex block, NodeIndex new_block)
 {
-    new_block->next = block->next;
-    new_block->previous = block;
-    block->next = new_block;
+    blocks[new_block].next = blocks[block].next;
+    blocks[new_block].previous = block;
+    blocks[block].next = new_block;
 }
 
-void TlsfHeap::InsertBefore(Block* block, Block* new_block)
+void TlsfHeap::InsertBefore(NodeIndex block, NodeIndex new_block)
 {
-    new_block->previous = block->previous;
-    new_block->next = block;
-    block->previous = new_block;
+    blocks[new_block].previous = blocks[block].previous;
+    blocks[new_block].next = block;
+    blocks[block].previous = new_block;
 }
 
-void TlsfHeap::RemoveBlock(Block* block)
+void TlsfHeap::RemoveBlock(NodeIndex block_index)
 {
-    if (block->previous) {
-        block->previous->next = block->next;
+    const Block& block = blocks[block_index];
+    if (block.previous != null_block_index) {
+        blocks[block.previous].next = block.next;
     }
-    if (block->next) {
-        block->next->previous = block->previous;
+    if (block.next != null_block_index) {
+        blocks[block.next].previous = block.previous;
     }
 }
 
-void TlsfHeap::InsertFreeBlock(Block* block)
+void TlsfHeap::InsertFreeBlock(NodeIndex block_index)
 {
-    assert(!block->is_occupied);
+    Block& block = blocks[block_index];
+    assert(!block.is_occupied);
 
     // Get the largest bin size that is smaller than the block size.
-    if (block->size >= (1 << significand_bits)) {
-        uint8_t first_level_index = FirstLevelIndex(block->size);
-        uint8_t second_level_index = SecondLevelIndex(block->size, first_level_index);
+    if (block.size >= (1 << significand_bits)) {
+        uint8_t first_level_index = FirstLevelIndex(block.size);
+        uint8_t second_level_index = SecondLevelIndex(block.size, first_level_index);
 
         // Add block to top of the free list.
-        block->next_free = free_lists[first_level_index][second_level_index];
-        free_lists[first_level_index][second_level_index] = block;
-        block->previous_free = nullptr;
+        block.next_free = free_lists[first_level_index][second_level_index];
+        free_lists[first_level_index][second_level_index] = block_index;
+        block.previous_free = null_block_index;
 
         // Update the bitmaps.
         first_level_bitmap |= 1 << first_level_index;
         second_level_bitmaps[first_level_index] |= 1 << second_level_index;
     } else {
         // Denormals are not added to the free list.
-        block->next_free = nullptr;
-        block->previous_free = nullptr;
+        block.next_free = null_block_index;
+        block.previous_free = null_block_index;
     }
 }
 
-void TlsfHeap::RemoveFreeBlock(Block* block)
+void TlsfHeap::RemoveFreeBlock(NodeIndex block_index)
 {
-    assert(!block->is_occupied);
-    if (block->next_free) {
-        block->next_free->previous_free = block->previous_free;
+    Block& block = blocks[block_index];
+    assert(!block.is_occupied);
+    if (block.next_free != null_block_index) {
+        blocks[block.next_free].previous_free = block.previous_free;
     }
-    if (block->previous_free) {
-        block->previous_free->next_free = block->next_free;
+    if (block.previous_free != null_block_index) {
+        blocks[block.previous_free].next_free = block.next_free;
     } else {
         // The block is at the top of the free list.
-        uint8_t first_level_index = FirstLevelIndex(block->size);
-        uint8_t second_level_index = SecondLevelIndex(block->size, first_level_index);
+        uint8_t first_level_index = FirstLevelIndex(block.size);
+        uint8_t second_level_index = SecondLevelIndex(block.size, first_level_index);
 
-        free_lists[first_level_index][second_level_index] = block->next_free;
-        if (!block->next_free) {
+        free_lists[first_level_index][second_level_index] = block.next_free;
+        if (block.next_free == null_block_index) {
             // Update the bitmaps.
             second_level_bitmaps[first_level_index] &= ~(1 << second_level_index);
             if (second_level_bitmaps[first_level_index] == 0) {
