@@ -771,8 +771,7 @@ float EnvironmentMapPdf(float3 l)
 
 bool RussianRouletteTerminate(float min_continue_prob, float max_continue_prob, float u, in out float3 throughput) 
 {
-    float continue_prob = MaxValue(throughput);
-    continue_prob = clamp(continue_prob, min_continue_prob, max_continue_prob);
+    float continue_prob = clamp(Luminance(throughput), min_continue_prob, max_continue_prob);
     if (u < continue_prob) {
         throughput /= continue_prob;
         return false;
@@ -785,8 +784,7 @@ bool RussianRouletteTerminate(float min_continue_prob, float max_continue_prob, 
 // Based on the implementation in the "Path Tracing Nanite in NVIDIA Zorah" presentation.
 bool WaveBasedRussianRouletteTerminate(float min_continue_prob, float max_continue_prob, float active_lane_ratio_threshold, float u, in out float3 throughput)
 {
-    float continue_prob = MaxValue(throughput);
-    continue_prob = clamp(continue_prob, min_continue_prob, max_continue_prob);
+    float continue_prob = clamp(Luminance(throughput), min_continue_prob, max_continue_prob);
     uint active_lanes = WaveActiveCountBits(true);
     uint total_lanes = WaveGetLaneCount();
     float active_lane_ratio = (float)active_lanes / (float)total_lanes;
