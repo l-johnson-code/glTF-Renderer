@@ -136,6 +136,7 @@ struct SceneConstants {
     float luminance_clamp;
     float min_russian_roulette_continue_prob;
     float max_russian_roulette_continue_prob;
+    float russian_roulette_active_lane_threshold;
     int v_buffer_primitive_id;
     int v_buffer_instance;
 };
@@ -780,6 +781,24 @@ bool RussianRouletteTerminate(float min_continue_prob, float max_continue_prob, 
     }
 }
 
+// A version of russian roulette that terminates entire warps based on the number of active lanes in a wave.
+// Based on the implementation in the "Path Tracing Nanite in NVIDIA Zorah" presentation.
+bool WaveBasedRussianRouletteTerminate(float min_continue_prob, float max_continue_prob, float active_lane_ratio_threshold, float u, in out float3 throughput)
+{
+    float continue_prob = MaxValue(throughput);
+    continue_prob = clamp(continue_prob, min_continue_prob, max_continue_prob);
+    uint active_lanes = WaveActiveCountBits(true);
+    uint total_lanes = WaveGetLaneCount();
+    float active_lane_ratio = (float)active_lanes / (float)total_lanes;
+    float group_continue_prob = continue_prob * saturate(active_lane_ratio / active_lane_ratio_threshold);
+    if (u < group_continue_prob) {
+        throughput /= group_continue_prob;
+        return false;
+    } else {
+        return true;
+    }
+}
+
 float TraceShadowRay(float3 origin, float3 direction, bool alpha_shadow)
 {
     if (g_scene_constants.flags & FLAG_INDIRECT_ENVIRONMENT_ONLY) {
@@ -1022,7 +1041,7 @@ void RayGeneration()
 
         // Terminate bounces using Russian roulette.
         u = GenerateNextRandom(random_count);
-        if ((bounce >= g_scene_constants.min_bounces) && RussianRouletteTerminate(g_scene_constants.min_russian_roulette_continue_prob, g_scene_constants.max_russian_roulette_continue_prob, u.x, throughput)) {
+        if ((bounce >= g_scene_constants.min_bounces) && WaveBasedRussianRouletteTerminate(g_scene_constants.min_russian_roulette_continue_prob, g_scene_constants.max_russian_roulette_continue_prob, g_scene_constants.russian_roulette_active_lane_threshold, u.x, throughput)) {
             break;
         }
 

@@ -85,6 +85,7 @@ class Pathtracer {
 		float luminance_clamp = 1000.0;
 		float min_russian_roulette_continue_prob = 0.1;
 		float max_russian_roulette_continue_prob = 0.9;
+        float russian_roulette_active_lane_threshold = 0.3;
 		int max_accumulated_frames = 65536;
 		float max_ray_length = 1000.0;
 	};

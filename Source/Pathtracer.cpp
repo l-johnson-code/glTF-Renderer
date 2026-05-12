@@ -689,6 +689,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             float luminance_clamp;
             float min_russian_roulette_continue_prob;
             float max_russian_roulette_continue_prob;
+            float russian_roulette_active_lane_threshold;
             int v_buffer_primitive_id;
             int v_buffer_instance;
         } constants;
@@ -716,6 +717,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .luminance_clamp = settings->luminance_clamp,
             .min_russian_roulette_continue_prob = settings->min_russian_roulette_continue_prob,
             .max_russian_roulette_continue_prob = settings->max_russian_roulette_continue_prob,
+            .russian_roulette_active_lane_threshold = settings->russian_roulette_active_lane_threshold,
             .v_buffer_primitive_id = this->v_buffer_primitive.Srv(),
             .v_buffer_instance = this->v_buffer_instance.Srv(),
         };

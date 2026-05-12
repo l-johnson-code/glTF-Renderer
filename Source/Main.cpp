@@ -265,6 +265,7 @@ void DrawGraphicsTab()
 			g_render_settings.pathtracer.reset |= ImGui::SliderInt("Minimum Bounces", &g_render_settings.pathtracer.min_bounces, 0, Pathtracer::MAX_BOUNCES);
 			g_render_settings.pathtracer.reset |= ImGui::InputFloat("Min Russian Roulette Continue Probability", &g_render_settings.pathtracer.min_russian_roulette_continue_prob);
 			g_render_settings.pathtracer.reset |= ImGui::InputFloat("Max Russian Roulette Continue Probability", &g_render_settings.pathtracer.max_russian_roulette_continue_prob);
+			g_render_settings.pathtracer.reset |= ImGui::InputFloat("Russian Roulette Active Lane Threshold", &g_render_settings.pathtracer.russian_roulette_active_lane_threshold);
 			g_render_settings.pathtracer.reset |= ImGui::InputFloat("Max Ray Length", &g_render_settings.pathtracer.max_ray_length);
 
 			const char* debug_output_strings[Pathtracer::DEBUG_OUTPUT_COUNT] = {

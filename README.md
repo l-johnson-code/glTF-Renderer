@@ -75,6 +75,7 @@ The camera can be toggled between orbit and free mode in the camera settings.
 |Minimum Bounces|Minimum amount of bounces before Russian roulette can terminate rays.|
 |Min Russian Roulette Probability|The minimum possibility a ray will continue when russian roulette is turned on.|
 |Max Russian Roulette Probability|The maximum possibility a ray will continue when russian roulette is turned on.|
+|Russian Roulette Active Lane Threshold|When the ratio of active lanes to total lanes in a wave drops below this threshold, russian roulette will terminate rays more aggressively.|
 |Max ray length|Maximum ray length.|
 |Debug Output|Alternate outputs for debugging assistance.|
 |Use Frame As Seed|Use the frame counter as the seed for pseudo random number generation.|
