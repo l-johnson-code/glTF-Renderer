@@ -261,6 +261,7 @@ void DrawGraphicsTab()
 		if (g_render_settings.renderer_type == Renderer::RENDERER_TYPE_PATHTRACER) {
 			g_render_settings.pathtracer.reset |= ImGui::Button("Reset History");
 
+			g_render_settings.pathtracer.reset |= ImGui::SliderInt("Ray Rate", &g_render_settings.pathtracer.ray_rate, 1, 8);
 			g_render_settings.pathtracer.reset |= ImGui::SliderInt("Maximum Bounces", &g_render_settings.pathtracer.max_bounces, 0, Pathtracer::MAX_BOUNCES);
 			g_render_settings.pathtracer.reset |= ImGui::SliderInt("Minimum Bounces", &g_render_settings.pathtracer.min_bounces, 0, Pathtracer::MAX_BOUNCES);
 			g_render_settings.pathtracer.reset |= ImGui::InputFloat("Min Russian Roulette Continue Probability", &g_render_settings.pathtracer.min_russian_roulette_continue_prob);

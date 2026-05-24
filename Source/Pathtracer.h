@@ -70,6 +70,7 @@ class Pathtracer {
         FLAG_SHOW_NAN = 1 << 13,
         FLAG_SHOW_INF = 1 << 14,
         FLAG_SHADING_NORMAL_ADAPTATION = 1 << 15,
+        FLAG_FILL_ALL_PIXELS = 1 << 16,
     };
 
     struct Settings {
@@ -89,6 +90,7 @@ class Pathtracer {
         float russian_roulette_active_lane_threshold = 0.3;
 		int max_accumulated_frames = 65536;
 		float max_ray_length = 1000.0;
+        int ray_rate = 1;
 	};
 
     struct ExecuteParams {
@@ -202,7 +204,7 @@ class Pathtracer {
     uint16_t height;
     
     glm::mat4x4 previous_world_to_clip;
-    int accumulated_frames = 0;
+    int iterations = 0;
 
     void CreateVBufferPipeline();
     void CreateVBufferAlphaTestedPipeline();

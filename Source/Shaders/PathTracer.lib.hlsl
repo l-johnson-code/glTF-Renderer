@@ -58,6 +58,7 @@ enum Flags {
     FLAG_SHOW_NAN = 1 << 13,
     FLAG_SHOW_INF = 1 << 14,
     FLAG_SHADING_NORMAL_ADAPTATION = 1 << 15,
+    FLAG_FILL_ALL_PIXELS = 1 << 16,
 };
 
 enum InstanceMask {
@@ -153,6 +154,9 @@ struct SceneConstants {
     float russian_roulette_active_lane_threshold;
     int v_buffer_primitive_id;
     int v_buffer_instance;
+    int render_scale;
+    int pixel_offset_x;
+    int pixel_offset_y;
 };
 
 ConstantBuffer<SceneConstants> g_scene_constants: register(b0);
@@ -984,7 +988,7 @@ void RayGeneration()
     ray_state.direction = 0.xxx;
     ray_state.origin = 0.xxx;
     ray_state.pdf = 1.0f;
-    ray_state.pixel = DispatchRaysIndex().xy;
+    ray_state.pixel = DispatchRaysIndex().xy * g_scene_constants.render_scale + int2(g_scene_constants.pixel_offset_x, g_scene_constants.pixel_offset_y);
     ray_state.random_count = 0;
     ray_state.throughput = 1.0f.xxx;
     ray_state.use_mis = false;
@@ -1000,14 +1004,16 @@ void RayGeneration()
     // Get data from visibility buffer.
     Texture2D<uint> v_buffer_primitive_id = ResourceDescriptorHeap[g_scene_constants.v_buffer_primitive_id];
     Texture2D<uint> v_buffer_instance = ResourceDescriptorHeap[g_scene_constants.v_buffer_instance];
-    uint primitive_id = v_buffer_primitive_id[ray_state.pixel];
-    uint instance_index = v_buffer_instance[ray_state.pixel] & 0x7fffffffu;
-    back_facing = !(bool)(v_buffer_instance[ray_state.pixel] & 0x80000000u);
+    uint2 visibility_buffer_pixel = DispatchRaysIndex().xy;
+    uint2 visibility_buffer_resolution = (g_scene_constants.resolution + g_scene_constants.render_scale - 1) / g_scene_constants.render_scale;
+    uint primitive_id = v_buffer_primitive_id[visibility_buffer_pixel];
+    uint instance_index = v_buffer_instance[visibility_buffer_pixel] & 0x7fffffffu;
+    back_facing = !(bool)(v_buffer_instance[visibility_buffer_pixel] & 0x80000000u);
     if (primitive_id == 0 || instance_index == 0) {
         // If no geometry was hit, sample the environment.
         if (g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) {
             TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
-            float3 direction = GenerateCameraRay(ray_state.pixel, g_scene_constants.resolution, g_scene_constants.clip_to_world, g_scene_constants.camera_pos);
+            float3 direction = GenerateCameraRay(visibility_buffer_pixel, visibility_buffer_resolution, g_scene_constants.clip_to_world, g_scene_constants.camera_pos);
             ray_state.color = g_scene_constants.environment_intensity * environment_map.SampleLevel(g_sampler_linear_wrap, direction, 0).rgb;
         } else {
             ray_state.color = g_scene_constants.environment_intensity * g_scene_constants.environment_color;
@@ -1017,7 +1023,7 @@ void RayGeneration()
         primitive_id--;
         instance_index--;
         instance = g_instances[instance_index];
-        vertex_attributes = GetVertexAttributesFromVisibilityBuffer(ray_state.pixel, g_scene_constants.resolution, instance, primitive_id, g_scene_constants.world_to_clip);
+        vertex_attributes = GetVertexAttributesFromVisibilityBuffer(visibility_buffer_pixel, visibility_buffer_resolution, instance, primitive_id, g_scene_constants.world_to_clip);
         if (back_facing) {
             FlipNormals(vertex_attributes);
         }
@@ -1175,7 +1181,15 @@ void RayGeneration()
         float4 accumulated = lerp(history, float4(ray_state.color, 1.0), blend_factor);
         output[ray_state.pixel] = accumulated;
     } else {
-        output[ray_state.pixel] = float4(ray_state.color, 1.0);
+        if (g_scene_constants.flags & FLAG_FILL_ALL_PIXELS) {
+            for (int i = 0; i < g_scene_constants.render_scale; i++) {
+                for (int j = 0; j < g_scene_constants.render_scale; j++) {
+                    output[DispatchRaysIndex().xy * g_scene_constants.render_scale + int2(i, j)] = float4(ray_state.color, 1.0);
+                }
+            }
+        } else {
+            output[ray_state.pixel] = float4(ray_state.color, 1.0);
+        }
     }
 }
 

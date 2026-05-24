@@ -544,20 +544,33 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
     bool reset = (world_to_clip != previous_world_to_clip) || (settings->reset);
     previous_world_to_clip = world_to_clip;
     
+    // Reset accumulation if the camera position has changed.
+    if (reset) {
+        this->iterations = 0;
+    }
+
+    int accumulated_frames = this->iterations / (settings->ray_rate * settings->ray_rate);
+
+    // Calculate which pixel we are tracing.
+    int offset = this->iterations % (settings->ray_rate * settings->ray_rate) + settings->ray_rate * ((settings->ray_rate - 1) / 2) + ((settings->ray_rate - 1) / 2);
+    glm::ivec2 pixel_offset(offset % settings->ray_rate, (offset / settings->ray_rate) % settings->ray_rate);
+
+    // Offset visibility buffer for rendering at lower resolutions.
+    glm::ivec2 visibility_buffer_size = (glm::ivec2(this->width, this->height) + settings->ray_rate - 1) / settings->ray_rate;
+    glm::vec2 offset_translation = (settings->ray_rate - 1.0f - 2.0f * glm::vec2(pixel_offset)) / (float)settings->ray_rate;
+    offset_translation.y = -offset_translation.y; 
+    offset_translation /= glm::vec2(visibility_buffer_size);
+    world_to_clip = glm::translate(glm::identity<glm::mat4x4>(), glm::vec3(offset_translation, 0.0f)) * world_to_clip;
+
     // Apply jitter.
     if (settings->jitter_matrix) {
-        glm::vec2 jitter = (HaltonSequence((execute_params->frame % 256) + 1) * 2.0f - 1.0f) / glm::vec2(this->width, this->height);
+        glm::vec2 jitter = (HaltonSequence((accumulated_frames % 256) + 1) * 2.0f - 1.0f) / glm::vec2(this->width, this->height);
         world_to_clip = glm::translate(glm::identity<glm::mat4x4>(), glm::vec3(jitter, 0.0f)) * world_to_clip;
     }
 
 	glm::mat4x4 view_to_world = glm::affineInverse(world_to_view);
 	glm::mat4x4 clip_to_world = glm::inverse(world_to_clip);
 	glm::vec3 camera_pos = view_to_world[3];
-
-    // Reset accumulation if the camera position has changed.
-    if (reset) {
-        this->accumulated_frames = 0;
-    }
 
 	if (accumulated_frames < settings->max_accumulated_frames) {
         
@@ -578,9 +591,9 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
         context->PushTransitionBarrier(this->v_buffer_primitive.Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
         context->SubmitBarriers();
         
-        CD3DX12_VIEWPORT viewport(0.0f, 0.0f, this->width, this->height);
+        CD3DX12_VIEWPORT viewport(0.0f, 0.0f, (this->width + settings->ray_rate - 1) / settings->ray_rate, (this->height + settings->ray_rate - 1) / settings->ray_rate);
         context->SetViewports(1, &viewport);
-        CD3DX12_RECT scissor_rect(0, 0, this->width, this->height);
+        CD3DX12_RECT scissor_rect(0, 0, (this->width + settings->ray_rate - 1) / settings->ray_rate, (this->height + settings->ray_rate - 1) / settings->ray_rate);
         context->SetScissorRects(1, &scissor_rect);
         
         D3D12_CPU_DESCRIPTOR_HANDLE render_targets[] = {
@@ -695,6 +708,9 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             float russian_roulette_active_lane_threshold;
             int v_buffer_primitive_id;
             int v_buffer_instance;
+            int render_scale;
+            int pixel_offset_x;
+            int pixel_offset_y;
         } constants;
 
         constants = {
@@ -705,11 +721,11 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .width = execute_params->width,
             .height = execute_params->height,
             .seed = settings->use_frame_as_seed ? (uint32_t)execute_params->frame : settings->seed,
-            .accumulated_frames = this->accumulated_frames,
+            .accumulated_frames = accumulated_frames,
             .environment_color = settings->environment_color,
             .environment_intensity = settings->environment_intensity,
             .debug_output = settings->debug_output,
-            .flags = settings->flags,
+            .flags = this->iterations == 0 ? settings->flags | FLAG_FILL_ALL_PIXELS : settings->flags,
             .max_ray_length = 1000,
             .min_bounces = std::clamp(settings->min_bounces, 0, MAX_BOUNCES),
             .max_bounces = std::clamp(settings->max_bounces, 0, MAX_BOUNCES),
@@ -723,6 +739,9 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .russian_roulette_active_lane_threshold = settings->russian_roulette_active_lane_threshold,
             .v_buffer_primitive_id = this->v_buffer_primitive.Srv(),
             .v_buffer_instance = this->v_buffer_instance.Srv(),
+            .render_scale = settings->ray_rate,
+            .pixel_offset_x = pixel_offset.x,
+            .pixel_offset_y = pixel_offset.y,
         };
 
         D3D12_GPU_VIRTUAL_ADDRESS constant_buffer = context->CreateConstantBuffer(&constants);
@@ -741,16 +760,16 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .MissShaderTable = this->shader_tables.miss_shader_table,
             .HitGroupTable = this->shader_tables.hit_group_table,
             .CallableShaderTable = this->shader_tables.callable_shader_table,
-            .Width = execute_params->width,
-            .Height = execute_params->height,
+            .Width = (execute_params->width + settings->ray_rate - 1 - pixel_offset.x) / settings->ray_rate,
+            .Height = (execute_params->height + settings->ray_rate - 1 - pixel_offset.y) / settings->ray_rate,
             .Depth = 1,
         };
         context->DispatchRays(&desc);
 
         if (settings->flags & FLAG_ACCUMULATE) {
-            this->accumulated_frames++;
+            this->iterations++;
         } else {
-            this->accumulated_frames = 0;
+            this->iterations = 0;
         }
 		
         context->EndEvent();
