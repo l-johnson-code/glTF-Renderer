@@ -184,6 +184,7 @@ void Pathtracer::Resize(uint32_t width, uint32_t height)
         .mip_levels = 1,
         .clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
         .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_RENDER_TARGET | Gpu::TEXTURE_FLAG_SRV),
+        .initial_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
         .name = "V Buffer Primitive ID",
     };
     result = resources->CreateTexture(&primitive_id_desc, &this->v_buffer_primitive);
@@ -196,6 +197,7 @@ void Pathtracer::Resize(uint32_t width, uint32_t height)
         .mip_levels = 1,
         .clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
         .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_RENDER_TARGET | Gpu::TEXTURE_FLAG_SRV),
+        .initial_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
         .name = "V Buffer Instance",
     };
     result = resources->CreateTexture(&instance_desc, &this->v_buffer_instance);
@@ -208,6 +210,7 @@ void Pathtracer::Resize(uint32_t width, uint32_t height)
         .mip_levels = 1,
         .clear_depth = 0.0f,
         .flags = Gpu::TEXTURE_FLAG_DEPTH_TARGET,
+        .initial_state = D3D12_RESOURCE_STATE_DEPTH_WRITE,
         .name = "V Buffer Depth",
     };
     result = resources->CreateTexture(&depth_desc, &this->v_buffer_depth);

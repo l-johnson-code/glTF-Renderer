@@ -86,6 +86,7 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, Gpu::Resources
 	Gpu::BufferDesc tlas_desc = {
 		.size = tlas_prebuild_info.ResultDataMaxSizeInBytes,
 		.flags = Gpu::BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE,
+		.initial_state = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
 		.name = "TLAS",
 	};
 	result = resources->CreateBuffer(&tlas_desc, &this->tlas);

@@ -458,6 +458,7 @@ void Renderer::CreateRenderTargets()
 		.mip_levels = 1,
 		.clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
 		.flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_RENDER_TARGET | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_SRV),
+		.initial_state = this->settings.renderer_type == RENDERER_TYPE_PATHTRACER ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
 		.name = "Display",
 	};
 	this->resources.CreateTexture(&desc, &this->display);
