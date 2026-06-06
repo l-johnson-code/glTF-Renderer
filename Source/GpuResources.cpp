@@ -122,6 +122,23 @@ HRESULT Resources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 		}
 	}
 
+	// Create UAV descriptor.
+	if ((desc->flags & BUFFER_FLAG_GENERATE_DESCRIPTOR) && (desc->flags & BUFFER_FLAG_UAV)) {
+		CD3DX12_UNORDERED_ACCESS_VIEW_DESC uav_desc;
+		if (desc->structured_byte_stride != 0) {
+			uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::StructuredBuffer(desc->size / desc->structured_byte_stride, desc->structured_byte_stride);
+		} else if (desc->format != DXGI_FORMAT_UNKNOWN) {
+			uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::TypedBuffer(desc->format, (8 * desc->size) / D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(desc->format));
+		} else {
+			uav_desc = CD3DX12_UNORDERED_ACCESS_VIEW_DESC::RawBuffer(desc->size / 4);
+		}
+		buffer->uav = cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(buffer->resource, nullptr, &uav_desc);
+		if (buffer->uav == -1) {
+			FreeBuffer(buffer);
+			return E_OUTOFMEMORY;
+		}
+	}
+
 	buffer->size = desc->size;
 
 	return S_OK;
@@ -137,6 +154,8 @@ void Resources::FreeBuffer(Buffer* buffer)
 	buffer->resource = nullptr;
 	cbv_uav_srv_dynamic_allocator.Free(buffer->srv);
 	buffer->srv = -1;
+	cbv_uav_srv_dynamic_allocator.Free(buffer->uav);
+	buffer->uav = -1;
 }
 
 HRESULT Resources::CreateTexture(const TextureDesc* desc, Texture* texture)

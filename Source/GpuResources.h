@@ -33,6 +33,7 @@ class Buffer {
 	ID3D12Resource* Resource() { return this->resource; }
 	uint64_t Size() { return this->size; }
 	int Srv() { assert(this->srv != -1); return this->srv; };
+	int Uav() { assert(this->uav != -1); return this->uav; };
 	void* Pointer() { assert(pointer); return this->pointer; }
 	
 	private:
@@ -42,6 +43,7 @@ class Buffer {
 	GpuAllocation allocation;
 	uint64_t size = 0;
 	int srv = -1;
+	int uav = -1;
 	void* pointer = nullptr;
 };
 
