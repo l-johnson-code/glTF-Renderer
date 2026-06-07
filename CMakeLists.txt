@@ -241,7 +241,7 @@ foreach(FILE ${SHADER_SOURCE_FILES})
     # Fun fact! If an input file to dxc has a path starting with C:/ includes don't work!
     add_custom_command(
         OUTPUT ${SHADER_OUTPUT_FILE}
-        COMMAND dxc ARGS -HV 2021 -T ${SHADER_PROFILE} -Fo ${SHADER_OUTPUT_FILE} -Zi $<$<CONFIG:Debug>:-Od> -Qembed_debug ${SHADER_INPUT_FILE} -enable-16bit-types
+        COMMAND dxc ARGS -HV 2021 -T ${SHADER_PROFILE} -Fo ${SHADER_OUTPUT_FILE} -Zi $<$<CONFIG:Debug>:-Od> $<$<CONFIG:Debug>:-Gis> -Qembed_debug ${SHADER_INPUT_FILE} -enable-16bit-types
         MAIN_DEPENDENCY ${SHADER_INPUT_FILE}
         DEPENDS ${SHADER_HEADER_FILES}
         # This allows us to use relative paths so we don't break includes.
