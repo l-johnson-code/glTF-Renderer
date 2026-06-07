@@ -103,6 +103,20 @@ struct PositionAndTangentSpace {
     uint tangent_space;
 };
 
+struct RayState {
+    uint2 pixel;
+    uint bounce;
+    uint random_count;
+    float3 origin;
+    float3 direction;
+    float3 throughput;
+    float pdf;
+    float3 color;
+    bool use_mis;
+    bool is_transmission;
+    bool active;
+};
+
 struct GeometryPayload {
     uint flags;
     uint instance_index;
@@ -149,9 +163,9 @@ StructuredBuffer<Light> g_lights: register(t3);
 SamplerState g_sampler_linear_clamp: register(s0);
 SamplerState g_sampler_linear_wrap: register(s1);
 
-float4 GenerateNextRandom(in out int count)
+float4 GenerateNextRandom(in out RayState ray_state)
 {
-    uint4 random = pcg4d(uint4(DispatchRaysIndex().xy, g_scene_constants.seed, count++));
+    uint4 random = pcg4d(uint4(ray_state.pixel, g_scene_constants.seed, ray_state.random_count++));
     return random / 4294967295.0.xxxx;
 }
 
@@ -443,6 +457,16 @@ SurfaceProperties GetSurfaceProperties(Material material, VertexAttributes attri
     surface_properties.thickness = GetThickness(material, attributes.texcoords);
     surface_properties.attenuation_distance = material.attenuation_distance;
 	surface_properties.attenuation_color = material.attenuation_color;
+
+    // Use a minimum roughness value so that we don't have to have handle delta bounces.
+    surface_properties.roughness_squared = max(surface_properties.roughness_squared, MINIMUM_ROUGHNESS.xx);
+    surface_properties.clearcoat_roughness = max(surface_properties.clearcoat_roughness, MINIMUM_ROUGHNESS);
+
+    // Use the geometric normal if this flag is set.
+    if (g_scene_constants.flags & FLAG_MATERIAL_USE_GEOMETRIC_NORMALS) {
+        surface_properties.shading_normal = attributes.geometric_normal;
+        surface_properties.clearcoat_normal = attributes.geometric_normal;
+    }
 
     return surface_properties;
 }
@@ -817,261 +841,301 @@ float TraceShadowRay(float3 origin, float3 direction, bool alpha_shadow)
     return shadow_payload.transmission;
 }
 
+bool EnvironmentMapNextEventEstimation(VertexAttributes vertex_attributes, SurfaceProperties surface_properties, in out RayState ray_state)
+{
+    // Importance sample environment map.
+    if ((g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) && (g_scene_constants.flags & FLAG_ENVIRONMENT_MIS)) {
+        float light_pdf;
+        LightRay light_ray = SampleEnvironmentMap(GenerateNextRandom(ray_state).xyz, light_pdf);
+        if (g_scene_constants.debug_output == DEBUG_OUTPUT_ENVIRONMENT_MAP_DIRECTION) {
+            ray_state.color = (light_ray.direction + 1) / 2;
+            return ray_state.active = false;
+        } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_ENVIRONMENT_MAP_COLOR) {
+            ray_state.color = light_ray.color;
+            return ray_state.active = false;
+        } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_ENVIRONMENT_MAP_PDF) {
+            ray_state.color = light_pdf;
+            return ray_state.active = false;
+        }
+        float3 origin = OffsetRay(vertex_attributes.position, vertex_attributes.geometric_normal);
+        light_ray.color *= TraceShadowRay(origin, light_ray.direction, false);
+        if (any(light_ray.color > 0.0)) {
+            float bsdf_pdf = 0;
+            float3 bsdf = EvaluateBsdf(surface_properties, vertex_attributes.geometric_normal, -ray_state.direction, light_ray.direction, bsdf_pdf);
+            float mis = BalanceHeuristic(light_pdf, bsdf_pdf);
+            ray_state.color += (ray_state.throughput * mis * bsdf * light_ray.color) / light_pdf;
+        }
+    }
+    return ray_state.active;
+}
+
+void NextEventEstimation(VertexAttributes vertex_attributes, SurfaceProperties surface_properties, in out RayState ray_state)
+{
+    // Sample point lights using next event estimation.
+    if ((g_scene_constants.flags & FLAG_POINT_LIGHTS) && (g_scene_constants.num_of_lights > 0)) {
+        float pdf;
+        LightRay light_ray = SamplePointLight(vertex_attributes.position, GenerateNextRandom(ray_state).x, pdf);
+        if (g_scene_constants.flags & FLAG_SHADOW_RAYS) {
+            float3 origin = OffsetRay(vertex_attributes.position, vertex_attributes.geometric_normal);
+            light_ray.color *= TraceShadowRay(origin, light_ray.direction, g_scene_constants.flags & FLAG_ALPHA_SHADOWS);
+        }
+        if (any(light_ray.color > 0.0)) {
+            float bsdf_pdf = 0;
+            float3 bsdf = EvaluateBsdf(surface_properties, vertex_attributes.geometric_normal, -ray_state.direction, light_ray.direction, bsdf_pdf);
+            ray_state.color += (ray_state.throughput * bsdf * light_ray.color) / pdf;
+        }
+    }
+}
+
+bool GenerateBounceRay(VertexAttributes vertex_attributes, SurfaceProperties surface_properties, in out RayState ray_state)
+{
+    // Generate the next bounce ray.
+    float3 v = -ray_state.direction;
+    float4 u = GenerateNextRandom(ray_state);
+    float3 bsdf = SampleBsdf(surface_properties, u.xyz, v, ray_state.direction, ray_state.pdf, ray_state.is_transmission, ray_state.use_mis);
+    float3 weight = ray_state.pdf != 0 ? bsdf / ray_state.pdf : 0;
+    ray_state.throughput *= weight;
+
+    // Bounce ray debug outputs.
+    if (g_scene_constants.debug_output == DEBUG_OUTPUT_BOUNCE_DIRECTION) {
+        ray_state.color = 0.5 * (ray_state.direction + 1);
+        return ray_state.active = false;
+    } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_BOUNCE_BSDF) {
+        ray_state.color = bsdf;
+        return ray_state.active = false;
+    } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_BOUNCE_PDF) {
+        ray_state.color = ray_state.pdf;
+        return ray_state.active = false;
+    } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_BOUNCE_WEIGHT) {
+        ray_state.color = weight;
+        return ray_state.active = false;
+    } else if (g_scene_constants.debug_output == DEBUG_BOUNCE_IS_TRANSMISSION) {
+        ray_state.color = ray_state.is_transmission ? float3(0, 1, 0) : float3(1, 0, 0);
+        return ray_state.active = false;
+    }
+
+    ray_state.origin = vertex_attributes.position;
+    ray_state.bounce++;
+    return ray_state.active;
+}
+
+bool ContinueRay(in out RayState ray_state)
+{
+    // Terminate bounces if throughput reaches 0.
+    if (all(ray_state.throughput <= 0.0f)) {
+        ray_state.active = false;
+    }
+
+    // Terminate bounces using Russian roulette.
+    float4 u = GenerateNextRandom(ray_state);
+    if ((ray_state.bounce >= g_scene_constants.min_bounces) && WaveBasedRussianRouletteTerminate(g_scene_constants.min_russian_roulette_continue_prob, g_scene_constants.max_russian_roulette_continue_prob, g_scene_constants.russian_roulette_active_lane_threshold, u.x, ray_state.throughput)) {
+        ray_state.active = false;
+    }
+
+    return ray_state.active;
+}
+
+GeometryPayload TraceBounceRay(VertexAttributes vertex_attributes, uint ray_flags, in out RayState ray_state)
+{
+    ray_state.origin = OffsetRay(ray_state.origin, ray_state.is_transmission ? -vertex_attributes.geometric_normal : vertex_attributes.geometric_normal);
+    
+    // Force bounces to miss all geometry and hit the environment if this flag is set.
+    uint instance_mask = g_scene_constants.flags & FLAG_INDIRECT_ENVIRONMENT_ONLY ? 0 : 0xff;
+
+    RayDesc ray;
+    ray.Origin = ray_state.origin;
+    ray.Direction = ray_state.direction;
+    ray.TMin = 0.0f;
+    ray.TMax = g_scene_constants.max_ray_length;
+    
+    GeometryPayload payload;
+    payload.flags = 0;
+    payload.barycentrics = 0.0f.xx;
+    payload.instance_index = 0;
+    payload.primitive_index = 0;
+
+    TraceRay(g_acceleration_structure, ray_flags, instance_mask, 0, 0, 0, ray, payload);
+
+    return payload;
+}
+
+void EvaluateEnvironment(in out RayState ray_state)
+{
+    if (g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) {
+        TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
+        float mis_weight = 1.0;
+        if ((g_scene_constants.flags & FLAG_ENVIRONMENT_MIS) && ray_state.use_mis) {
+            float environment_map_pdf = EnvironmentMapPdf(ray_state.direction);
+            mis_weight = BalanceHeuristic(ray_state.pdf, environment_map_pdf);
+        }
+        ray_state.color += ray_state.throughput * mis_weight * g_scene_constants.environment_intensity * environment_map.SampleLevel(g_sampler_linear_wrap, ray_state.direction, 0).rgb;
+    } else {
+        ray_state.color += ray_state.throughput * g_scene_constants.environment_intensity * g_scene_constants.environment_color;
+    }
+}
+
 [shader("raygeneration")]
 void RayGeneration()
 {
-    uint bounce = 0;
-    float3 color = 0.xxx;
-    float3 throughput = 1.xxx;
-    float bsdf_pdf = 0;
-    bool use_mis = false;
-    float3 ray_origin = 0.xxx;
-    float3 ray_direction = float3(0, -1, 0);
+    RayState ray_state;
+    ray_state.active = true;
+    ray_state.bounce = 0;
+    ray_state.color = 0.xxx;
+    ray_state.direction = 0.xxx;
+    ray_state.origin = 0.xxx;
+    ray_state.pdf = 1.0f;
+    ray_state.pixel = DispatchRaysIndex().xy;
+    ray_state.random_count = 0;
+    ray_state.throughput = 1.0f.xxx;
+    ray_state.use_mis = false;
+    ray_state.is_transmission = false;
+
     uint ray_flags = g_scene_constants.flags & FLAG_CULL_BACKFACE ? RAY_FLAG_CULL_BACK_FACING_TRIANGLES : 0;
     bool back_facing = false;
     uint instance_mask = 0xff;
-    int random_count = 0;
     float4 u = 0.xxxx;
-    bool loop = false;
     VertexAttributes vertex_attributes;
     Instance instance;
-    RayDesc ray;
 
     // Get data from visibility buffer.
-    uint2 pixel = DispatchRaysIndex().xy;
-
     Texture2D<uint> v_buffer_primitive_id = ResourceDescriptorHeap[g_scene_constants.v_buffer_primitive_id];
     Texture2D<uint> v_buffer_instance = ResourceDescriptorHeap[g_scene_constants.v_buffer_instance];
-    uint primitive_id = v_buffer_primitive_id[pixel];
-    uint instance_index = v_buffer_instance[pixel] & 0x7fffffffu;
-    back_facing = !(bool)(v_buffer_instance[pixel] & 0x80000000u);
+    uint primitive_id = v_buffer_primitive_id[ray_state.pixel];
+    uint instance_index = v_buffer_instance[ray_state.pixel] & 0x7fffffffu;
+    back_facing = !(bool)(v_buffer_instance[ray_state.pixel] & 0x80000000u);
     if (primitive_id == 0 || instance_index == 0) {
         // If no geometry was hit, sample the environment.
         if (g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) {
             TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
-            float3 direction = GenerateCameraRay(pixel, g_scene_constants.resolution, g_scene_constants.clip_to_world, g_scene_constants.camera_pos);
-            color = g_scene_constants.environment_intensity * environment_map.SampleLevel(g_sampler_linear_wrap, direction, 0).rgb;
+            float3 direction = GenerateCameraRay(ray_state.pixel, g_scene_constants.resolution, g_scene_constants.clip_to_world, g_scene_constants.camera_pos);
+            ray_state.color = g_scene_constants.environment_intensity * environment_map.SampleLevel(g_sampler_linear_wrap, direction, 0).rgb;
         } else {
-            color = g_scene_constants.environment_intensity * g_scene_constants.environment_color;
+            ray_state.color = g_scene_constants.environment_intensity * g_scene_constants.environment_color;
         }
-        loop = false;
+        ray_state.active = false;
     } else {
         primitive_id--;
         instance_index--;
         instance = g_instances[instance_index];
-        vertex_attributes = GetVertexAttributesFromVisibilityBuffer(pixel, g_scene_constants.resolution, instance, primitive_id, g_scene_constants.world_to_clip);
+        vertex_attributes = GetVertexAttributesFromVisibilityBuffer(ray_state.pixel, g_scene_constants.resolution, instance, primitive_id, g_scene_constants.world_to_clip);
         if (back_facing) {
             FlipNormals(vertex_attributes);
         }
-        ray.Origin = g_scene_constants.camera_pos;
-        ray.TMin = 0.0f;
-        ray.Direction = normalize(vertex_attributes.position - g_scene_constants.camera_pos);
-        ray.TMax = 1.0f;
-        loop = true;
+        ray_state.origin = g_scene_constants.camera_pos;
+        ray_state.direction = normalize(vertex_attributes.position - g_scene_constants.camera_pos);
     }
 
-    while (loop) {
+    while (ray_state.active) {
 
         // Vertex attribute debug outputs.
         if (g_scene_constants.debug_output == DEBUG_OUTPUT_HIT_KIND) {
-            color = back_facing ? float3(1, 0, 0) : float3(0, 1, 0);
+            ray_state.color = back_facing ? float3(1, 0, 0) : float3(0, 1, 0);
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_VERTEX_COLOR) {
-            color = vertex_attributes.color.rgb;
+            ray_state.color = vertex_attributes.color.rgb;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_VERTEX_ALPHA) {
-            color = vertex_attributes.color.aaa;
+            ray_state.color = vertex_attributes.color.aaa;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_VERTEX_NORMAL) {
-            color = (vertex_attributes.normal + 1) / 2;
+            ray_state.color = (vertex_attributes.normal + 1) / 2;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_VERTEX_TANGENT) {
-            color = (vertex_attributes.tangent.xyz + 1) / 2;
+            ray_state.color = (vertex_attributes.tangent.xyz + 1) / 2;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_VERTEX_BITANGENT) {
-            color = (vertex_attributes.bitangent + 1) / 2;
+            ray_state.color = (vertex_attributes.bitangent + 1) / 2;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_TEXCOORD_0) {
-            color = float3(vertex_attributes.texcoords[0], 0);
+            ray_state.color = float3(vertex_attributes.texcoords[0], 0);
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_TEXCOORD_1) {
-            color = float3(vertex_attributes.texcoords[1], 0);
+            ray_state.color = float3(vertex_attributes.texcoords[1], 0);
             break;
         }
-
-        // Get location of the intersection.
-        float3 ray_origin = OffsetRay(vertex_attributes.position, vertex_attributes.geometric_normal);
-        float3 ray_origin_below = OffsetRay(vertex_attributes.position, -vertex_attributes.geometric_normal);
-        float3 view = -ray.Direction;
 
         // Get surface properties for shading.
         Material material = g_materials[instance.material_id];
-        SurfaceProperties surface_properties = GetSurfaceProperties(material, vertex_attributes, view);
-        surface_properties.roughness_squared = max(surface_properties.roughness_squared, MINIMUM_ROUGHNESS.xx);
-        surface_properties.clearcoat_roughness = max(surface_properties.clearcoat_roughness, MINIMUM_ROUGHNESS);
-        if (g_scene_constants.flags & FLAG_MATERIAL_USE_GEOMETRIC_NORMALS) {
-            surface_properties.shading_normal = vertex_attributes.geometric_normal;
-            surface_properties.clearcoat_normal = vertex_attributes.geometric_normal;
-        }
+        SurfaceProperties surface_properties = GetSurfaceProperties(material, vertex_attributes, -ray_state.direction);
 
         // Material debug output.
         if (g_scene_constants.debug_output == DEBUG_OUTPUT_COLOR) {
-            color = surface_properties.albedo;
+            ray_state.color = surface_properties.albedo;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_ALPHA) {
-            color = surface_properties.alpha.xxx;
+            ray_state.color = surface_properties.alpha.xxx;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_SHADING_NORMAL) {
-            color = (surface_properties.shading_normal + 1) / 2;
+            ray_state.color = (surface_properties.shading_normal + 1) / 2;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_SHADING_TANGENT) {
-            color = (surface_properties.anisotropy_tangent + 1) / 2;
+            ray_state.color = (surface_properties.anisotropy_tangent + 1) / 2;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_SHADING_BITANGENT) {
-            color = (surface_properties.anisotropy_bitangent + 1) / 2;
+            ray_state.color = (surface_properties.anisotropy_bitangent + 1) / 2;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_METALNESS) {
-            color = surface_properties.metalness;
+            ray_state.color = surface_properties.metalness;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_ROUGHNESS) {
-            color = sqrt(surface_properties.roughness_squared.y);
+            ray_state.color = sqrt(surface_properties.roughness_squared.y);
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_SPECULAR) {
-            color = surface_properties.specular_factor.xxx;
+            ray_state.color = surface_properties.specular_factor.xxx;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_SPECULAR_COLOR) {
-            color = surface_properties.specular_color;
+            ray_state.color = surface_properties.specular_color;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_CLEARCOAT) {
-            color = surface_properties.clearcoat.xxx;
+            ray_state.color = surface_properties.clearcoat.xxx;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_CLEARCOAT_ROUGHNESS) {
-            color = surface_properties.clearcoat_roughness.xxx;
+            ray_state.color = surface_properties.clearcoat_roughness.xxx;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_CLEARCOAT_NORMAL) {
-            color = (surface_properties.clearcoat_normal + 1) / 2;
+            ray_state.color = (surface_properties.clearcoat_normal + 1) / 2;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_TRANSMISSIVE) {
-            color = surface_properties.transmissive.xxx;
+            ray_state.color = surface_properties.transmissive.xxx;
             break;
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_HEMISPHERE_VIEW_SIDE) {
-            color = dot(view, surface_properties.shading_normal) > 0 ? float3(0, 1, 0) : float3(1, 0, 0);
+            ray_state.color = dot(-ray_state.direction, surface_properties.shading_normal) > 0 ? float3(0, 1, 0) : float3(1, 0, 0);
             break;
         }
 
         // Emissive.
         float3 emissive = GetEmissive(material, vertex_attributes.texcoords);
-        color += throughput * emissive;
+        ray_state.color += ray_state.throughput * emissive;
 
-        // Importance sample environment map.
-        if ((g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) && (g_scene_constants.flags & FLAG_ENVIRONMENT_MIS)) {
-            float light_pdf;
-            LightRay light_ray = SampleEnvironmentMap(GenerateNextRandom(random_count).xyz, light_pdf);
-            if (g_scene_constants.debug_output == DEBUG_OUTPUT_ENVIRONMENT_MAP_DIRECTION) {
-                color = (light_ray.direction + 1) / 2;
-                break;
-            } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_ENVIRONMENT_MAP_COLOR) {
-                color = light_ray.color;
-                break;
-            } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_ENVIRONMENT_MAP_PDF) {
-                color = light_pdf;
-                break;
-            }
-            light_ray.color *= TraceShadowRay(ray_origin, light_ray.direction, false);
-            if (any(light_ray.color > 0.0)) {
-                float bsdf_pdf = 0;
-                float3 bsdf = EvaluateBsdf(surface_properties, vertex_attributes.geometric_normal, view, light_ray.direction, bsdf_pdf);
-                float mis = BalanceHeuristic(light_pdf, bsdf_pdf);
-                color += (throughput * mis * bsdf * light_ray.color) / light_pdf;
-            }
+        // Sample the environment map.
+        if (!EnvironmentMapNextEventEstimation(vertex_attributes, surface_properties, ray_state)) {
+            break;
         }
-
-        // Sample point lights using next event estimation.
-        if ((g_scene_constants.flags & FLAG_POINT_LIGHTS) && (g_scene_constants.num_of_lights > 0)) {
-            float pdf;
-            LightRay light_ray = SamplePointLight(ray_origin, GenerateNextRandom(random_count).x, pdf);
-            if (g_scene_constants.flags & FLAG_SHADOW_RAYS) {
-                light_ray.color *= TraceShadowRay(ray_origin, light_ray.direction, g_scene_constants.flags & FLAG_ALPHA_SHADOWS);
-            }
-            if (any(light_ray.color > 0.0)) {
-                float bsdf_pdf = 0;
-                float3 bsdf = EvaluateBsdf(surface_properties, vertex_attributes.geometric_normal, view, light_ray.direction, bsdf_pdf);
-                color += (throughput * bsdf * light_ray.color) / pdf;
-            }
-        }
+        
+        // Sample point lights.
+        NextEventEstimation(vertex_attributes, surface_properties, ray_state);
 
         // Break loop if max bounces exeeded.
-        if (bounce >= g_scene_constants.max_bounces) {
+        if (ray_state.bounce >= g_scene_constants.max_bounces) {
             break;
         }
 
-        // Generate the next bounce ray.
-        float3 v = view;
-        u = GenerateNextRandom(random_count);
-        bool is_transmission = false;
-        float3 l = 0.xxx;
-        float3 bsdf = SampleBsdf(surface_properties, u.xyz, v, l, bsdf_pdf, is_transmission, use_mis);
-        float3 weight = bsdf_pdf != 0 ? bsdf / bsdf_pdf : 0;
-        throughput *= weight;
-
-        // Bounce ray debug outputs.
-        if (g_scene_constants.debug_output == DEBUG_OUTPUT_BOUNCE_DIRECTION) {
-            color = 0.5 * (l + 1);
-            break;
-        } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_BOUNCE_BSDF) {
-            color = bsdf;
-            break;
-        } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_BOUNCE_PDF) {
-            color = bsdf_pdf;
-            break;
-        } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_BOUNCE_WEIGHT) {
-            color = weight;
-            break;
-        } else if (g_scene_constants.debug_output == DEBUG_BOUNCE_IS_TRANSMISSION) {
-            color = is_transmission ? float3(0, 1, 0) : float3(1, 0, 0);
-            break;
-        }
-
-        // Terminate bounces if throughput reaches 0.
-        if (all(throughput <= 0.0f)) {
+        if (!GenerateBounceRay(vertex_attributes, surface_properties, ray_state)) {
             break;
         }
 
         // Terminate bounces using Russian roulette.
-        u = GenerateNextRandom(random_count);
-        if ((bounce >= g_scene_constants.min_bounces) && WaveBasedRussianRouletteTerminate(g_scene_constants.min_russian_roulette_continue_prob, g_scene_constants.max_russian_roulette_continue_prob, g_scene_constants.russian_roulette_active_lane_threshold, u.x, throughput)) {
+        if (!ContinueRay(ray_state)) {
             break;
         }
 
-        ray.Origin = is_transmission ? ray_origin_below : ray_origin;
-        ray.TMin = 0.0f;
-        ray.Direction = normalize(l);
-        ray.TMax = g_scene_constants.max_ray_length;
-
-        bounce++;
-
-        // Force bounces to miss all geometry and hit the environment.
-        if (g_scene_constants.flags & FLAG_INDIRECT_ENVIRONMENT_ONLY) {
-            instance_mask = 0;
-        }
-
         // Trace bounce ray and get intersected geometry.
-        GeometryPayload geometry_payload = {0, 0, 0, 0.xx};
-        TraceRay(g_acceleration_structure, ray_flags, 0xff, 0, 0, 0, ray, geometry_payload);
+        GeometryPayload geometry_payload = TraceBounceRay(vertex_attributes, ray_flags, ray_state);
 
         // Sample the environment if we haven't hit any geometry.
         if (!(geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_HIT)) {
-            if (g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) {
-                TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
-                float mis_weight = 1.0;
-                if ((g_scene_constants.flags & FLAG_ENVIRONMENT_MIS) && use_mis) {
-                    float environment_map_pdf = EnvironmentMapPdf(ray.Direction);
-                    mis_weight = BalanceHeuristic(bsdf_pdf, environment_map_pdf);
-                }
-                color += throughput * mis_weight * g_scene_constants.environment_intensity * environment_map.SampleLevel(g_sampler_linear_wrap, ray.Direction, 0).rgb;
-            } else {
-                color += throughput * g_scene_constants.environment_intensity * g_scene_constants.environment_color;
-            }
+            EvaluateEnvironment(ray_state);
+            ray_state.active = false;
             break;
         }
 
@@ -1088,30 +1152,30 @@ void RayGeneration()
     }
 
     // Display any floating point errors.
-    if (any(isnan(color))) {
-        color = g_scene_constants.flags & FLAG_SHOW_NAN ? float3(1, 0, 0) : 0.xxx;
+    if (any(isnan(ray_state.color))) {
+        ray_state.color = g_scene_constants.flags & FLAG_SHOW_NAN ? float3(1, 0, 0) : 0.xxx;
     }
-    if (any(isinf(color))) {
-        color = g_scene_constants.flags & FLAG_SHOW_INF ? float3(1, 0, 0) : 0.xxx;
+    if (any(isinf(ray_state.color))) {
+        ray_state.color = g_scene_constants.flags & FLAG_SHOW_INF ? float3(1, 0, 0) : 0.xxx;
     }
 
     // Luminance clampling to help with fireflies. 
     if (g_scene_constants.flags & FLAG_LUMINANCE_CLAMP) {
-        float luminance = Luminance(color);
+        float luminance = Luminance(ray_state.color);
         if (luminance > g_scene_constants.luminance_clamp) {
-            color *= g_scene_constants.luminance_clamp / luminance; 
+            ray_state.color *= g_scene_constants.luminance_clamp / luminance; 
         }
     }
 
     // Accumulate result.
     RWTexture2D<float4> output = ResourceDescriptorHeap[g_scene_constants.output_descriptor];
     if ((g_scene_constants.flags & FLAG_ACCUMULATE) && (g_scene_constants.accumulated_frames != 0)) {
-        float4 history = output[pixel];
+        float4 history = output[ray_state.pixel];
         float blend_factor = 1.0 / ((float)g_scene_constants.accumulated_frames + 1.0);
-        float4 accumulated = lerp(history, float4(color, 1.0), blend_factor);
-        output[pixel] = accumulated;
+        float4 accumulated = lerp(history, float4(ray_state.color, 1.0), blend_factor);
+        output[ray_state.pixel] = accumulated;
     } else {
-        output[pixel] = float4(color, 1.0);
+        output[ray_state.pixel] = float4(ray_state.color, 1.0);
     }
 }
 
