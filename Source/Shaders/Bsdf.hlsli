@@ -164,6 +164,7 @@ float3 FresnelCoat(float ior, float weight, float3 base, float3 layer, float n_d
 // Sheen.
 float SheenNormalDistribution(float alpha, float n_dot_h)
 {
+	n_dot_h = saturate(n_dot_h); // Clamp to prevent NaN.
 	float inv_r = 1 / alpha;
 	float cos2h = n_dot_h * n_dot_h;
 	float sin2h = 1 - cos2h;
