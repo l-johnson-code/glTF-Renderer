@@ -131,7 +131,7 @@ void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBu
     assert(SUCCEEDED(result));
 
     // Create the shader table.
-    uint64_t shader_table_size = ShaderTableCollectionBuilder::CalculateRequiredSize(1, 1, 0);
+    uint64_t shader_table_size = ShaderTableCollectionBuilder::CalculateRequiredSize(MISS_SHADER_COUNT, HIT_GROUP_COUNT, 0);
     Gpu::BufferDesc shader_table_buffer_desc = {
         .name = "Shader Table",
         .size = shader_table_size,
