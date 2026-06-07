@@ -451,6 +451,7 @@ void Renderer::CreateRenderTargets()
 {
 	HRESULT result = S_OK;
 
+	this->resources.FreeTexture(&this->display);
 	Gpu::TextureDesc desc = {
 		.format = this->settings.renderer_type == RENDERER_TYPE_PATHTRACER ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT,
 		.width = (uint16_t)display_width,

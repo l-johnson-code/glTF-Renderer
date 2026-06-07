@@ -17,7 +17,9 @@ void Rasterizer::Resize(uint16_t width, uint16_t height)
     this->width = width;
     this->height = height;
 
-    CD3DX12_HEAP_PROPERTIES render_target_heap_properties(D3D12_HEAP_TYPE_DEFAULT);
+    gpu_resources->FreeTexture(&this->depth);
+    gpu_resources->FreeTexture(&this->motion_vectors);
+    gpu_resources->FreeTexture(&this->transmission);
 
 	HRESULT result;
 

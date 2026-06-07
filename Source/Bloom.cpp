@@ -47,6 +47,7 @@ void Bloom::Resize(uint16_t width, uint16_t height, uint8_t max_iterations)
     height = NextMipSize(height);
     this->max_iterations = std::min(MipCount(width, height), (uint16_t)max_iterations);
 
+    resources->FreeTexture(&this->mip_chain);
     Gpu::TextureDesc desc = {
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = width,
