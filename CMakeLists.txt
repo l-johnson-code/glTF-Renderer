@@ -115,6 +115,7 @@ target_sources(glTF PRIVATE
     "Source/AnimationPlayer.cpp"
     "Source/AnimationPlayer.h"
     "Source/Bloom.cpp"
+    "Source/EnumFlag.h"
     "Source/Bloom.h"
     "Source/BufferAllocator.cpp"
     "Source/BufferAllocator.h"

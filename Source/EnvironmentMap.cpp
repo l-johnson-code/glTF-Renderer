@@ -93,7 +93,7 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, Gpu::Texture*
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = cube_map_resolution,
         .height = cube_map_resolution,
-        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE),
+        .flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE,
         .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         .name = "Environment Cube",
     };
@@ -108,7 +108,7 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, Gpu::Texture*
         .width = cube_map_resolution,
         .height = cube_map_resolution,
         .mip_levels = ggx_mips,
-        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE),
+        .flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE,
         .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         .name = "Environment GGX",
     };
@@ -122,7 +122,7 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, Gpu::Texture*
         .width = diffuse_resolution,
         .height = diffuse_resolution,
         .mip_levels = 1,
-        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE),
+        .flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE,
         .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         .name = "Environment Diffuse",
     };

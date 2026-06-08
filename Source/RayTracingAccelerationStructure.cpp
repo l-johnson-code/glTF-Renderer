@@ -54,7 +54,7 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, Gpu::Resources
 	for (int i = 0; i < tlas_staging.Size(); i++) {
 		Gpu::BufferDesc tlas_scratch_desc = {
 			.size = instance_desc_stride * max_tlas_instances,
-			.flags = (Gpu::BufferFlags)(Gpu::BUFFER_FLAG_UAV | Gpu::BUFFER_FLAG_PERSISTENT_MAP),
+			.flags = Gpu::BUFFER_FLAG_UAV | Gpu::BUFFER_FLAG_PERSISTENT_MAP,
 			.heap_type = resources->allocator.SupportsGpuUploadHeap() ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD,
 			.name = "TLAS Staging",
 		};

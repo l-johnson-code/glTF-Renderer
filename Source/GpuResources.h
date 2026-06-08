@@ -5,6 +5,7 @@
 
 #include "Config.h"
 #include "DescriptorAllocator.h"
+#include "EnumFlag.h"
 #include "MultiBuffer.h"
 #include "GpuAllocator.h"
 
@@ -17,6 +18,7 @@ enum BufferFlags : uint8_t {
 	BUFFER_FLAG_PERSISTENT_MAP = 1 << 2,
 	BUFFER_FLAG_GENERATE_DESCRIPTOR = 1 << 3,
 };
+DEFINE_ENUM_FLAG(BufferFlags);
 
 struct BufferDesc {
 	uint64_t size = 0;
@@ -56,6 +58,7 @@ enum TextureFlags : uint8_t {
 	TEXTURE_FLAG_CUBE = 1 << 4,
 	TEXTURE_FLAG_SRV_PER_MIP = 1 << 5,
 };
+DEFINE_ENUM_FLAG(TextureFlags);
 
 struct TextureDesc {
 	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;

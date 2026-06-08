@@ -53,7 +53,7 @@ void Bloom::Resize(uint16_t width, uint16_t height, uint8_t max_iterations)
         .width = width,
         .height = height,
         .mip_levels = this->max_iterations,
-        .flags = (Gpu::TextureFlags)(Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_SRV_PER_MIP),
+        .flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_SRV_PER_MIP,
         .initial_state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
         .name = "Bloom Mip Chain"
     };
