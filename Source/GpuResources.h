@@ -21,13 +21,13 @@ enum BufferFlags : uint8_t {
 DEFINE_ENUM_FLAG(BufferFlags);
 
 struct BufferDesc {
+	const char* name = nullptr;
 	uint64_t size = 0;
 	BufferFlags flags = BUFFER_FLAG_NONE;
 	D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COMMON;
 	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
 	uint32_t structured_byte_stride = 0;
 	D3D12_HEAP_TYPE heap_type = D3D12_HEAP_TYPE_DEFAULT;
-	const char* name = nullptr;
 };
 
 class Buffer {
@@ -61,6 +61,7 @@ enum TextureFlags : uint8_t {
 DEFINE_ENUM_FLAG(TextureFlags);
 
 struct TextureDesc {
+	const char* name = nullptr;
 	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
 	uint16_t width = 0;
 	uint16_t height = 0;
@@ -71,7 +72,6 @@ struct TextureDesc {
 	};
 	TextureFlags flags = TEXTURE_FLAG_NONE;
 	D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COMMON;
-	const char* name = nullptr;
 };
 
 class Texture {

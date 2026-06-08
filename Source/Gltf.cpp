@@ -996,12 +996,12 @@ void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, Gpu::Resource
 	
 	// Create the texture.
 	Gpu::TextureDesc texture_desc = {
+		.name = image.name.data(),
 		.format = srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM,
 		.width = (uint16_t)image.width,
 		.height = (uint16_t)image.height,
 		.mip_levels = 1,
 		.flags = Gpu::TEXTURE_FLAG_SRV,
-		.name = image.name.data(),
 	};
 	HRESULT result = gpu_resources->CreateTexture(&texture_desc, &textures[slot]);
 	assert(SUCCEEDED(result));

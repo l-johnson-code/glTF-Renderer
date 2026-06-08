@@ -42,9 +42,9 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, Gpu::Resources
 
 	// Create scratch buffer for BLAS.
 	Gpu::BufferDesc blas_scratch_desc = {
+		.name = "BLAS Scratch",
 		.size = max_blas_scratch_size,
 		.flags = Gpu::BUFFER_FLAG_UAV,
-		.name = "BLAS Scratch",
 	};
 	result = blas_scratch.Create(resources, &blas_scratch_desc);
 	assert(SUCCEEDED(result));
@@ -53,10 +53,10 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, Gpu::Resources
 	const int instance_desc_stride = Align(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), 16);
 	for (int i = 0; i < tlas_staging.Size(); i++) {
 		Gpu::BufferDesc tlas_scratch_desc = {
+			.name = "TLAS Staging",
 			.size = instance_desc_stride * max_tlas_instances,
 			.flags = Gpu::BUFFER_FLAG_UAV | Gpu::BUFFER_FLAG_PERSISTENT_MAP,
 			.heap_type = resources->allocator.SupportsGpuUploadHeap() ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD,
-			.name = "TLAS Staging",
 		};
 		tlas_staging[i].Create(resources, &tlas_scratch_desc);
 	}
@@ -75,19 +75,19 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, Gpu::Resources
 
 	// Create scratch buffer for building the TLAS.
 	Gpu::BufferDesc tlas_scratch_desc = {
+		.name = "TLAS Scratch",
 		.size = tlas_prebuild_info.ScratchDataSizeInBytes,
 		.flags = Gpu::BUFFER_FLAG_UAV,
-		.name = "TLAS Scratch",
 	};
 	result = resources->CreateBuffer(&tlas_scratch_desc, &this->tlas_scratch);
 	assert(result == S_OK);
 
 	// Create buffer to store the TLAS.
 	Gpu::BufferDesc tlas_desc = {
+		.name = "TLAS",
 		.size = tlas_prebuild_info.ResultDataMaxSizeInBytes,
 		.flags = Gpu::BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE,
 		.initial_state = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-		.name = "TLAS",
 	};
 	result = resources->CreateBuffer(&tlas_desc, &this->tlas);
 	assert(result == S_OK);
@@ -255,10 +255,10 @@ void RaytracingAccelerationStructure::BuildBlas(CommandContext* command_context,
 	}
 
 	Gpu::BufferDesc blas_desc = {
+		.name = "BLAS",
 		.size = prebuild_info.ResultDataMaxSizeInBytes,
 		.flags = Gpu::BUFFER_FLAG_UAV,
 		.initial_state = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-		.name = "BLAS",
 	};
 	HRESULT result = resources->CreateBuffer(&blas_desc, blas_buffer);
 	assert(result == S_OK);

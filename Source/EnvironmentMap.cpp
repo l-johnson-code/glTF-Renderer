@@ -90,12 +90,12 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, Gpu::Texture*
     uint16_t cube_map_resolution = std::max(((int)equirectangular_image->Width() / 4) / 2, 1) + 1; // TODO: I dont think this is correct.
 	Gpu::TextureDesc cubemap_desc = 
     {
+        .name = "Environment Cube",
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = cube_map_resolution,
         .height = cube_map_resolution,
         .flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE,
         .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        .name = "Environment Cube",
     };
 	result = resources->CreateTexture(&cubemap_desc, &map->cube);
 	assert(result == S_OK);
@@ -104,13 +104,13 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, Gpu::Texture*
 	const int smallest_mip = 4;
 	uint8_t ggx_mips = std::max((int)std::floorf(std::log2f(cube_map_resolution)) + 1 - smallest_mip, 1);
     Gpu::TextureDesc ggx_desc = {
+        .name = "Environment GGX",
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = cube_map_resolution,
         .height = cube_map_resolution,
         .mip_levels = ggx_mips,
         .flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE,
         .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        .name = "Environment GGX",
     };
 	result = resources->CreateTexture(&ggx_desc, &map->ggx);
 	assert(result == S_OK);
@@ -118,13 +118,13 @@ void EnvironmentMap::CreateEnvironmentMap(CommandContext* context, Gpu::Texture*
 	// Create the diffuse map.
 	const uint16_t diffuse_resolution = 256;
     Gpu::TextureDesc diffuse_desc = {
+        .name = "Environment Diffuse",
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = diffuse_resolution,
         .height = diffuse_resolution,
         .mip_levels = 1,
         .flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_CUBE,
         .initial_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        .name = "Environment Diffuse",
     };
 	result = resources->CreateTexture(&diffuse_desc, &map->diffuse);
 	assert(result == S_OK);
@@ -215,12 +215,12 @@ void EnvironmentMap::LoadEnvironmentMapImageExr(UploadBuffer* upload_buffer, con
 	y = exr_image.height;
 	
     Gpu::TextureDesc desc = {
+        .name = "Environment Map",
         .format = format,
         .width = x,
         .height = y,
         .mip_levels = 1,
         .flags = Gpu::TEXTURE_FLAG_SRV,
-        .name = "Environment Map",
     };
     result = resources->CreateTexture(&desc, &this->equirectangular_image);
 	if (result != S_OK) {
@@ -289,12 +289,12 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
     }
 
 	Gpu::TextureDesc desc = {
+        .name = "Environment Map",
         .format = format,
         .width = (uint16_t)x,
         .height = (uint16_t)y,
         .mip_levels = 1,
         .flags = Gpu::TEXTURE_FLAG_SRV,
-        .name = "Environment Map",
     };
     result = resources->CreateTexture(&desc, &this->equirectangular_image);
 	if (result != S_OK) {
@@ -559,22 +559,22 @@ void EnvironmentMap::GenerateAliasTable(UploadBuffer* upload, Map* map, int widt
 
     // Create the alias table resource.
     Gpu::BufferDesc alias_desc = {
+        .name = "Alias Table",
         .size = alias_table_size * sizeof(AliasMap),
         .flags = Gpu::BUFFER_FLAG_GENERATE_DESCRIPTOR,
         .structured_byte_stride = sizeof(AliasMap),
-        .name = "Alias Table",
     };
 	HRESULT result = resources->CreateBuffer(&alias_desc, &map->alias);
 	assert(result == S_OK);
 
     // Create the PDF texture.
 	Gpu::TextureDesc pdf_desc = {
+        .name = "PDF",
         .format = DXGI_FORMAT_R16_FLOAT,
         .width = pdf_size,
         .height = pdf_size,
         .mip_levels = 1,
         .flags = Gpu::TEXTURE_FLAG_SRV,
-        .name = "PDF",
     };
     resources->CreateTexture(&pdf_desc, &map->pdf);
 	assert(result == S_OK);

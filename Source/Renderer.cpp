@@ -152,10 +152,10 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 
 	for (int i = 0; i < frame_allocators.Size(); i++) {
 		Gpu::BufferDesc buffer_desc = {
+			.name = "Transient Resources",
 			.size = ::Config::FRAME_HEAP_CAPACITY,
 			.flags = Gpu::BUFFER_FLAG_PERSISTENT_MAP,
 			.heap_type = resources.allocator.SupportsGpuUploadHeap() ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_UPLOAD,
-			.name = "Transient Resources",
 		};
 		frame_allocators[i].Create(&this->resources, &buffer_desc);
 	}
@@ -412,12 +412,12 @@ void Renderer::LoadLookupTables(UploadBuffer* upload_buffer)
 		y = exr_image.height;
 
 		Gpu::TextureDesc texture_desc = {
+			.name = "Sheen E Lookup Table",
 			.format = DXGI_FORMAT_R16_FLOAT,
 			.width = (uint16_t)x,
 			.height = (uint16_t)y,
 			.mip_levels = 1,
 			.flags = Gpu::TEXTURE_FLAG_SRV,
-			.name = "Sheen E Lookup Table",
 		};
 		result = resources.CreateTexture(&texture_desc, &this->sheen_e);
 		assert(result == S_OK);
@@ -453,6 +453,7 @@ void Renderer::CreateRenderTargets()
 
 	this->resources.FreeTexture(&this->display);
 	Gpu::TextureDesc desc = {
+		.name = "Display",
 		.format = this->settings.renderer_type == RENDERER_TYPE_PATHTRACER ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT,
 		.width = (uint16_t)display_width,
 		.height = (uint16_t)display_height,
@@ -460,7 +461,6 @@ void Renderer::CreateRenderTargets()
 		.clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
 		.flags = Gpu::TEXTURE_FLAG_RENDER_TARGET | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_SRV,
 		.initial_state = this->settings.renderer_type == RENDERER_TYPE_PATHTRACER ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-		.name = "Display",
 	};
 	this->resources.CreateTexture(&desc, &this->display);
 }

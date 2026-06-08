@@ -216,8 +216,8 @@ HRESULT Mesh::Create(Gpu::Resources* resources, const Desc* desc, const char* na
 	
 	// Allocate a buffer for indices and vertices.
 	Gpu::BufferDesc buffer_desc = {
-		.size = size,
 		.name = name ? name : "Mesh",
+		.size = size,
 	};
 	HRESULT result = resources->CreateBuffer(&buffer_desc, &this->buffer);
 	if (result != S_OK) {
@@ -309,9 +309,9 @@ HRESULT DynamicMesh::Create(Gpu::Resources* resources, const Desc* desc, const c
 	
 	// Allocate a buffer for vertices.
 	Gpu::BufferDesc buffer_desc = {
+		.name = name ? name : "Dynamic Mesh",
 		.size = size,
 		.flags = Gpu::BUFFER_FLAG_UAV,
-		.name = name ? name : "Dynamic Mesh",
 	};
 	HRESULT result = resources->CreateBuffer(&buffer_desc, &this->buffer);
 	if (result != S_OK) {
@@ -365,8 +365,8 @@ HRESULT MorphTarget::Create(Gpu::Resources* resources, const Desc* desc, const c
 	
 	// Allocate a resource for vertices.
 	Gpu::BufferDesc buffer_desc = {
-		.size = size,
 		.name = name ? name : "Morph Target",
+		.size = size,
 	};
 	HRESULT result = resources->CreateBuffer(&buffer_desc, &this->buffer);
 	if (result != S_OK) {

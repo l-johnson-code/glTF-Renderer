@@ -133,8 +133,8 @@ void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBu
     // Create the shader table.
     uint64_t shader_table_size = ShaderTableCollectionBuilder::CalculateRequiredSize(1, 1, 0);
     Gpu::BufferDesc shader_table_buffer_desc = {
-        .size = shader_table_size,
         .name = "Shader Table",
+        .size = shader_table_size,
     };
     result = resources->CreateBuffer(&shader_table_buffer_desc, &this->shader_tables_buffer);
     assert(SUCCEEDED(result));
@@ -178,6 +178,7 @@ void Pathtracer::Resize(uint32_t width, uint32_t height)
     // Create visibility buffer.
     HRESULT result = S_OK;
     Gpu::TextureDesc primitive_id_desc = {
+        .name = "V Buffer Primitive ID",
         .format = DXGI_FORMAT_R32_UINT,
         .width = (uint16_t)width,
         .height = (uint16_t)height,
@@ -185,12 +186,12 @@ void Pathtracer::Resize(uint32_t width, uint32_t height)
         .clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
         .flags = Gpu::TEXTURE_FLAG_RENDER_TARGET | Gpu::TEXTURE_FLAG_SRV,
         .initial_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-        .name = "V Buffer Primitive ID",
     };
     result = resources->CreateTexture(&primitive_id_desc, &this->v_buffer_primitive);
     assert(SUCCEEDED(result));
 
     Gpu::TextureDesc instance_desc = {
+        .name = "V Buffer Instance",
         .format = DXGI_FORMAT_R32_UINT,
         .width = (uint16_t)width,
         .height = (uint16_t)height,
@@ -198,12 +199,12 @@ void Pathtracer::Resize(uint32_t width, uint32_t height)
         .clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
         .flags = Gpu::TEXTURE_FLAG_RENDER_TARGET | Gpu::TEXTURE_FLAG_SRV,
         .initial_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-        .name = "V Buffer Instance",
     };
     result = resources->CreateTexture(&instance_desc, &this->v_buffer_instance);
     assert(SUCCEEDED(result));
 
     Gpu::TextureDesc depth_desc = {
+        .name = "V Buffer Depth",
         .format = DXGI_FORMAT_D32_FLOAT,
         .width = (uint16_t)width,
         .height = (uint16_t)height,
@@ -211,7 +212,6 @@ void Pathtracer::Resize(uint32_t width, uint32_t height)
         .clear_depth = 0.0f,
         .flags = Gpu::TEXTURE_FLAG_DEPTH_TARGET,
         .initial_state = D3D12_RESOURCE_STATE_DEPTH_WRITE,
-        .name = "V Buffer Depth",
     };
     result = resources->CreateTexture(&depth_desc, &this->v_buffer_depth);
     assert(SUCCEEDED(result));

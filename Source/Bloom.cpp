@@ -49,13 +49,13 @@ void Bloom::Resize(uint16_t width, uint16_t height, uint8_t max_iterations)
 
     resources->FreeTexture(&this->mip_chain);
     Gpu::TextureDesc desc = {
+        .name = "Bloom Mip Chain",
         .format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .width = width,
         .height = height,
         .mip_levels = this->max_iterations,
         .flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_SRV_PER_MIP,
         .initial_state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-        .name = "Bloom Mip Chain"
     };
     HRESULT result = resources->CreateTexture(&desc, &this->mip_chain);
     assert(result == S_OK);

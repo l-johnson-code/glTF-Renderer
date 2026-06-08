@@ -24,34 +24,34 @@ void Rasterizer::Resize(uint16_t width, uint16_t height)
 	HRESULT result;
 
 	Gpu::TextureDesc depth_target_desc = {
+		.name = "Depth",
 		.format = DXGI_FORMAT_D32_FLOAT,
 		.width = width,
 		.height = height,
 		.mip_levels = 1,
 		.clear_depth = 0.0f,
 		.flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_DEPTH_TARGET,
-		.name = "Depth",
 	};
     result = gpu_resources->CreateTexture(&depth_target_desc, &this->depth);
-
+	
 	Gpu::TextureDesc motion_vectors_desc = {
+		.name = "Motion Vectors",
 		.format = DXGI_FORMAT_R16G16_FLOAT,
 		.width = width,
 		.height = height,
 		.mip_levels = 1,
 		.clear_color = {0.0f, 0.0f, 0.0f, 0.0f},
 		.flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_RENDER_TARGET,
-		.name = "Motion Vectors",
 	};
 	result = gpu_resources->CreateTexture(&motion_vectors_desc, &this->motion_vectors);
 
 	Gpu::TextureDesc transmission_desc = {
+		.name = "Transmission",
 		.format = DXGI_FORMAT_R16G16B16A16_FLOAT,
 		.width = width,
 		.height = height,
 		.mip_levels = 0,
 		.flags = Gpu::TEXTURE_FLAG_SRV | Gpu::TEXTURE_FLAG_UAV | Gpu::TEXTURE_FLAG_SRV_PER_MIP,
-		.name = "Transmission",
 	};
 	result = gpu_resources->CreateTexture(&transmission_desc, &this->transmission);
 }

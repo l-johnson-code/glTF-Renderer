@@ -15,10 +15,10 @@ void UploadBuffer::Create(ID3D12Device* device, Gpu::Resources* gpu_resources, s
 
 	// Create a ring buffer.
 	Gpu::BufferDesc buffer_desc = {
+		.name = "Upload Buffer",
 		.size = capacity,
 		.flags = Gpu::BUFFER_FLAG_PERSISTENT_MAP,
 		.heap_type = D3D12_HEAP_TYPE_UPLOAD,
-		.name = "Upload Buffer",
 	};
 	allocator.Create(gpu_resources, &buffer_desc);
 	markers = std::vector<uint64_t>(max_queued_uploads, 0);
