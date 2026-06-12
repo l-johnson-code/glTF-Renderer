@@ -105,7 +105,7 @@ class Pathtracer {
         Gpu::Texture* output = nullptr;
     };
 
-    static constexpr int MAX_BOUNCES = 5;
+    static constexpr int MAX_BOUNCES = 20;
     
     void Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBuffer* upload_buffer, uint32_t width, uint32_t height);
     void Resize(uint32_t width, uint32_t height);
