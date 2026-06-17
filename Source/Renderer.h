@@ -10,11 +10,11 @@
 #include "EnvironmentMap.h"
 #include "Gltf.h"
 #include "GpuResources.h"
+#include "GpuScene.h"
 #include "GpuSkin.h"
 #include "MultiBuffer.h"
 #include "Pathtracer.h"
 #include "Rasterizer.h"
-#include "RayTracingAccelerationStructure.h"
 #include "Swapchain.h"
 #include "ToneMapper.h"
 #include "UploadBuffer.h"
@@ -51,126 +51,6 @@ public:
 
 private:
 
-	struct GpuLight {
-		enum Type {
-            TYPE_POINT,
-            TYPE_SPOT,
-            TYPE_DIRECTIONAL,
-        };
-		int type;
-		glm::vec3 position;
-		float cutoff;
-		glm::vec3 direction;
-		float intensity;
-		glm::vec3 color;
-		float inner_angle;
-		float outer_angle;
-		std::byte pad[8];
-	};
-
-	struct TextureSample {
-		int descriptor = -1;
-        int sampler = 0;
-        int tex_coord = 0;
-        float rotation = 0.0f;
-        glm::vec2 offset = glm::vec2(0.0f);
-        glm::vec2 scale = glm::vec2(1.0f);
-        TextureSample() = default;
-        TextureSample(const Gltf::Material::Texture& texture) {
-            this->descriptor = texture.texture;
-            this->sampler = texture.sampler;
-            this->tex_coord = texture.tex_coord;
-            this->rotation = texture.rotation;
-            this->offset = texture.offset;
-            this->scale = texture.scale;
-        }
-    };
-
-    struct GpuMaterial {
-        uint32_t flags;
-        int alpha_mode;
-        float metalness_factor;
-        float roughness_factor;
-        glm::vec4 base_color_factor;
-        float occlusion_factor;
-        glm::vec3 emissive_factor;
-        float alpha_cutoff;
-        float ior;
-        float normal_scale;
-        alignas(16) TextureSample normal;
-        alignas(16) TextureSample albedo;
-        alignas(16) TextureSample metallic_roughness;
-        alignas(16) TextureSample occlusion;
-        alignas(16) TextureSample emissive;
-        float specular_factor;
-        glm::vec3 specular_color_factor;
-        alignas(16) TextureSample specular;
-        alignas(16) TextureSample specular_color;
-        float clearcoat_factor;
-        float clearcoat_roughness_factor;
-        float clearcoat_normal_scale;
-        std::byte pad_1[4];
-        alignas(16) TextureSample clearcoat;
-        alignas(16) TextureSample clearcoat_roughness;
-        alignas(16) TextureSample clearcoat_normal;
-        float anisotropy_strength;
-        float anisotropy_rotation;
-        std::byte pad_2[8];
-        alignas(16) TextureSample anisotropy_texture;
-        glm::vec3 sheen_color_factor;
-        float sheen_roughness_factor;
-        alignas(16) TextureSample sheen_color_texture;
-        alignas(16) TextureSample sheen_roughness_texture;
-        float transmission_factor = 0;
-        float thickness_factor = 0;
-        std::byte pad_3[8];
-        alignas(16) TextureSample transmission_texture;
-        float attenuation_distance = 0;
-        glm::vec3 attenuation_color = glm::vec3(1.0, 1.0, 1.0);
-        alignas(16) TextureSample thickness_texture;
-        GpuMaterial() = default;
-        GpuMaterial(const Gltf::Material& material) {
-            this->flags = material.flags;
-			this->alpha_mode = material.alpha_mode;
-            this->metalness_factor = material.metalness_factor;
-            this->roughness_factor = material.roughness_factor;
-            this->occlusion_factor = material.occlusion_factor;
-            this->emissive_factor = material.emissive_strength * material.emissive_factor;
-            this->base_color_factor = material.base_color_factor;
-            this->normal_scale = material.normal_map_scale;
-            this->normal = TextureSample(material.normal);
-            this->albedo = TextureSample(material.albedo);
-            this->metallic_roughness = TextureSample(material.metallic_roughness);
-            this->occlusion = TextureSample(material.occlusion);
-            this->emissive = TextureSample(material.emissive);
-            this->alpha_cutoff = material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK ? material.alpha_cutoff : 0.0f;
-            this->ior = material.ior;
-            this->specular_color_factor = material.specular_color_factor;
-            this->specular_factor = material.specular_factor;
-            this->specular = TextureSample(material.specular_texture);
-            this->specular_color = TextureSample(material.specular_color_texture);
-            this->clearcoat_factor = material.clearcoat_factor;
-            this->clearcoat_roughness_factor = material.clearcoat_roughness_factor;
-            this->clearcoat_normal_scale = material.clearcoat_normal_scale;
-            this->clearcoat = TextureSample(material.clearcoat_texture);
-            this->clearcoat_roughness = TextureSample(material.clearcoat_roughness_texture);
-            this->clearcoat_normal = TextureSample(material.clearcoat_normal_texture);
-            this->anisotropy_strength = material.anisotropy_strength;
-            this->anisotropy_rotation = material.anisotropy_rotation;
-            this->anisotropy_texture = TextureSample(material.anisotropy_texture);
-            this->sheen_color_factor = material.sheen_color_factor;
-            this->sheen_roughness_factor = material.sheen_roughness_factor;
-            this->sheen_color_texture = TextureSample(material.sheen_color_texture);
-            this->sheen_roughness_texture = TextureSample(material.sheen_roughness_texture);
-            this->transmission_factor = material.transmission_factor;
-            this->transmission_texture = TextureSample(material.transmission_texture);
-            this->thickness_factor = material.thickness_factor;
-            this->attenuation_distance = material.attenuation_distance;
-            this->attenuation_color = material.attenuation_color;
-            this->thickness_texture = TextureSample(material.thickness_texture);
-        }
-    };
-
 	// Feature support.
 	bool raytracing_tier_1_1_supported = false;
 	bool gpu_upload_heaps_supported = false;
@@ -182,19 +62,15 @@ private:
 
 	// Render targets and resolution dependent resources.
     Gpu::Texture display;
-	
-	const int MAX_LIGHTS = 10;
-	std::vector<GpuLight> lights;
-	std::vector<D3D12_RAYTRACING_INSTANCE_DESC> raytracing_instances;
-	D3D12_GPU_VIRTUAL_ADDRESS gpu_lights;
-	D3D12_GPU_VIRTUAL_ADDRESS gpu_materials;
-    
+	    
     // Lookup tables.
 	Gpu::Texture sheen_e;
 
 	uint64_t frame = 0;
 
 	MultiBuffer<std::vector<Gpu::Texture>, Config::FRAME_COUNT> deferred_release;
+
+	GpuScene gpu_scene;
 
 	Swapchain swapchain;
 	MultiBuffer<CpuMappedLinearBuffer, Config::FRAME_COUNT> frame_allocators;
@@ -232,10 +108,6 @@ private:
 	void DrawImGui();
 
 	void SetViewportAndScissorRects(ID3D12GraphicsCommandList* command_list, int width, int height);
-
-	// Gather scene data to upload to GPU.
-	void GatherLights(Gltf* gltf, int scene, CpuMappedLinearBuffer* allocator);
-	void GatherMaterials(Gltf* gltf, CpuMappedLinearBuffer* allocator);
 
 	void ApplySettingsChanges(const RenderSettings* new_settings);
 };

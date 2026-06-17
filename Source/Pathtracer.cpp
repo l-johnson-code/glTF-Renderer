@@ -630,7 +630,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
         context->SetGraphicsRootSignature(this->v_buffer_alpha_tested_root_signature.Get());
         context->SetPipelineState(this->v_buffer_alpha_tested_pipeline.Get());
         context->SetGraphicsRootConstantBufferView(VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME, context->CreateConstantBuffer(&cb_per_frame));
-        context->SetGraphicsRootShaderResourceView(VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_MATERIALS, execute_params->gpu_materials);
+        context->SetGraphicsRootShaderResourceView(VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_MATERIALS, execute_params->gpu_scene->MaterialBuffer().Resource()->GetGPUVirtualAddress());
         for (const AlphaVertices& alpha_vertex: alpha_vertex_buffers) {
             struct {
                 glm::mat4x4 model_to_world;
@@ -701,7 +701,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .clip_to_world = clip_to_world,
             .world_to_clip = world_to_clip,
             .camera_pos = camera_pos,
-            .num_of_lights = execute_params->light_count,
+            .num_of_lights = execute_params->gpu_scene->LightCount(),
             .width = execute_params->width,
             .height = execute_params->height,
             .seed = settings->use_frame_as_seed ? (uint32_t)execute_params->frame : settings->seed,
@@ -731,8 +731,8 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
         context->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
         context->SetComputeRootShaderResourceView(ROOT_PARAMETER_ACCELERATION_STRUCTURE, this->acceleration_structure.GetAccelerationStructure());
         context->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, this->gpu_mesh_instances);
-        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, execute_params->gpu_materials);
-        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, execute_params->gpu_lights);
+        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, execute_params->gpu_scene->MaterialBuffer().Resource()->GetGPUVirtualAddress());
+        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, execute_params->gpu_scene->LightBuffer().Resource()->GetGPUVirtualAddress());
 
         context->SetPipelineState(this->state_object.Get());
 

@@ -5,6 +5,7 @@
 #include "ForwardPass.h"
 #include "Gltf.h"
 #include "GpuResources.h"
+#include "GpuScene.h"
 
 class Rasterizer {
 
@@ -21,9 +22,7 @@ class Rasterizer {
         Gltf* gltf = nullptr;
         int scene = 0;
         Camera* camera = nullptr;
-        D3D12_GPU_VIRTUAL_ADDRESS gpu_materials = 0;
-        D3D12_GPU_VIRTUAL_ADDRESS gpu_lights = 0;
-        int light_count = 0;
+        GpuScene* gpu_scene = nullptr;
         EnvironmentMap::Map* environment_map = nullptr;
         Gpu::Texture* output;
     };

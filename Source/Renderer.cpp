@@ -168,6 +168,7 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	gpu_skinner.Create(&this->resources);
 	tone_mapper.Create(&this->resources);
 	environment_map.Init(&this->resources);
+	gpu_scene.Init(&this->resources);
 	LoadLookupTables(&this->upload_buffer);
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
@@ -319,8 +320,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 		command_context.EndEvent();
 	}
 
-	GatherLights(gltf, scene, frame_allocator);
-	GatherMaterials(gltf, frame_allocator);
+	gpu_scene.Update(gltf, scene);
 
 	command_context.BeginEvent("Skinning");
 	gpu_skinner.Bind(&command_context);
@@ -332,9 +332,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 			.gltf = gltf,
         	.scene = scene,
         	.camera = camera,
-        	.gpu_materials = this->gpu_materials,
-        	.gpu_lights = this->gpu_lights,
-        	.light_count = (int)this->lights.size(),
+        	.gpu_scene = &this->gpu_scene,
         	.environment_map = environment_map_loaded ? &map : nullptr,
         	.output = &this->display,
 		};
@@ -347,9 +345,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
         	.width = this->display_width,
         	.height = this->display_height,
         	.frame = this->frame,
-        	.gpu_materials = this->gpu_materials,
-        	.gpu_lights = this->gpu_lights,
-        	.light_count = (int)this->lights.size(),
+        	.gpu_scene = &this->gpu_scene,
         	.environment_map = environment_map_loaded ? &map : nullptr,
         	.output = &this->display,
 		};
@@ -523,49 +519,6 @@ void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf, int scene)
 			}
 		}
 	});
-}
-
-void Renderer::GatherLights(Gltf* gltf, int scene, CpuMappedLinearBuffer* allocator)
-{
-	lights.clear();
-	gltf->TraverseScene(scene, [&](Gltf* gltf, int node_id) {
-		const Gltf::Node& node = gltf->nodes[node_id];
-		int light_id = node.light_id;
-		if (light_id != -1) {
-			const Gltf::Light& scene_light = gltf->lights[light_id];
-			GpuLight light;
-			switch (scene_light.type) {
-				case Gltf::Light::TYPE_POINT:
-					light.type = GpuLight::TYPE_POINT;
-					break;
-				case Gltf::Light::TYPE_SPOT:
-					light.type = GpuLight::TYPE_SPOT;
-					break;
-				case Gltf::Light::TYPE_DIRECTIONAL:
-					light.type = GpuLight::TYPE_DIRECTIONAL;
-					break;
-			}
-			light.color = scene_light.color;
-			light.intensity = scene_light.intensity;
-			light.cutoff = scene_light.cutoff;
-			light.position = node.global_transform[3];
-			light.direction = glm::normalize(glm::inverseTranspose(node.global_transform) * glm::vec4(0.0, 0.0, -1.0, 0.0));
-			light.inner_angle = scene_light.inner_angle;
-			light.outer_angle = scene_light.outer_angle;
-			lights.emplace_back(light);
-		}
-	});
-	if (lights.data()) {
-		this->gpu_lights = allocator->Copy(lights.data(), sizeof(GpuLight) * lights.size(), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-	}
-}
-
-void Renderer::GatherMaterials(Gltf* gltf, CpuMappedLinearBuffer* allocator)
-{
-	GpuMaterial* gpu_materials = (GpuMaterial*)allocator->Allocate(sizeof(GpuMaterial) * (gltf->materials.size()), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT, &this->gpu_materials);
-	for (int i = 0; i < gltf->materials.size(); i++) {
-		gpu_materials[i] = GpuMaterial(gltf->materials[i]);
-	}
 }
 
 void Renderer::EndFrame()

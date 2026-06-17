@@ -10,6 +10,7 @@
 #include "EnvironmentMap.h"
 #include "Gltf.h"
 #include "GpuResources.h"
+#include "GpuScene.h"
 #include "ShaderTableBuilder.h"
 #include "UploadBuffer.h"
 
@@ -97,9 +98,7 @@ class Pathtracer {
         uint32_t width = 0;
         uint32_t height = 0;
         uint64_t frame = 0;
-        D3D12_GPU_VIRTUAL_ADDRESS gpu_materials = 0;
-        D3D12_GPU_VIRTUAL_ADDRESS gpu_lights = 0;
-        int light_count = 0;;
+        GpuScene* gpu_scene = nullptr;
         EnvironmentMap::Map* environment_map = nullptr;
         Gpu::Texture* output = nullptr;
     };
