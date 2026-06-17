@@ -164,6 +164,18 @@ void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBu
     CreateVBufferPipeline();
     CreateVBufferAlphaTestedPipeline();
 
+    for (int i = 0; i < gpu_mesh_instances.Size(); i++) {
+        Gpu::BufferDesc instances_buffer_desc = {
+            .name = "Instances",
+            .size = sizeof(GpuMeshInstance) * MAX_INSTANCES,
+            .flags = Gpu::BUFFER_FLAG_GENERATE_DESCRIPTOR | Gpu::BUFFER_FLAG_PERSISTENT_MAP,
+            .structured_byte_stride = sizeof(GpuMeshInstance),
+            .heap_type = D3D12_HEAP_TYPE_UPLOAD,
+        };
+        result = resources->CreateBuffer(&instances_buffer_desc, &gpu_mesh_instances[i]);
+        assert(SUCCEEDED(result));
+    }
+
     // Cleanup.
     Gpu::Resources::FreeShader(dxil_library_desc.DXILLibrary);
 }
@@ -226,6 +238,9 @@ void Pathtracer::Shutdown()
     state_object.Reset();
     if (resources) {
         resources->FreeBuffer(&shader_tables_buffer);
+        for (int i = 0; i < gpu_mesh_instances.Size(); i++) {
+            resources->FreeBuffer(&gpu_mesh_instances[i]);
+        }
     }
 }
 
@@ -422,9 +437,10 @@ void Pathtracer::UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAc
 
 void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure)
 {
-	mesh_instances.clear();
+    mesh_instances.clear();
     vertex_buffers.clear();
     alpha_vertex_buffers.clear();
+    gpu_mesh_instances.Next();
     acceleration_structure->BeginTlasBuild();
 
 	// TODO: Define this somewhere else?
@@ -466,15 +482,43 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 					instance_mask = MASK_NONE;
 				}
 				bool tlas_added = false;
-				if (gltf->nodes[node_id].dynamic_mesh != -1) {
-					if (gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases.size() > i) {
-						// Dynamic.
-						DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_meshes[i];
-						RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases[i];
-						tlas_added = acceleration_structure->AddTlasInstance(&dynamic_blas, node.global_transform, instance_mask, flags);
-						if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_POSITION) {
-							gpu_mesh_instance.position_and_tangent_space_descriptor = dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->descriptor;
-						}
+                if (mesh_instances.size() <= MAX_INSTANCES) {
+                    if (gltf->nodes[node_id].dynamic_mesh != -1) {
+                        if (gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases.size() > i) {
+                            // Dynamic.
+                            DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_meshes[i];
+                            RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases[i];
+                            tlas_added = acceleration_structure->AddTlasInstance(&dynamic_blas, node.global_transform, instance_mask, flags);
+                            if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_POSITION) {
+                                gpu_mesh_instance.position_and_tangent_space_descriptor = dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->descriptor;
+                            }
+                            if (tlas_added) {
+                                if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
+                                    alpha_vertex_buffers.push_back({
+                                        .instance_id = (uint32_t)mesh_instances.size(),
+                                        .index_count = mesh.num_of_indices,
+                                        .vertex_count = mesh.num_of_vertices,
+                                        .index = mesh.index.view,
+                                        .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->view : mesh.position_and_tangent_space.view,
+                                        .tex_coords = { mesh.texcoords[0].view, mesh.texcoords[1].view },
+                                        .color = mesh.color.view,
+                                        .material_id = primitives[i].material_id,
+                                    });
+                                } else {
+                                    vertex_buffers.push_back({
+                                        .instance_id = (uint32_t)mesh_instances.size(),
+                                        .index_count = mesh.num_of_indices,
+                                        .vertex_count = mesh.num_of_vertices,
+                                        .index = mesh.index.view,
+                                        .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->view : mesh.position_and_tangent_space.view,
+                                    });
+                                }
+                            }
+                        }
+                    } else {
+                        // Static.
+                        RaytracingAccelerationStructure::Blas& blas = primitives[i].blas;
+                        tlas_added = acceleration_structure->AddTlasInstance(&blas, node.global_transform, instance_mask, flags);
                         if (tlas_added) {
                             if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
                                 alpha_vertex_buffers.push_back({
@@ -482,7 +526,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
                                     .index_count = mesh.num_of_indices,
                                     .vertex_count = mesh.num_of_vertices,
                                     .index = mesh.index.view,
-                                    .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->view : mesh.position_and_tangent_space.view,
+                                    .vertices = mesh.position_and_tangent_space.view,
                                     .tex_coords = { mesh.texcoords[0].view, mesh.texcoords[1].view },
                                     .color = mesh.color.view,
                                     .material_id = primitives[i].material_id,
@@ -493,47 +537,21 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
                                     .index_count = mesh.num_of_indices,
                                     .vertex_count = mesh.num_of_vertices,
                                     .index = mesh.index.view,
-                                    .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->view : mesh.position_and_tangent_space.view,
+                                    .vertices = mesh.position_and_tangent_space.view,
                                 });
                             }
                         }
-					}
-				} else {
-					// Static.
-					RaytracingAccelerationStructure::Blas& blas = primitives[i].blas;
-					tlas_added = acceleration_structure->AddTlasInstance(&blas, node.global_transform, instance_mask, flags);
-                    if (tlas_added) {
-                        if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
-                            alpha_vertex_buffers.push_back({
-                                .instance_id = (uint32_t)mesh_instances.size(),
-                                .index_count = mesh.num_of_indices,
-                                .vertex_count = mesh.num_of_vertices,
-                                .index = mesh.index.view,
-                                .vertices = mesh.position_and_tangent_space.view,
-                                .tex_coords = { mesh.texcoords[0].view, mesh.texcoords[1].view },
-                                .color = mesh.color.view,
-                                .material_id = primitives[i].material_id,
-                            });
-                        } else {
-                            vertex_buffers.push_back({
-                                .instance_id = (uint32_t)mesh_instances.size(),
-                                .index_count = mesh.num_of_indices,
-                                .vertex_count = mesh.num_of_vertices,
-                                .index = mesh.index.view,
-                                .vertices = mesh.position_and_tangent_space.view,
-                            });
-                        }
                     }
-				}
-				if (tlas_added) {
-					mesh_instances.push_back(gpu_mesh_instance);
-				}
+                    if (tlas_added) {
+                        mesh_instances.push_back(gpu_mesh_instance);
+                    }
+                }
 			}
 		}
 	});
 
     acceleration_structure->BuildTlas(context);
-	this->gpu_mesh_instances = context->AllocateAndCopy(mesh_instances.data(), sizeof(GpuMeshInstance) * mesh_instances.size(), 4);
+	memcpy(this->gpu_mesh_instances.Current().Pointer(), mesh_instances.data(), sizeof(GpuMeshInstance) * mesh_instances.size());
 }
 
 void Pathtracer::PathtraceScene(CommandContext* context, const Settings* settings, const ExecuteParams* execute_params)
@@ -749,7 +767,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
         context->SetComputeRootSignature(this->root_signature.Get());
         context->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
         context->SetComputeRootShaderResourceView(ROOT_PARAMETER_ACCELERATION_STRUCTURE, this->acceleration_structure.GetAccelerationStructure());
-        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, this->gpu_mesh_instances);
+        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, this->gpu_mesh_instances.Current().Resource()->GetGPUVirtualAddress());
         context->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, execute_params->gpu_scene->MaterialBuffer().Resource()->GetGPUVirtualAddress());
         context->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, execute_params->gpu_scene->LightBuffer().Resource()->GetGPUVirtualAddress());
 

@@ -178,6 +178,8 @@ class Pathtracer {
         int material_id;
     };
 
+    static constexpr int MAX_INSTANCES = 65536;
+
     std::vector<Vertices> vertex_buffers;
     std::vector<AlphaVertices> alpha_vertex_buffers;
     
@@ -191,7 +193,7 @@ class Pathtracer {
 	RaytracingAccelerationStructure acceleration_structure;
 
     std::vector<GpuMeshInstance> mesh_instances;
-    D3D12_GPU_VIRTUAL_ADDRESS gpu_mesh_instances;
+    MultiBuffer<Gpu::Buffer, Config::FRAME_COUNT> gpu_mesh_instances;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> v_buffer_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> v_buffer_pipeline;
