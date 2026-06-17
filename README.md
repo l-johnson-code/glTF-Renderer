@@ -71,6 +71,7 @@ The camera can be toggled between orbit and free mode in the camera settings.
 ## Pathtracer Settings
 |Setting|Description|
 |-|-|
+|Ray Rate|How many rays will be traced per frame. A ray rate of n will trace 1 ray for every n*n pixels per frame.|
 |Maximum Bounces|Maximum possible bounces before a ray terminates.|
 |Minimum Bounces|Minimum amount of bounces before Russian roulette can terminate rays.|
 |Min Russian Roulette Probability|The minimum possibility a ray will continue when russian roulette is turned on.|
