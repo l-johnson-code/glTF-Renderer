@@ -25,7 +25,7 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
         return;
     }
 
-    float2 uv = PixelToUV(pixel, output_resolution);
+    float2 uv = PixelToUv(pixel, output_resolution);
     float3 direction = SquareToSphere(UvToUnitSquare(uv));
 
     uint2 input_size;

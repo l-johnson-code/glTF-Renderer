@@ -15,7 +15,7 @@ int2 UVToPixel(float2 uv, int2 resolution)
 }
 
 // Takes a pixel and returns its corresponding uv coordinate.
-float2 PixelToUV(int2 pixel, int2 resolution)
+float2 PixelToUv(int2 pixel, int2 resolution)
 {
     return ((float2)pixel + .5) / (float2)resolution;
 }

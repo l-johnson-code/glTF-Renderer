@@ -62,7 +62,7 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
             return;
         }
     }
-    float2 uv = PixelToUV(pixel, output_dimensions.xy);
+    float2 uv = PixelToUv(pixel, output_dimensions.xy);
     uv = uv * 2 - 1;
     float3 direction = normalize(face_direction + uv.x * u_direction + uv.y * v_direction);
     const float TAU = 6.28318530717;

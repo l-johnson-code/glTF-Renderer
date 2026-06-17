@@ -40,7 +40,7 @@ void main(in uint3 thread_id: SV_DispatchThreadID)
     }
 
     // Create a local basis.
-    float3 normal = CubemapToDirection(output_pixel.z, PixelToUV(output_pixel.xy, output_dimensions.xy));
+    float3 normal = CubemapToDirection(output_pixel.z, PixelToUv(output_pixel.xy, output_dimensions.xy));
     float3 tangent;
     float3 bitangent;
     CreateBasis(normal, tangent, bitangent);

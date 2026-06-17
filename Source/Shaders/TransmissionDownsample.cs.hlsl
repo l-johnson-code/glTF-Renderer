@@ -27,7 +27,7 @@ void main(in uint3 dispatch_thread_id: SV_DispatchThreadID)
     // TODO: Consider using gather functions and then manually performing the bilinear sampling. Could potentially use less loads.
     // TODO: Consider storing samples in group shared memory to share sample results across pixels.
     float2 offset_size = 0.5 / (float2)resolution;
-    float2 uv_centre = PixelToUV(pixel, resolution);
+    float2 uv_centre = PixelToUv(pixel, resolution);
 
     switch (g_parameters.sample_pattern) {
         case 1: {
