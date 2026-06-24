@@ -119,6 +119,16 @@ class Texture {
 	TextureFlags flags;
 };
 
+enum GenericComputeRootParameter {
+	GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER,
+	GENERIC_COMPUTE_ROOT_PARAMETER_COUNT,
+};
+
+struct ComputePipelineDesc {
+	const char* name;
+	const char* compute_shader;
+};
+
 class Resources {
     public:
 
@@ -151,16 +161,19 @@ class Resources {
 	void FreeTexture(Texture* texture);
 	HRESULT CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name = nullptr);
 	HRESULT CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
+	HRESULT CreateComputePipelineState(const ComputePipelineDesc* desc, ID3D12PipelineState** pipeline_state);
 	HRESULT CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	HRESULT CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name = nullptr);
 	int CreateShaderResourceView(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* desc);
 	void FreeResourceDescriptor(int descriptor);
 	static D3D12_SHADER_BYTECODE LoadShader(const char* filepath);
 	static void FreeShader(D3D12_SHADER_BYTECODE shader);
+	ID3D12RootSignature* GenericComputeRootSignature() { return generic_compute_root_signature.Get(); }
 	
 	private:
 
 	Microsoft::WRL::ComPtr<ID3D12Device> device;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> generic_compute_root_signature;
 };
 
 }

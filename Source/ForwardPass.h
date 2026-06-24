@@ -66,6 +66,8 @@ class ForwardPass {
 		ROOT_PARAMETER_COUNT,
 	};
 
+    Gpu::Resources* resources = nullptr;
+
     D3D12_PRIMITIVE_TOPOLOGY current_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
     uint32_t current_pipeline_flags;
 
@@ -75,7 +77,6 @@ class ForwardPass {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> background_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> background_pipeline_state;
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> transmission_mips_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> transmission_mips_pipeline_state;
 
     void CreatePipeline(Gpu::Resources* resources, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature);

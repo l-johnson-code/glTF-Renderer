@@ -46,7 +46,6 @@ class EnvironmentMap {
     
     Gpu::Resources* resources = nullptr;
     
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> generate_cubemap_pipeline_state;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> generate_cube_mip_pipeline_state;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> generate_importance_map_pipeline_state;

@@ -30,46 +30,37 @@ void EnvironmentMap::Init(Gpu::Resources* resources)
 
     this->resources = resources;
 
-    // Create the root signature.
-    CD3DX12_ROOT_PARAMETER root_parameter;
-    root_parameter.InitAsConstantBufferView(0);
-    CD3DX12_STATIC_SAMPLER_DESC sampler_descs[] = {
-        // For sampling a cubemap.
-        CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP),
-        // For sampling an equirectangular image. This wraps horizontally but clamps at the bottom and top.
-        CD3DX12_STATIC_SAMPLER_DESC(1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP)
-    };
-    CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(1, &root_parameter, std::size(sampler_descs), sampler_descs, D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-    result = resources->CreateRootSignature(&root_signature_desc, &this->root_signature, "Environment Root Signature");
-    assert(result == S_OK);
-
     // Create the pipelines.
-    D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {};
-    pipeline_desc.pRootSignature = this->root_signature.Get();
-    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/ConvertEquirectangularToCubemap.cs.bin");
-    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_cubemap_pipeline_state, "Convert Equirectangular To Cubemap");
+    Gpu::ComputePipelineDesc pipeline_desc = {
+        .name = "Convert Equirectangular To Cubemap",
+        .compute_shader = "ConvertEquirectangularToCubemap",
+    };
+    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_cubemap_pipeline_state);
     assert(result == S_OK);
-    Gpu::Resources::FreeShader(pipeline_desc.CS);
-
-    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/GenerateMipLevelArray.cs.bin");
-	result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_cube_mip_pipeline_state, "Generate Mip Level Array");
+    pipeline_desc = {
+        .name = "Generate Mip Level Array",
+        .compute_shader = "GenerateMipLevelArray",
+    };
+    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_cube_mip_pipeline_state);
 	assert(result == S_OK);
-    Gpu::Resources::FreeShader(pipeline_desc.CS);
-
-    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/GenerateEnvironmentImportanceMap.cs.bin");
-    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_importance_map_pipeline_state, "Generate Environment Importance Map");
+    pipeline_desc = {
+        .name = "Generate Environment Importance Map",
+        .compute_shader = "GenerateEnvironmentImportanceMap",
+    };
+    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_importance_map_pipeline_state);
     assert(result == S_OK);
-    Gpu::Resources::FreeShader(pipeline_desc.CS);
-
-    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/GenerateEnvironmentImportanceMapLevel.cs.bin");
-    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_importance_map_level_pipeline_state, "Generate Environment Importance Map Level");
+    pipeline_desc = {
+        .name = "Generate Environment Importance Map Level",
+        .compute_shader = "GenerateEnvironmentImportanceMapLevel",
+    };
+    result = resources->CreateComputePipelineState(&pipeline_desc, &this->generate_importance_map_level_pipeline_state);
     assert(result == S_OK);
-    Gpu::Resources::FreeShader(pipeline_desc.CS);
-
-    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/FilterEnvironmentCubeMap.cs.bin");
-    result = resources->CreateComputePipelineState(&pipeline_desc, &this->filter_cube_map_pipeline_state, "Filter Environment Cube Map");
+    pipeline_desc = {
+        .name = "Filter Environment Cube Map",
+        .compute_shader = "FilterEnvironmentCubeMap",
+    };
+    result = resources->CreateComputePipelineState(&pipeline_desc, &this->filter_cube_map_pipeline_state);
     assert(result == S_OK);
-    Gpu::Resources::FreeShader(pipeline_desc.CS);
 }
 
 void EnvironmentMap::LoadEnvironmentMapImage(UploadBuffer* upload_buffer, const char* filepath, Map* map)
@@ -323,7 +314,7 @@ void EnvironmentMap::LoadEnvironmentMapImageHdr(UploadBuffer* upload_buffer, con
 void EnvironmentMap::GenerateCubemap(CommandContext* context, Gpu::Texture* equirectangular_image, Gpu::Texture* cubemap)
 {
     // Convert the equirectangular map to a cubemap.
-    context->SetComputeRootSignature(this->root_signature.Get());
+    context->SetComputeRootSignature(this->resources->GenericComputeRootSignature());
     context->SetPipelineState(this->generate_cubemap_pipeline_state.Get());
     struct {
         int environment;
@@ -334,7 +325,7 @@ void EnvironmentMap::GenerateCubemap(CommandContext* context, Gpu::Texture* equi
         .environment = equirectangular_image->Srv(),
         .cube = cubemap->Uav(),
     };
-    context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+    context->SetComputeRootConstantBufferView(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
     uint32_t thread_groups_x = ((cubemap->Width() * 6) + 7) / 8;
     uint32_t thread_groups_y = (cubemap->Height() + 7) / 8;
     context->Dispatch(thread_groups_x, thread_groups_y, 1);
@@ -353,7 +344,7 @@ void EnvironmentMap::GenerateCubemap(CommandContext* context, Gpu::Texture* equi
             .output_descriptor = cubemap->Uav(i),
         };
 
-        context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+        context->SetComputeRootConstantBufferView(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
         uint32_t thread_groups_x = ((output_width * 6) + 7) / 8;
         uint32_t thread_groups_y = (output_width + 7) / 8;
         context->Dispatch(thread_groups_x, thread_groups_y, 1);
@@ -386,12 +377,12 @@ void EnvironmentMap::FilterCube(CommandContext* context, Gpu::Texture* cubemap, 
         .mip_bias = mip_bias,
         .bsdf = bsdf,
     };
-    context->SetComputeRootSignature(this->root_signature.Get());
+    context->SetComputeRootSignature(this->resources->GenericComputeRootSignature());
     context->SetPipelineState(this->filter_cube_map_pipeline_state.Get());
     for (int i = 0; i < mip_count; i++) {
         constant_buffer.output = filtered_cube_map->Uav(i);
         constant_buffer.roughness = MipToRoughness(i, mip_count);
-        context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+        context->SetComputeRootConstantBufferView(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
         uint32_t thread_groups_x = (resolution * 6 + 7) / 8;
         uint32_t thread_groups_y = (resolution + 7) / 8;
         context->Dispatch(thread_groups_x, thread_groups_y, 1);

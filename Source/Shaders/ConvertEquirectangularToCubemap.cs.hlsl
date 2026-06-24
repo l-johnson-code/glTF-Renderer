@@ -6,7 +6,7 @@ struct Parameters {
 };
 
 ConstantBuffer<Parameters> g_parameters: register(b0);
-SamplerState g_sampler_equirectangular: register(s1);
+SamplerState g_sampler_equirectangular: register(s2);
 
 [numthreads(8, 8, 1)]
 void main(in uint3 thread_id: SV_DispatchThreadID)

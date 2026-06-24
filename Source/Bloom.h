@@ -20,6 +20,4 @@ class Bloom {
     Gpu::Texture mip_chain;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> downsample_pipeline_state;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> upsample_pipeline_state;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
-
 };

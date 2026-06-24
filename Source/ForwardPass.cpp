@@ -10,11 +10,11 @@
 #include <directx/dxgiformat.h>
 #include <glm/gtc/matrix_inverse.hpp>
 
-#include "DirectXHelpers.h"
-
 void ForwardPass::Create(Gpu::Resources* resources)
 {
     HRESULT result;
+
+	this->resources = resources;
 
 	// Create the root signature.
 	CD3DX12_ROOT_PARAMETER root_parameters[ROOT_PARAMETER_COUNT] = {};
@@ -346,7 +346,7 @@ void ForwardPass::GenerateTransmissionMips(CommandContext* context, Gpu::Texture
 	context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
 
 	// Generate the mips.
-	context->SetComputeRootSignature(this->transmission_mips_root_signature.Get());
+	context->SetComputeRootSignature(this->resources->GenericComputeRootSignature());
 	context->SetPipelineState(this->transmission_mips_pipeline_state.Get());
 
 	struct {
@@ -369,7 +369,7 @@ void ForwardPass::GenerateTransmissionMips(CommandContext* context, Gpu::Texture
 		context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i);
 		context->SubmitBarriers();
 
-		context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+		context->SetComputeRootConstantBufferView(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
 		context->Dispatch((width + 7) / 8, (height + 7) / 8, 1);
 		context->PushUavBarrier(output->Resource());
 		context->PushTransitionBarrier(output->Resource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, i);
@@ -380,18 +380,11 @@ void ForwardPass::GenerateTransmissionMips(CommandContext* context, Gpu::Texture
 void ForwardPass::CreateTranmissionMipPipeline(Gpu::Resources* resources)
 {
 	HRESULT result = S_OK;
-	CD3DX12_ROOT_PARAMETER root_parameter;
-	root_parameter.InitAsConstantBufferView(0);
-	CD3DX12_STATIC_SAMPLER_DESC sampler_desc(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
-	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(1, &root_parameter, 1, &sampler_desc, D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-	result = resources->CreateRootSignature(&root_signature_desc, &this->transmission_mips_root_signature, "Transmission Mip Root Signature");
-	assert(result == S_OK);
 
-	D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {
-		.pRootSignature = transmission_mips_root_signature.Get(),
-		.CS = Gpu::Resources::LoadShader("Shaders/TransmissionDownsample.cs.bin"),
+	Gpu::ComputePipelineDesc pipeline_desc = {
+		.name = "Transmission Downsample",
+		.compute_shader = "TransmissionDownsample",
 	};
-	result = resources->CreateComputePipelineState(&pipeline_desc, &this->transmission_mips_pipeline_state, "Transmission Downsample");
+	result = resources->CreateComputePipelineState(&pipeline_desc, &this->transmission_mips_pipeline_state);
 	assert(result == S_OK);
-	Gpu::Resources::FreeShader(pipeline_desc.CS);
 }

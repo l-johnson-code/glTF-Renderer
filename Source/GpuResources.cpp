@@ -5,9 +5,10 @@
 #include <directx/d3d12.h>
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
+#include <directx/d3dx12_root_signature.h>
 #include <directx/dxgiformat.h>
-#include <stb/stb_image.h>
 #include <glm/gtx/texture.hpp>
+#include <stb/stb_image.h>
 
 #include "Config.h"
 #include "DirectXHelpers.h"
@@ -68,6 +69,31 @@ void Resources::Create(ID3D12Device* device)
 	dsv_allocator.Create(this->device.Get());
 
 	allocator.Init(this->device.Get());
+
+	CD3DX12_STATIC_SAMPLER_DESC static_samplers[3];
+	static_samplers[0].Init(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+	static_samplers[1].Init(1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+	static_samplers[2].Init(2, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+
+	CD3DX12_ROOT_PARAMETER compute_root_parameters[GENERIC_COMPUTE_ROOT_PARAMETER_COUNT];
+	compute_root_parameters[GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER].InitAsConstantBufferView(0);
+
+	CD3DX12_ROOT_SIGNATURE_DESC compute_root_signature_desc(
+		std::size(compute_root_parameters), 
+		compute_root_parameters, 
+		std::size(static_samplers), 
+		static_samplers, 
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | 
+		D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED
+	);
+	result = CreateRootSignature(&compute_root_signature_desc, &this->generic_compute_root_signature, "Generic Compute Root Signature");
 }
 
 HRESULT Resources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
@@ -334,6 +360,37 @@ HRESULT Resources::CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE
 		SetName(*pipeline_state, name);
 	}
 	return result;
+}
+
+HRESULT Resources::CreateComputePipelineState(const ComputePipelineDesc* desc, ID3D12PipelineState** pipeline_state)
+{
+	HRESULT result = S_OK;
+	D3D12_COMPUTE_PIPELINE_STATE_DESC d3d12_desc = {};
+
+	// Load shaders.
+	std::string shader_path("Shaders/");
+	shader_path.append(desc->compute_shader);
+	shader_path.append(".cs.bin");
+	d3d12_desc.CS = LoadShader(shader_path.c_str());
+	if (d3d12_desc.CS.pShaderBytecode == nullptr) {
+		FreeShader(d3d12_desc.CS);
+		return E_FAIL;
+	}
+
+	// TODO: Check if pipeline exists in cache, create pipeline from cache if it does.
+
+	// Create pipeline from scratch.
+	d3d12_desc.pRootSignature = generic_compute_root_signature.Get();
+	result = this->device->CreateComputePipelineState(&d3d12_desc, IID_PPV_ARGS(pipeline_state));
+	if (FAILED(result)) {
+		FreeShader(d3d12_desc.CS);
+		return result;
+	}
+	SetName(*pipeline_state, desc->name);
+
+	// TODO: Store pipeline in cache.
+	
+	return S_OK;
 }
 
 HRESULT Resources::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)

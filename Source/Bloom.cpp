@@ -15,29 +15,21 @@ void Bloom::Create(Gpu::Resources* resources, uint16_t width, uint16_t height, u
 
     // Create the mip chain.
     Bloom::Resize(width, height, max_iterations);
-
-    // Create the root signature.
-	CD3DX12_ROOT_PARAMETER root_parameter;
-	root_parameter.InitAsConstantBufferView(0);
-	CD3DX12_STATIC_SAMPLER_DESC sampler_desc(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
-	CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(1, &root_parameter, 1, &sampler_desc, D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-	result = resources->CreateRootSignature(&root_signature_desc, &this->root_signature, "Bloom Root Signature");
-	assert(result == S_OK);
     
     // Create the pipeline states.
-	D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc = {
-		.pRootSignature = root_signature.Get(),
+	Gpu::ComputePipelineDesc pipeline_desc = {
+		.name = "Bloom Downsample",
+        .compute_shader = "BloomDownsample",
 	};
+	result = resources->CreateComputePipelineState(&pipeline_desc, &this->downsample_pipeline_state);
+	assert(result == S_OK);
 
-    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/BloomDownsample.cs.bin");
-	result = resources->CreateComputePipelineState(&pipeline_desc, &this->downsample_pipeline_state, "Bloom Downsample");
+    pipeline_desc = {
+		.name = "Bloom Upsample",
+        .compute_shader = "BloomUpsample",
+	};
+	result = resources->CreateComputePipelineState(&pipeline_desc, &this->upsample_pipeline_state);
 	assert(result == S_OK);
-	Gpu::Resources::FreeShader(pipeline_desc.CS);
-    	
-    pipeline_desc.CS = Gpu::Resources::LoadShader("Shaders/BloomUpsample.cs.bin");
-	result = resources->CreateComputePipelineState(&pipeline_desc, &this->upsample_pipeline_state, "Bloom Upsample");
-	assert(result == S_OK);
-	Gpu::Resources::FreeShader(pipeline_desc.CS);
 }
 
 void Bloom::Resize(uint16_t width, uint16_t height, uint8_t max_iterations)
@@ -65,7 +57,7 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
 {
     iterations = std::min(this->max_iterations, iterations);
 
-    context->SetComputeRootSignature(this->root_signature.Get());
+    context->SetComputeRootSignature(this->resources->GenericComputeRootSignature());
 
     // Downsample and blur.
     context->SetPipelineState(this->downsample_pipeline_state.Get());
@@ -87,7 +79,7 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
     constant_buffer.input_descriptor = input->Srv();
     constant_buffer.output_descriptor = mip_chain.Uav();
 
-    context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+    context->SetComputeRootConstantBufferView(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
 	context->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 
     context->PushUavBarrier(mip_chain.Resource());
@@ -104,7 +96,7 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
         constant_buffer.input_descriptor = mip_chain.Srv(i - 1);
         constant_buffer.output_descriptor = mip_chain.Uav(i);
 
-		context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&constant_buffer));
+		context->SetComputeRootConstantBufferView(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&constant_buffer));
 		context->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 
 		context->PushUavBarrier(mip_chain.Resource());
@@ -132,7 +124,7 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
 		context->PushTransitionBarrier(mip_chain.Resource(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, i - 1);
 		context->SubmitBarriers();
 
-		context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&upsample_constant_buffer));
+		context->SetComputeRootConstantBufferView(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&upsample_constant_buffer));
 		context->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 
 		context->PushUavBarrier(mip_chain.Resource());
@@ -149,6 +141,6 @@ void Bloom::Execute(CommandContext* context, Gpu::Texture* input, D3D12_RESOURCE
 
     context->PushTransitionBarrier(input->Resource(), input_resource_states, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0);
     context->SubmitBarriers();
-    context->SetComputeRootConstantBufferView(0, context->CreateConstantBuffer(&upsample_constant_buffer));
+    context->SetComputeRootConstantBufferView(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER, context->CreateConstantBuffer(&upsample_constant_buffer));
     context->Dispatch(CalculateThreadGroups(width, 8), CalculateThreadGroups(height, 8), 1);
 }
