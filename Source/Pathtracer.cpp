@@ -255,7 +255,6 @@ void Pathtracer::CreateVBufferPipelines()
         .name = "Visibility",
         .vertex_shader = "Visibility",
         .pixel_shader = "Visibility",
-        .blend_state = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT()),
         .rasterizer_state = {
             .FillMode = D3D12_FILL_MODE_SOLID,
             .CullMode = D3D12_CULL_MODE_NONE,
@@ -268,7 +267,6 @@ void Pathtracer::CreateVBufferPipelines()
             .DepthEnable = TRUE,
             .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
             .DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
-            .StencilEnable = FALSE,
         },
         .input_layout = {
             .pInputElementDescs = input_layout,
@@ -297,7 +295,6 @@ void Pathtracer::CreateVBufferPipelines()
         .name = "Visibility Alpha Tested",
         .vertex_shader = "VisibilityAlphaTested",
         .pixel_shader = "VisibilityAlphaTested",
-        .blend_state = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT()),
         .rasterizer_state = {
             .FillMode = D3D12_FILL_MODE_SOLID,
             .CullMode = D3D12_CULL_MODE_NONE,
@@ -310,7 +307,6 @@ void Pathtracer::CreateVBufferPipelines()
             .DepthEnable = TRUE,
             .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
             .DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
-            .StencilEnable = FALSE,
         },
         .input_layout = {
             .pInputElementDescs = alpha_tested_input_layout,

@@ -41,7 +41,6 @@ void ForwardPass::CreatePipeline(Gpu::Resources* resources, uint32_t flags)
 		.name = "Forward",
 		.vertex_shader = "Forward",
 		.pixel_shader = "Forward",
-		.blend_state = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT()),
 		.rasterizer_state = {
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = flags & PIPELINE_FLAGS_DOUBLE_SIDED ? D3D12_CULL_MODE_NONE : D3D12_CULL_MODE_BACK,
@@ -54,7 +53,6 @@ void ForwardPass::CreatePipeline(Gpu::Resources* resources, uint32_t flags)
 			.DepthEnable = TRUE,
 			.DepthWriteMask = flags & PIPELINE_FLAGS_ALPHA_BLEND ? D3D12_DEPTH_WRITE_MASK_ZERO : D3D12_DEPTH_WRITE_MASK_ALL,
 			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
-			.StencilEnable = FALSE,
 		},
 		.input_layout = {
 			.pInputElementDescs = input_layout,
@@ -225,7 +223,6 @@ void ForwardPass::CreateBackgroundRenderer(Gpu::Resources* resources)
 		.name = "Background",
 		.vertex_shader = "Background",
 		.pixel_shader = "Background",
-		.blend_state = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT()),
 		.rasterizer_state = {
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_NONE,
@@ -236,7 +233,6 @@ void ForwardPass::CreateBackgroundRenderer(Gpu::Resources* resources)
 			.DepthEnable = TRUE,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
 			.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
-			.StencilEnable = FALSE,
 		},
 		.input_layout = {
 			.pInputElementDescs = input_layout,

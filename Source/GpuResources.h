@@ -128,17 +128,41 @@ enum GenericGraphicsRootParameter {
 };
 
 struct GraphicsPipelineDesc {
-	const char* name;
-	const char* vertex_shader;
-	const char* pixel_shader;
-	D3D12_BLEND_DESC blend_state;
-	D3D12_RASTERIZER_DESC rasterizer_state;
-	D3D12_DEPTH_STENCIL_DESC depth_stencil_state;
-	D3D12_INPUT_LAYOUT_DESC input_layout;
-	D3D12_PRIMITIVE_TOPOLOGY_TYPE primitive_topology_type;
-	uint8_t render_target_count;
-	DXGI_FORMAT render_target_formats[8];
-	DXGI_FORMAT depth_stencil_format;
+	const char* name = nullptr;
+	const char* vertex_shader = nullptr;
+	const char* pixel_shader = nullptr;
+	D3D12_BLEND_DESC blend_state = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
+	D3D12_RASTERIZER_DESC rasterizer_state = {
+		.FillMode = D3D12_FILL_MODE_SOLID,
+		.CullMode = D3D12_CULL_MODE_NONE,
+		.FrontCounterClockwise = TRUE,
+		.DepthClipEnable = TRUE,
+		.MultisampleEnable = FALSE,
+		.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+	};
+	D3D12_DEPTH_STENCIL_DESC depth_stencil_state = {
+		.DepthEnable = FALSE,
+		.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+		.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL,
+		.StencilEnable = FALSE,
+    };
+	D3D12_INPUT_LAYOUT_DESC input_layout = {
+		.pInputElementDescs = nullptr,
+		.NumElements = 0,
+	};
+	D3D12_PRIMITIVE_TOPOLOGY_TYPE primitive_topology_type = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	uint8_t render_target_count = 0;
+	DXGI_FORMAT render_target_formats[8] = {
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+		DXGI_FORMAT_UNKNOWN,
+	};
+	DXGI_FORMAT depth_stencil_format = DXGI_FORMAT_UNKNOWN;
 };
 
 enum GenericComputeRootParameter {
@@ -147,8 +171,8 @@ enum GenericComputeRootParameter {
 };
 
 struct ComputePipelineDesc {
-	const char* name;
-	const char* compute_shader;
+	const char* name = nullptr;
+	const char* compute_shader = nullptr;
 };
 
 class Resources {
