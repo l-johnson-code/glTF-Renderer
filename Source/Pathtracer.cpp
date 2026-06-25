@@ -48,36 +48,9 @@ void Pathtracer::Init(ID3D12Device5* device, Gpu::Resources* resources, UploadBu
 
     this->resources = resources;
 
-    CD3DX12_ROOT_PARAMETER root_parameters[ROOT_PARAMETER_COUNT];
-    root_parameters[ROOT_PARAMETER_CONSTANT_BUFFER].InitAsConstantBufferView(0);
-    root_parameters[ROOT_PARAMETER_ACCELERATION_STRUCTURE].InitAsShaderResourceView(0);
-    root_parameters[ROOT_PARAMETER_INSTANCES].InitAsShaderResourceView(1);
-    root_parameters[ROOT_PARAMETER_MATERIALS].InitAsShaderResourceView(2);
-    root_parameters[ROOT_PARAMETER_LIGHTS].InitAsShaderResourceView(3);
-
-    CD3DX12_STATIC_SAMPLER_DESC static_samplers[] = {
-        CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP),
-        CD3DX12_STATIC_SAMPLER_DESC(1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP),
-    };
-
-    CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc(ROOT_PARAMETER_COUNT, root_parameters, std::size(static_samplers), static_samplers);
-    root_signature_desc.Flags = 
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | 
-        D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
-    
-    result = resources->CreateRootSignature(&root_signature_desc, &this->root_signature, "Path Tracer Root Signature");
-    assert(SUCCEEDED(result));
-
     // Root signature shared between all shaders.
     D3D12_GLOBAL_ROOT_SIGNATURE global_root_signature = {
-        .pGlobalRootSignature = this->root_signature.Get(),
+        .pGlobalRootSignature = resources->GenericComputeRootSignature(),
     };
 
     // Shader code.
@@ -233,7 +206,6 @@ void Pathtracer::Resize(uint32_t width, uint32_t height)
 
 void Pathtracer::Shutdown()
 {
-    root_signature.Reset();
     state_object.Reset();
     if (resources) {
         resources->FreeBuffer(&shader_tables_buffer);
@@ -666,6 +638,10 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             int render_scale;
             int pixel_offset_x;
             int pixel_offset_y;
+            int acceleration_structure_descriptor;
+            int instances_descriptor;
+            int materials_descriptor;
+            int lights_descriptor;
         } constants;
 
         constants = {
@@ -697,16 +673,16 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             .render_scale = settings->ray_rate,
             .pixel_offset_x = pixel_offset.x,
             .pixel_offset_y = pixel_offset.y,
+            .acceleration_structure_descriptor = this->acceleration_structure.GetAccelerationStructure().Srv(),
+            .instances_descriptor = this->gpu_mesh_instances.Current().Srv(),
+            .materials_descriptor = execute_params->gpu_scene->MaterialBuffer().Srv(),
+            .lights_descriptor = execute_params->gpu_scene->LightBuffer().Srv(),
         };
 
         D3D12_GPU_VIRTUAL_ADDRESS constant_buffer = context->CreateConstantBuffer(&constants);
 
-        context->SetComputeRootSignature(this->root_signature.Get());
-        context->SetComputeRootConstantBufferView(ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
-        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_ACCELERATION_STRUCTURE, this->acceleration_structure.GetAccelerationStructure());
-        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_INSTANCES, this->gpu_mesh_instances.Current().Resource()->GetGPUVirtualAddress());
-        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_MATERIALS, execute_params->gpu_scene->MaterialBuffer().Resource()->GetGPUVirtualAddress());
-        context->SetComputeRootShaderResourceView(ROOT_PARAMETER_LIGHTS, execute_params->gpu_scene->LightBuffer().Resource()->GetGPUVirtualAddress());
+        context->SetComputeRootSignature(this->resources->GenericComputeRootSignature());
+        context->SetComputeRootConstantBufferView(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER, constant_buffer);
 
         context->SetPipelineState(this->state_object.Get());
 

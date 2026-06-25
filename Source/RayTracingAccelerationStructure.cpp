@@ -86,7 +86,7 @@ void RaytracingAccelerationStructure::Init(ID3D12Device5* device, Gpu::Resources
 	Gpu::BufferDesc tlas_desc = {
 		.name = "TLAS",
 		.size = tlas_prebuild_info.ResultDataMaxSizeInBytes,
-		.flags = Gpu::BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE,
+		.flags = Gpu::BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE | Gpu::BUFFER_FLAG_GENERATE_DESCRIPTOR,
 		.initial_state = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
 	};
 	result = resources->CreateBuffer(&tlas_desc, &this->tlas);
@@ -216,9 +216,9 @@ void RaytracingAccelerationStructure::BuildTlas(CommandContext* command_context)
 	tlas_staging.Next();
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS RaytracingAccelerationStructure::GetAccelerationStructure()
+Gpu::Buffer& RaytracingAccelerationStructure::GetAccelerationStructure()
 {
-	return tlas.Resource()->GetGPUVirtualAddress();
+	return tlas;
 }
 
 void RaytracingAccelerationStructure::BuildBlas(CommandContext* command_context, D3D12_GPU_VIRTUAL_ADDRESS vertices, uint32_t num_of_vertices, D3D12_INDEX_BUFFER_VIEW indices, uint32_t num_of_indices, Gpu::Buffer* blas_buffer, uint64_t* update_scratch_size)

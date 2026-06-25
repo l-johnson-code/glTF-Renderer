@@ -171,7 +171,6 @@ class Pathtracer {
     Gpu::Resources* resources = nullptr;
 
     ShaderTableCollection shader_tables;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12StateObject> state_object;
     Gpu::Buffer shader_tables_buffer;
 

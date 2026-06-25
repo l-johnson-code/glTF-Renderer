@@ -35,7 +35,7 @@ class RaytracingAccelerationStructure {
     bool AddTlasInstance(DynamicBlas* blas, glm::mat4x4 transform, uint32_t instance_mask, uint32_t flags);
     void BuildTlas(CommandContext* command_context);
     
-    D3D12_GPU_VIRTUAL_ADDRESS GetAccelerationStructure();
+    Gpu::Buffer& GetAccelerationStructure();
     
     private:
     

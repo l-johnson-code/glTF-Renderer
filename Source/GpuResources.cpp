@@ -158,14 +158,17 @@ HRESULT Resources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
 	// Create descriptor. We assume that the descriptor spans the entire buffer.
 	if (desc->flags & BUFFER_FLAG_GENERATE_DESCRIPTOR) {
 		CD3DX12_SHADER_RESOURCE_VIEW_DESC srv_desc;
-		if (desc->structured_byte_stride != 0) {
+		if (desc->flags & BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE) {
+			srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::RaytracingAccelStruct(buffer->resource->GetGPUVirtualAddress());
+		} else if (desc->structured_byte_stride != 0) {
 			srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::StructuredBuffer(desc->size / desc->structured_byte_stride, desc->structured_byte_stride);
 		} else if (desc->format != DXGI_FORMAT_UNKNOWN) {
 			srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::TypedBuffer(desc->format, (8 * desc->size) / D3D12_PROPERTY_LAYOUT_FORMAT_TABLE::GetBitsPerUnit(desc->format));
 		} else {
 			srv_desc = CD3DX12_SHADER_RESOURCE_VIEW_DESC::RawBuffer(desc->size / 4);
+			srv_desc.Format = DXGI_FORMAT_R32_TYPELESS; // The RawBuffer function sets the format incorrectly, so we reset it here.
 		}
-		buffer->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(buffer->resource, &srv_desc);
+		buffer->srv = cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(desc->flags & BUFFER_FLAG_RAYTRACING_ACCELERATION_STRUCTURE ? nullptr : buffer->resource, &srv_desc);
 		if (buffer->srv == -1) {
 			FreeBuffer(buffer);
 			return E_OUTOFMEMORY;

@@ -157,13 +157,13 @@ struct SceneConstants {
     int render_scale;
     int pixel_offset_x;
     int pixel_offset_y;
+    int acceleration_structure_descriptor;
+    int instances_descriptor;
+    int materials_descriptor;
+    int lights_descriptor;
 };
 
 ConstantBuffer<SceneConstants> g_scene_constants: register(b0);
-RaytracingAccelerationStructure g_acceleration_structure: register(t0);
-StructuredBuffer<Instance> g_instances: register(t1);
-StructuredBuffer<Material> g_materials: register(t2);
-StructuredBuffer<Light> g_lights: register(t3);
 SamplerState g_sampler_linear_clamp: register(s0);
 SamplerState g_sampler_linear_wrap: register(s1);
 
@@ -764,7 +764,8 @@ float3 SampleBsdf(SurfaceProperties surface_properties, float3 u, float3 v, out 
 LightRay SamplePointLight(float3 surface_pos, float u, out float pdf)
 {
     uint light_index = clamp(((uint)(u * (float)g_scene_constants.num_of_lights)), 0, g_scene_constants.num_of_lights - 1);
-    Light light = g_lights[light_index];
+    StructuredBuffer<Light> lights = ResourceDescriptorHeap[g_scene_constants.lights_descriptor];
+    Light light = lights[light_index];
     pdf = 1.0f / (float)g_scene_constants.num_of_lights;
     return GetLightRay(light, surface_pos);
 }
@@ -825,7 +826,7 @@ bool WaveBasedRussianRouletteTerminate(float min_continue_prob, float max_contin
     }
 }
 
-float TraceShadowRay(float3 origin, float3 direction, bool alpha_shadow)
+float TraceShadowRay(RaytracingAccelerationStructure acceleration_structure, float3 origin, float3 direction, bool alpha_shadow)
 {
     if (g_scene_constants.flags & FLAG_INDIRECT_ENVIRONMENT_ONLY) {
         return 1.0;
@@ -841,11 +842,11 @@ float TraceShadowRay(float3 origin, float3 direction, bool alpha_shadow)
     } else {
         ray_flags |= RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
     }
-    TraceRay(g_acceleration_structure, ray_flags, 0xff, HIT_GROUP_OFFSET_SHADOW, 0, MISS_SHADER_OFFSET_SHADOW, shadow_ray, shadow_payload);
+    TraceRay(acceleration_structure, ray_flags, 0xff, HIT_GROUP_OFFSET_SHADOW, 0, MISS_SHADER_OFFSET_SHADOW, shadow_ray, shadow_payload);
     return shadow_payload.transmission;
 }
 
-bool EnvironmentMapNextEventEstimation(VertexAttributes vertex_attributes, SurfaceProperties surface_properties, in out RayState ray_state)
+bool EnvironmentMapNextEventEstimation(VertexAttributes vertex_attributes, SurfaceProperties surface_properties, RaytracingAccelerationStructure acceleration_structure, in out RayState ray_state)
 {
     // Importance sample environment map.
     if ((g_scene_constants.flags & FLAG_ENVIRONMENT_MAP) && (g_scene_constants.flags & FLAG_ENVIRONMENT_MIS)) {
@@ -862,7 +863,7 @@ bool EnvironmentMapNextEventEstimation(VertexAttributes vertex_attributes, Surfa
             return ray_state.active = false;
         }
         float3 origin = OffsetRay(vertex_attributes.position, vertex_attributes.geometric_normal);
-        light_ray.color *= TraceShadowRay(origin, light_ray.direction, false);
+        light_ray.color *= TraceShadowRay(acceleration_structure, origin, light_ray.direction, false);
         if (any(light_ray.color > 0.0)) {
             float bsdf_pdf = 0;
             float3 bsdf = EvaluateBsdf(surface_properties, vertex_attributes.geometric_normal, -ray_state.direction, light_ray.direction, bsdf_pdf);
@@ -873,7 +874,7 @@ bool EnvironmentMapNextEventEstimation(VertexAttributes vertex_attributes, Surfa
     return ray_state.active;
 }
 
-void NextEventEstimation(VertexAttributes vertex_attributes, SurfaceProperties surface_properties, in out RayState ray_state)
+void NextEventEstimation(VertexAttributes vertex_attributes, SurfaceProperties surface_properties, RaytracingAccelerationStructure acceleration_structure, in out RayState ray_state)
 {
     // Sample point lights using next event estimation.
     if ((g_scene_constants.flags & FLAG_POINT_LIGHTS) && (g_scene_constants.num_of_lights > 0)) {
@@ -881,7 +882,7 @@ void NextEventEstimation(VertexAttributes vertex_attributes, SurfaceProperties s
         LightRay light_ray = SamplePointLight(vertex_attributes.position, GenerateNextRandom(ray_state).x, pdf);
         if (g_scene_constants.flags & FLAG_SHADOW_RAYS) {
             float3 origin = OffsetRay(vertex_attributes.position, vertex_attributes.geometric_normal);
-            light_ray.color *= TraceShadowRay(origin, light_ray.direction, g_scene_constants.flags & FLAG_ALPHA_SHADOWS);
+            light_ray.color *= TraceShadowRay(acceleration_structure, origin, light_ray.direction, g_scene_constants.flags & FLAG_ALPHA_SHADOWS);
         }
         if (any(light_ray.color > 0.0)) {
             float bsdf_pdf = 0;
@@ -939,7 +940,7 @@ bool ContinueRay(in out RayState ray_state)
     return ray_state.active;
 }
 
-GeometryPayload TraceBounceRay(VertexAttributes vertex_attributes, uint ray_flags, in out RayState ray_state)
+GeometryPayload TraceBounceRay(VertexAttributes vertex_attributes, RaytracingAccelerationStructure acceleration_structure, uint ray_flags, in out RayState ray_state)
 {
     ray_state.origin = OffsetRay(ray_state.origin, ray_state.is_transmission ? -vertex_attributes.geometric_normal : vertex_attributes.geometric_normal);
     
@@ -958,7 +959,7 @@ GeometryPayload TraceBounceRay(VertexAttributes vertex_attributes, uint ray_flag
     payload.instance_index = 0;
     payload.primitive_index = 0;
 
-    TraceRay(g_acceleration_structure, ray_flags, instance_mask, 0, 0, 0, ray, payload);
+    TraceRay(acceleration_structure, ray_flags, instance_mask, 0, 0, 0, ray, payload);
 
     return payload;
 }
@@ -999,6 +1000,7 @@ void RayGeneration()
     uint instance_mask = 0xff;
     float4 u = 0.xxxx;
     VertexAttributes vertex_attributes;
+    StructuredBuffer<Instance> instances = ResourceDescriptorHeap[g_scene_constants.instances_descriptor];
     Instance instance;
 
     // Get data from visibility buffer.
@@ -1022,7 +1024,7 @@ void RayGeneration()
     } else {
         primitive_id--;
         instance_index--;
-        instance = g_instances[instance_index];
+        instance = instances[instance_index];
         vertex_attributes = GetVertexAttributesFromVisibilityBuffer(visibility_buffer_pixel, visibility_buffer_resolution, instance, primitive_id, g_scene_constants.world_to_clip);
         if (back_facing) {
             FlipNormals(vertex_attributes);
@@ -1030,6 +1032,8 @@ void RayGeneration()
         ray_state.origin = g_scene_constants.camera_pos;
         ray_state.direction = normalize(vertex_attributes.position - g_scene_constants.camera_pos);
     }
+
+    RaytracingAccelerationStructure acceleration_structure = ResourceDescriptorHeap[g_scene_constants.acceleration_structure_descriptor];
 
     while (ray_state.active) {
 
@@ -1061,7 +1065,8 @@ void RayGeneration()
         }
 
         // Get surface properties for shading.
-        Material material = g_materials[instance.material_id];
+        StructuredBuffer<Material> materials = ResourceDescriptorHeap[g_scene_constants.materials_descriptor];
+        Material material = materials[instance.material_id];
         SurfaceProperties surface_properties = GetSurfaceProperties(material, vertex_attributes, -ray_state.direction);
 
         // Material debug output.
@@ -1114,12 +1119,12 @@ void RayGeneration()
         ray_state.color += ray_state.throughput * emissive;
 
         // Sample the environment map.
-        if (!EnvironmentMapNextEventEstimation(vertex_attributes, surface_properties, ray_state)) {
+        if (!EnvironmentMapNextEventEstimation(vertex_attributes, surface_properties, acceleration_structure, ray_state)) {
             break;
         }
         
         // Sample point lights.
-        NextEventEstimation(vertex_attributes, surface_properties, ray_state);
+        NextEventEstimation(vertex_attributes, surface_properties, acceleration_structure, ray_state);
 
         // Break loop if max bounces exeeded.
         if (ray_state.bounce >= g_scene_constants.max_bounces) {
@@ -1136,7 +1141,7 @@ void RayGeneration()
         }
 
         // Trace bounce ray and get intersected geometry.
-        GeometryPayload geometry_payload = TraceBounceRay(vertex_attributes, ray_flags, ray_state);
+        GeometryPayload geometry_payload = TraceBounceRay(vertex_attributes, acceleration_structure, ray_flags, ray_state);
 
         // Sample the environment if we haven't hit any geometry.
         if (!(geometry_payload.flags & GEOMETRY_PAYLOAD_FLAG_HIT)) {
@@ -1146,7 +1151,7 @@ void RayGeneration()
         }
 
         // Get interpolated vertex attributes.
-        instance = g_instances[geometry_payload.instance_index];
+        instance = instances[geometry_payload.instance_index];
         float3 barycentric_weights = BarycentricWeights(geometry_payload.barycentrics);
         vertex_attributes = GetVertexAttributes(instance, geometry_payload.primitive_index, barycentric_weights);
 
@@ -1214,8 +1219,10 @@ void AnyHit(inout GeometryPayload payload, in BuiltInTriangleIntersectionAttribu
     uint primitive_index = PrimitiveIndex();
     float3 barycentric_weights = BarycentricWeights(attributes.barycentrics);
    
-    Instance instance = g_instances[instance_index];
-    Material material = g_materials[instance.material_id];
+    StructuredBuffer<Instance> instances = ResourceDescriptorHeap[g_scene_constants.instances_descriptor];
+    StructuredBuffer<Material> materials = ResourceDescriptorHeap[g_scene_constants.materials_descriptor];
+    Instance instance = instances[instance_index];
+    Material material = materials[instance.material_id];
 
     // Get interpolated vertex attributes.
     uint3 vertices = GetIndices(instance.index_descriptor, primitive_index);
@@ -1239,8 +1246,10 @@ void ShadowAnyHit(inout ShadowPayload payload, in BuiltInTriangleIntersectionAtt
     uint primitive_index = PrimitiveIndex();
     float3 barycentric_weights = BarycentricWeights(attributes.barycentrics);
    
-    Instance instance = g_instances[instance_index];
-    Material material = g_materials[instance.material_id];
+    StructuredBuffer<Instance> instances = ResourceDescriptorHeap[g_scene_constants.instances_descriptor];
+    StructuredBuffer<Material> materials = ResourceDescriptorHeap[g_scene_constants.materials_descriptor];
+    Instance instance = instances[instance_index];
+    Material material = materials[instance.material_id];
 
     // Get interpolated vertex attributes.
     uint3 vertices = GetIndices(instance.index_descriptor, primitive_index);
