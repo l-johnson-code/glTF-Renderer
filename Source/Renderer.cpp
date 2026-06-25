@@ -364,7 +364,7 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 
 	// Tone mapping.
 	command_context.BeginEvent("Tone Mapping");
-	this->tone_mapper.Run(&command_context, this->resources.cbv_uav_srv_dynamic_allocator.GetGpuHandle(this->display.Uav()), &this->settings.tone_mapper_config);
+	this->tone_mapper.Run(&command_context, this->display.Uav(), &this->settings.tone_mapper_config);
 	command_context.EndEvent();
 
 	command_context.BeginEvent("ImGui");

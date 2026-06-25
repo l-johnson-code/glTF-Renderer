@@ -20,10 +20,10 @@ struct Config {
     int tonemapper;
     float exposure;
     int frame;
+    int input_descriptor;
 };
 
-RWTexture2D<float4> g_input: register(u0);
-ConstantBuffer<Config> g_config: register(b0);
+ConstantBuffer<Config> g_config: register(b1);
 
 // AgX lookup table approximation by Benjamin Wrensch.
 // https://iolite-engine.com/blog_posts/minimal_agx_implementation
@@ -83,10 +83,11 @@ float3 Dither(float3 input, uint3 seed)
 PSOut main(PSIn input)
 {
     PSOut output;
+    RWTexture2D<float4> input_texture = ResourceDescriptorHeap[g_config.input_descriptor]; 
     uint2 resolution;
-    g_input.GetDimensions(resolution.x, resolution.y);
+    input_texture.GetDimensions(resolution.x, resolution.y);
     uint2 pixel = UVToPixel(input.uv, resolution);
-    float3 color = g_config.exposure * g_input[pixel].rgb;
+    float3 color = g_config.exposure * input_texture[pixel].rgb;
     switch (g_config.tonemapper) {
         case TONEMAPPER_NONE: {
             color = saturate(color);

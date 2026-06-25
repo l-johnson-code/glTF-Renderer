@@ -20,16 +20,10 @@ class ToneMapper {
 	};
 
     void Create(Gpu::Resources* resources);
-    void Run(CommandContext* context, D3D12_GPU_DESCRIPTOR_HANDLE input_descriptor, const Config* config);
+    void Run(CommandContext* context, int input_descriptor, const Config* config);
 
 	private:
 
-	enum OutputRootParameter {
-        ROOT_PARAMETER_INPUT,
-		ROOT_PARAMETER_CONFIG,
-		ROOT_PARAMETER_COUNT,
-	};
-
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
+	Gpu::Resources* resources;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state;
 };
