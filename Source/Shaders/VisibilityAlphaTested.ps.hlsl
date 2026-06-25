@@ -16,11 +16,11 @@ struct PSOut {
 struct PerModel {
 	uint instance_id;
     bool vertex_color;
+    int material_descriptor;
     int material_id;
 };
 
-ConstantBuffer<PerModel> g_per_model: register(b0);
-StructuredBuffer<Material> g_materials: register(t0);
+ConstantBuffer<PerModel> g_per_model: register(b1);
 
 PSOut main(PSIn input)
 {
@@ -28,7 +28,8 @@ PSOut main(PSIn input)
     
     // Discard pixel if alpha is zero.
     float4 vertex_color = g_per_model.vertex_color ? input.color : 1.0f;
-    Material material = g_materials[g_per_model.material_id];
+    StructuredBuffer<Material> materials = ResourceDescriptorHeap[g_per_model.material_descriptor];
+    Material material = materials[g_per_model.material_id];
     float4 base_color = GetBaseColor(material, input.tex_coords, vertex_color);
     float alpha = GetAlpha(material, base_color);
     if (alpha == 0.0f) {

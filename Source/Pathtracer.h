@@ -134,21 +134,6 @@ class Pathtracer {
         MISS_SHADER_COUNT,
     };
 
-    enum VisibilityRootParameter {
-        VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME,
-        VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL,
-        VISIBILITY_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL,
-        VISIBILITY_ROOT_PARAMETER_COUNT,
-    };
-
-    enum VisibilityAlphaTestedRootParameter {
-        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME,
-        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL,
-        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL,
-        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_MATERIALS,
-        VISIBILITY_ALPHA_TESTED_ROOT_PARAMETER_COUNT,
-    };
-
     struct GpuMeshInstance {
 		glm::mat4x4 transform;
 		glm::mat4x4 normal_transform;
@@ -195,9 +180,7 @@ class Pathtracer {
     std::vector<GpuMeshInstance> mesh_instances;
     MultiBuffer<Gpu::Buffer, Config::FRAME_COUNT> gpu_mesh_instances;
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> v_buffer_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> v_buffer_pipeline;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> v_buffer_alpha_tested_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> v_buffer_alpha_tested_pipeline;
     Gpu::Texture v_buffer_instance;
     Gpu::Texture v_buffer_primitive;
@@ -208,8 +191,7 @@ class Pathtracer {
     glm::mat4x4 previous_world_to_clip;
     int iterations = 0;
 
-    void CreateVBufferPipeline();
-    void CreateVBufferAlphaTestedPipeline();
+    void CreateVBufferPipelines();
     void BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure);

@@ -13,7 +13,7 @@ struct PerModel {
 	uint instance_id;
 };
 
-ConstantBuffer<PerModel> g_per_model: register(b0);
+ConstantBuffer<PerModel> g_per_model: register(b1);
 
 PSOut main(PSIn input)
 {
