@@ -47,12 +47,12 @@ struct PerFrame {
 	uint32_t render_flags;
 	int diffuse_cube_descriptor;
 	int transmission_descriptor;
+	int lights_descriptor;
+	int materials_descriptor;
 };
 
 ConstantBuffer<PerFrame> g_per_frame: register(b0);
 ConstantBuffer<PerModel> g_per_model: register(b1);
-StructuredBuffer<Light> g_lights: register(t0);
-StructuredBuffer<Material> g_materials: register(t1);
 SamplerState g_sampler_linear_clamp: register(s0);
 SamplerState g_sampler_linear_wrap: register(s1);
 
@@ -122,8 +122,9 @@ PSOut main(PSIn input)
 	// Create tangent space to world space matrix.
 	float3x3 tangent_to_world =	TangentToWorldMatrix(geometric_normal, geometric_tangent.xyz, geometric_bitangent);
 
+	StructuredBuffer<Material> materials = ResourceDescriptorHeap[g_per_frame.materials_descriptor];
+	Material material = materials[g_per_model.material_index];
 	SurfaceProperties surface_properties;
-	Material material = g_materials[g_per_model.material_index];
 
 	// Base color.
 	float4 vertex_color = g_per_model.mesh_flags & MESH_FLAG_COLOR ? input.color : 1.xxxx;
@@ -280,9 +281,10 @@ PSOut main(PSIn input)
 	}
 
 	// Point lighting.
+	StructuredBuffer<Light> lights = ResourceDescriptorHeap[g_per_frame.lights_descriptor];
 	if (g_per_frame.render_flags & RENDER_FLAG_POINT_LIGHTS) {
 		for (int i = 0; i < g_per_frame.num_of_lights; i++) {
-			Light light = g_lights[i];
+			Light light = lights[i];
 			LightRay light_ray = GetLightRay(light, input.world_pos);
 			output.lighting.xyz += GltfBsdf(
 				surface_properties,

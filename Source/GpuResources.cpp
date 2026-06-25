@@ -94,6 +94,30 @@ void Resources::Create(ID3D12Device* device)
 		D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED
 	);
 	result = CreateRootSignature(&compute_root_signature_desc, &this->generic_compute_root_signature, "Generic Compute Root Signature");
+	assert(SUCCEEDED(result));
+
+	CD3DX12_ROOT_PARAMETER graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_COUNT];
+	graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_DRAW].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_FRAME].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+	graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_DRAW].InitAsConstantBufferView(1, 0 , D3D12_SHADER_VISIBILITY_PIXEL);
+	
+	CD3DX12_ROOT_SIGNATURE_DESC graphics_root_signature_desc(
+		std::size(graphics_root_parameters), 
+		graphics_root_parameters, 
+		std::size(static_samplers), 
+		static_samplers, 
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | 
+		D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED
+	);
+	result = CreateRootSignature(&graphics_root_signature_desc, &this->generic_graphics_root_signature, "Generic Graphics Root Signature");
+	assert(SUCCEEDED(result));
 }
 
 HRESULT Resources::CreateBuffer(const BufferDesc* desc, Buffer* buffer)
@@ -405,6 +429,61 @@ HRESULT Resources::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STA
 		SetName(*pipeline_state, name);
 	}
 	return result;
+}
+
+HRESULT Resources::CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc, ID3D12PipelineState** pipeline_state)
+{
+	HRESULT result = S_OK;
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC d3d12_desc = {};
+
+	// Load shaders.
+	std::string shader_path("Shaders/");
+	shader_path.append(desc->vertex_shader);
+	shader_path.append(".vs.bin");
+	d3d12_desc.VS = LoadShader(shader_path.c_str());
+	if (d3d12_desc.VS.pShaderBytecode == nullptr) {
+		FreeShader(d3d12_desc.VS);
+		return E_FAIL;
+	}
+
+	shader_path = std::string("Shaders/");
+	shader_path.append(desc->pixel_shader);
+	shader_path.append(".ps.bin");
+	d3d12_desc.PS = LoadShader(shader_path.c_str());
+	if (d3d12_desc.PS.pShaderBytecode == nullptr) {
+		FreeShader(d3d12_desc.VS);
+		FreeShader(d3d12_desc.PS);
+		return E_FAIL;
+	}
+
+	// TODO: Check if pipeline exists in cache, create pipeline from cache if it does.
+
+	// Create pipeline from scratch.
+	d3d12_desc.pRootSignature = generic_graphics_root_signature.Get();
+	d3d12_desc.BlendState = desc->blend_state;
+	d3d12_desc.SampleMask = std::numeric_limits<UINT>::max();
+	d3d12_desc.InputLayout = desc->input_layout;
+	d3d12_desc.RasterizerState = desc->rasterizer_state;
+	d3d12_desc.DepthStencilState = desc->depth_stencil_state;
+	d3d12_desc.PrimitiveTopologyType = desc->primitive_topology_type;
+	d3d12_desc.NumRenderTargets = desc->render_target_count;
+	for (int i = 0; i < std::size(desc->render_target_formats); i++) {
+		d3d12_desc.RTVFormats[i] = desc->render_target_formats[i];
+	}
+	d3d12_desc.DSVFormat = desc->depth_stencil_format;
+	d3d12_desc.SampleDesc.Count = 1;
+	d3d12_desc.SampleDesc.Quality = 0;
+	result = this->device->CreateGraphicsPipelineState(&d3d12_desc, IID_PPV_ARGS(pipeline_state));
+	if (FAILED(result)) {
+		FreeShader(d3d12_desc.VS);
+		FreeShader(d3d12_desc.PS);
+		return result;
+	}
+	SetName(*pipeline_state, desc->name);
+
+	// TODO: Store pipeline in cache.
+	
+	return S_OK;
 }
 
 HRESULT Resources::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name)

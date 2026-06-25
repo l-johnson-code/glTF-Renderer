@@ -11,7 +11,7 @@ struct VsOut {
     float3 direction: DIRECTION;
 };
 
-ConstantBuffer<Parameters> g_parameters;
+ConstantBuffer<Parameters> g_parameters : register(b1);
 
 void GenerateCameraRay(float2 clip, float4x4 clip_to_world, out float3 direction)
 {

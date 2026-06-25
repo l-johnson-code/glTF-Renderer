@@ -35,8 +35,8 @@ class ForwardPass {
 		glm::mat4x4 previous_world_to_clip;
         glm::vec3 camera_pos;
         int num_of_lights;
-        D3D12_GPU_VIRTUAL_ADDRESS lights;
-        D3D12_GPU_VIRTUAL_ADDRESS materials;
+        Gpu::Buffer* lights;
+        Gpu::Buffer* materials;
         int ggx_cube_descriptor;
         int diffuse_cube_descriptor;
         float environment_map_intensity;
@@ -56,30 +56,16 @@ class ForwardPass {
 
     private:
 
-    enum RootParameterIndex {
-		ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME,
-		ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_MODEL,
-		ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_FRAME,
-		ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_MODEL,
-		ROOT_PARAMETER_SRV_LIGHTS,
-		ROOT_PARAMETER_SRV_MATERIALS,
-		ROOT_PARAMETER_COUNT,
-	};
-
     Gpu::Resources* resources = nullptr;
 
     D3D12_PRIMITIVE_TOPOLOGY current_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
     uint32_t current_pipeline_flags;
 
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_states[PIPELINE_FLAGS_PERMUTATION_COUNT];
-
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> background_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> background_pipeline_state;
-
     Microsoft::WRL::ComPtr<ID3D12PipelineState> transmission_mips_pipeline_state;
 
-    void CreatePipeline(Gpu::Resources* resources, D3D12_SHADER_BYTECODE vertex_shader, D3D12_SHADER_BYTECODE pixel_shader, uint32_t flags, ID3D12RootSignature* root_signature);
+    void CreatePipeline(Gpu::Resources* resources, uint32_t flags);
     void CreateBackgroundRenderer(Gpu::Resources* resources);
     void CreateTranmissionMipPipeline(Gpu::Resources* resources);
 };

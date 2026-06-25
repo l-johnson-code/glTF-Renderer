@@ -119,6 +119,28 @@ class Texture {
 	TextureFlags flags;
 };
 
+enum GenericGraphicsRootParameter {
+	GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME,
+	GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_DRAW,
+	GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_FRAME,
+	GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_DRAW,
+	GENERIC_GRAPHICS_ROOT_PARAMETER_COUNT,
+};
+
+struct GraphicsPipelineDesc {
+	const char* name;
+	const char* vertex_shader;
+	const char* pixel_shader;
+	D3D12_BLEND_DESC blend_state;
+	D3D12_RASTERIZER_DESC rasterizer_state;
+	D3D12_DEPTH_STENCIL_DESC depth_stencil_state;
+	D3D12_INPUT_LAYOUT_DESC input_layout;
+	D3D12_PRIMITIVE_TOPOLOGY_TYPE primitive_topology_type;
+	uint8_t render_target_count;
+	DXGI_FORMAT render_target_formats[8];
+	DXGI_FORMAT depth_stencil_format;
+};
+
 enum GenericComputeRootParameter {
 	GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER,
 	GENERIC_COMPUTE_ROOT_PARAMETER_COUNT,
@@ -163,17 +185,20 @@ class Resources {
 	HRESULT CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	HRESULT CreateComputePipelineState(const ComputePipelineDesc* desc, ID3D12PipelineState** pipeline_state);
 	HRESULT CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
+	HRESULT CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc, ID3D12PipelineState** pipeline_state);
 	HRESULT CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name = nullptr);
 	int CreateShaderResourceView(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* desc);
 	void FreeResourceDescriptor(int descriptor);
 	static D3D12_SHADER_BYTECODE LoadShader(const char* filepath);
 	static void FreeShader(D3D12_SHADER_BYTECODE shader);
 	ID3D12RootSignature* GenericComputeRootSignature() { return generic_compute_root_signature.Get(); }
+	ID3D12RootSignature* GenericGraphicsRootSignature() { return generic_graphics_root_signature.Get(); }
 	
 	private:
 
 	Microsoft::WRL::ComPtr<ID3D12Device> device;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> generic_compute_root_signature;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> generic_graphics_root_signature;
 };
 
 }

@@ -1,5 +1,5 @@
 struct Parameters {
-    float environment_intensitity;
+    float environment_intensity;
     int environment_descriptor;
 };
 
@@ -12,13 +12,13 @@ struct PsOut {
     float4 lighting: SV_TARGET0;
 };
 
-ConstantBuffer<Parameters> g_parameters: register(b0);
+ConstantBuffer<Parameters> g_parameters: register(b1);
 SamplerState g_sampler_linear_clamp: register(s0);
 
 PsOut main(PsIn input)
 {
     PsOut output;
-    output.lighting.rgb = g_parameters.environment_intensitity;
+    output.lighting.rgb = g_parameters.environment_intensity;
     if (g_parameters.environment_descriptor != -1) {
         TextureCube<float3> environment_cube = ResourceDescriptorHeap[g_parameters.environment_descriptor];
         float3 direction = normalize(input.direction);
