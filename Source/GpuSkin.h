@@ -16,7 +16,7 @@ class GpuSkin {
 
     void Create(Gpu::Resources* resources);
     void Bind(CommandContext* context);
-    void Run(CommandContext* context, Mesh* input, DynamicMesh* output, D3D12_GPU_VIRTUAL_ADDRESS bones, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights);
+    void Run(CommandContext* context, Mesh* input, DynamicMesh* output, int num_of_morph_targets, MorphTarget** morph_targets, float* morph_weights);
 
     private:
 
@@ -31,6 +31,6 @@ class GpuSkin {
 
     const int THREAD_GROUP_SIZE = 64;
 
+    Gpu::Resources* resources = nullptr;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
 };

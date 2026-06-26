@@ -514,6 +514,11 @@ int Resources::CreateShaderResourceView(ID3D12Resource* resource, const D3D12_SH
 	return this->cbv_uav_srv_dynamic_allocator.AllocateAndCreateSrv(resource, desc);
 }
 
+int Resources::CreateUnorderedAccessView(ID3D12Resource* resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc)
+{
+	return this->cbv_uav_srv_dynamic_allocator.AllocateAndCreateUav(resource, nullptr, desc);
+}
+
 void Resources::FreeResourceDescriptor(int descriptor)
 {
 	this->cbv_uav_srv_dynamic_allocator.Free(descriptor);

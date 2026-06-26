@@ -896,7 +896,6 @@ void Gltf::CreateDynamicMesh(Gpu::Resources* gpu_resources)
             this->nodes[i].dynamic_mesh = -1;
             continue;
         }
-
 		const std::vector<Primitive>& primitives = this->meshes[node.mesh_id].primitives;
 		DynamicPrimitives& dynamic = dynamic_primitives.emplace_back();
 		dynamic.dynamic_meshes.resize(primitives.size());
@@ -906,6 +905,11 @@ void Gltf::CreateDynamicMesh(Gpu::Resources* gpu_resources)
 			desc.flags = DynamicMesh::FLAG_POSITION;
 			if (primitives[j].mesh.flags & ::Mesh::FLAG_TANGENT_SPACE) {
 				desc.flags |= DynamicMesh::FLAG_TANGENT_SPACE;
+			}
+			if (node.skin_id != -1) {
+				const Skin& skin = this->skins[node.skin_id];
+				desc.flags |= DynamicMesh::FLAG_SKELETON;
+				desc.bone_count = skin.joints.size();
 			}
         	dynamic.dynamic_meshes[j].Create(gpu_resources, &desc);
 		}

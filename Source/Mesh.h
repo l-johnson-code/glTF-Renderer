@@ -95,26 +95,33 @@ struct DynamicMesh {
 
     struct Desc {
         uint32_t num_of_vertices;
+        uint16_t bone_count;
         uint8_t flags;
     };
 
     enum Flags {
         FLAG_POSITION = 1 << 0,
         FLAG_TANGENT_SPACE = 1 << 1,
+        FLAG_SKELETON = 1 << 2,
     };
 
     uint8_t flags = 0;
     uint32_t num_of_vertices = 0;
+    uint16_t bone_count = 0;
     int current_position_buffer = 0;
 
     Gpu::Buffer buffer;
 
     VertexBuffer position_and_tangent_space[2];
+    int bone_descriptors[2] = {-1, -1};
+    void* bone_pointers[2] = {nullptr, nullptr};
 
     HRESULT Create(Gpu::Resources* resources, const Desc* desc, const char* name = nullptr);
     void Flip();
     VertexBuffer* GetCurrentPositionAndTangentSpaceBuffer();
     VertexBuffer* GetPreviousPositionAndTangentSpaceBuffer();
+    int GetCurrentBoneDescriptor();
+    void* GetCurrentBonePointer();
     void Destroy(Gpu::Resources* resources);
 };
 

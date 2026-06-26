@@ -303,6 +303,8 @@ HRESULT DynamicMesh::Create(Gpu::Resources* resources, const Desc* desc, const c
 	VertexAllocation allocations[] = {
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(Mesh::PositionAndTangentSpace)) : null_allocation,
 		desc->flags & FLAG_POSITION ? VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(Mesh::PositionAndTangentSpace)) : null_allocation,
+		desc->flags & FLAG_SKELETON ? VertexBuffer::GetAllocationSize(desc->bone_count, sizeof(glm::mat4x4) * 2) : null_allocation, 
+		desc->flags & FLAG_SKELETON ? VertexBuffer::GetAllocationSize(desc->bone_count, sizeof(glm::mat4x4) * 2) : null_allocation, 
 	};
 	uint64_t offsets[std::size(allocations)];
 	size = CalculateTotalAllocationSize(std::size(allocations), allocations, offsets);
@@ -311,7 +313,8 @@ HRESULT DynamicMesh::Create(Gpu::Resources* resources, const Desc* desc, const c
 	Gpu::BufferDesc buffer_desc = {
 		.name = name ? name : "Dynamic Mesh",
 		.size = size,
-		.flags = Gpu::BUFFER_FLAG_UAV,
+		.flags = Gpu::BUFFER_FLAG_UAV | (desc->flags & FLAG_SKELETON ? Gpu::BUFFER_FLAG_PERSISTENT_MAP : Gpu::BUFFER_FLAG_NONE),
+		.heap_type = desc->flags & FLAG_SKELETON ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT,
 	};
 	HRESULT result = resources->CreateBuffer(&buffer_desc, &this->buffer);
 	if (result != S_OK) {
@@ -323,6 +326,16 @@ HRESULT DynamicMesh::Create(Gpu::Resources* resources, const Desc* desc, const c
 	if (desc->flags & FLAG_POSITION) {
 		position_and_tangent_space[0].Create(buffer.Resource(), base_address + offsets[0], resources, num_of_vertices, sizeof(Mesh::PositionAndTangentSpace));
 		position_and_tangent_space[1].Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, sizeof(Mesh::PositionAndTangentSpace));
+	}
+	if (desc->flags & FLAG_SKELETON) {
+		CD3DX12_UNORDERED_ACCESS_VIEW_DESC bones_uav_desc[2] = {
+			CD3DX12_UNORDERED_ACCESS_VIEW_DESC::StructuredBuffer(desc->bone_count, sizeof(glm::mat4x4) * 2, offsets[2] / (sizeof(glm::mat4x4) * 2)),
+			CD3DX12_UNORDERED_ACCESS_VIEW_DESC::StructuredBuffer(desc->bone_count, sizeof(glm::mat4x4) * 2, offsets[3] / (sizeof(glm::mat4x4) * 2))
+		};
+		bone_descriptors[0] = resources->CreateUnorderedAccessView(buffer.Resource(), &bones_uav_desc[0]);
+		bone_descriptors[1] = resources->CreateUnorderedAccessView(buffer.Resource(), &bones_uav_desc[1]);
+		bone_pointers[0] = (std::byte*)this->buffer.Pointer() + offsets[2];
+		bone_pointers[1] = (std::byte*)this->buffer.Pointer() + offsets[3];
 	}
 
 	return S_OK;
@@ -348,6 +361,18 @@ VertexBuffer* DynamicMesh::GetCurrentPositionAndTangentSpaceBuffer()
 VertexBuffer* DynamicMesh::GetPreviousPositionAndTangentSpaceBuffer()
 {
 	return &position_and_tangent_space[(current_position_buffer - 1) % 1];
+}
+
+int DynamicMesh::GetCurrentBoneDescriptor()
+{
+	assert(this->flags & FLAG_SKELETON);
+	return bone_descriptors[current_position_buffer];
+}
+
+void* DynamicMesh::GetCurrentBonePointer()
+{
+	assert(this->flags & FLAG_SKELETON);
+	return bone_pointers[current_position_buffer];
 }
 
 HRESULT MorphTarget::Create(Gpu::Resources* resources, const Desc* desc, const char* name)

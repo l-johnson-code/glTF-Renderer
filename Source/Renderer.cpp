@@ -468,24 +468,23 @@ void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf, int scene)
 		bool skinned = node.skin_id != -1;
 		bool morphed = node.current_weights.size() > 0;
 		if (skinned || morphed) {
-
-			// Calculate and upload bones to gpu.
-			D3D12_GPU_VIRTUAL_ADDRESS gpu_bones = 0;
-			if (skinned) {
-				Gltf::Skin& skin = gltf->skins[node.skin_id];
-				GpuSkin::Bone* bones = (GpuSkin::Bone*)context->Allocate(sizeof(bones[0]) * skin.joints.size(), D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT, &gpu_bones);
-				for (int i = 0; i < skin.joints.size(); i++) {
-					int joint = skin.joints[i];
-					bones[i].transform = glm::affineInverse(node.global_transform) * gltf->nodes[joint].global_transform * skin.inverse_bind_poses[i];
-					bones[i].inverse_transpose = glm::inverseTranspose(glm::mat3x3(bones[i].transform));
-				}
-			}
-
-			// Perform gpu skinning.
 			std::vector<Gltf::Primitive>& primitive = gltf->meshes[node.mesh_id].primitives;
 			std::vector<DynamicMesh>& dynamic = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_meshes;
+
+			// Perform gpu skinning.
 			for (int i = 0; i < primitive.size(); i++) {
 				dynamic[i].Flip();
+
+				// Calculate and upload bones to gpu.
+				if (skinned) {
+					Gltf::Skin& skin = gltf->skins[node.skin_id];
+					GpuSkin::Bone* bones = (GpuSkin::Bone*)(dynamic[i].GetCurrentBonePointer());
+					for (int i = 0; i < skin.joints.size(); i++) {
+						int joint = skin.joints[i];
+						bones[i].transform = glm::affineInverse(node.global_transform) * gltf->nodes[joint].global_transform * skin.inverse_bind_poses[i];
+						bones[i].inverse_transpose = glm::inverseTranspose(glm::mat3x3(bones[i].transform));
+					}
+				}
 
 				// Pick only the largest weights, and ignore any weights that are not larger than 0.
 				int num_of_targets = 0;
@@ -511,7 +510,6 @@ void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf, int scene)
 					context,
 					&primitive[i].mesh,
 					&dynamic[i],
-					skinned ? gpu_bones : 0,
 					num_of_targets,
 					targets,
 					weights
