@@ -53,6 +53,8 @@ struct PerFrame {
 
 ConstantBuffer<PerFrame> g_per_frame: register(b0);
 ConstantBuffer<PerModel> g_per_model: register(b1);
+StructuredBuffer<Material> g_material_buffers[] : register(t0, space0);
+StructuredBuffer<Light> g_light_buffers[] : register(t0, space1);
 SamplerState g_sampler_linear_clamp: register(s0);
 SamplerState g_sampler_linear_wrap: register(s1);
 
@@ -122,7 +124,7 @@ PSOut main(PSIn input)
 	// Create tangent space to world space matrix.
 	float3x3 tangent_to_world =	TangentToWorldMatrix(geometric_normal, geometric_tangent.xyz, geometric_bitangent);
 
-	StructuredBuffer<Material> materials = ResourceDescriptorHeap[g_per_frame.materials_descriptor];
+	StructuredBuffer<Material> materials = g_material_buffers[g_per_frame.materials_descriptor];
 	Material material = materials[g_per_model.material_index];
 	SurfaceProperties surface_properties;
 
@@ -281,7 +283,7 @@ PSOut main(PSIn input)
 	}
 
 	// Point lighting.
-	StructuredBuffer<Light> lights = ResourceDescriptorHeap[g_per_frame.lights_descriptor];
+	StructuredBuffer<Light> lights = g_light_buffers[g_per_frame.lights_descriptor];
 	if (g_per_frame.render_flags & RENDER_FLAG_POINT_LIGHTS) {
 		for (int i = 0; i < g_per_frame.num_of_lights; i++) {
 			Light light = lights[i];

@@ -164,6 +164,12 @@ struct SceneConstants {
 };
 
 ConstantBuffer<SceneConstants> g_scene_constants: register(b0);
+StructuredBuffer<PositionAndTangentSpace> g_position_and_tangent_space_buffers[]: register(t0, space0);
+StructuredBuffer<float2> g_float2_buffers[]: register(t0, space1);
+StructuredBuffer<Instance> g_instance_buffers[]: register(t0, space2);
+StructuredBuffer<Material> g_material_buffers[]: register(t0, space3);
+StructuredBuffer<Light> g_light_buffers[]: register(t0, space4);
+StructuredBuffer<AliasMap> g_alias_table_buffers[]: register(t0, space5);
 SamplerState g_sampler_linear_clamp: register(s0);
 SamplerState g_sampler_linear_wrap: register(s1);
 
@@ -230,7 +236,7 @@ float3 GetGeometricNormal(float3 pos_0, float3 pos_1, float3 pos_2)
 
 void GetPositionAndTangentSpace(int position_and_tangent_space_descriptor, uint3 indices, float3 barycentric_weights, in out VertexAttributes attributes)
 {
-    StructuredBuffer<PositionAndTangentSpace> position_and_tangent_space = ResourceDescriptorHeap[NonUniformResourceIndex(position_and_tangent_space_descriptor)];
+    StructuredBuffer<PositionAndTangentSpace> position_and_tangent_space = g_position_and_tangent_space_buffers[NonUniformResourceIndex(position_and_tangent_space_descriptor)];
     PositionAndTangentSpace pos_tan_0 = position_and_tangent_space[indices.x];
     PositionAndTangentSpace pos_tan_1 = position_and_tangent_space[indices.y];
     PositionAndTangentSpace pos_tan_2 = position_and_tangent_space[indices.z];
@@ -279,7 +285,7 @@ float2 GetTexcoord(int texcoord_descriptor, uint3 vertex, float3 barycentric_wei
 {
     float2 texcoord;
     if (texcoord_descriptor != -1) {
-        StructuredBuffer<float2> texcoord_buffer = ResourceDescriptorHeap[NonUniformResourceIndex(texcoord_descriptor)];
+        StructuredBuffer<float2> texcoord_buffer = g_float2_buffers[NonUniformResourceIndex(texcoord_descriptor)];
         float2 texcoord_0 = texcoord_buffer[vertex.x];
         float2 texcoord_1 = texcoord_buffer[vertex.y];
         float2 texcoord_2 = texcoord_buffer[vertex.z];
@@ -340,7 +346,7 @@ VertexAttributes GetVertexAttributesFromVisibilityBuffer(uint2 pixel, uint2 reso
     uint3 indices = GetIndices(instance.index_descriptor, primitive_id);
 
     // Get positions and use them to calculate barycentrics.
-    StructuredBuffer<PositionAndTangentSpace> position_and_tangent_space = ResourceDescriptorHeap[NonUniformResourceIndex(instance.position_and_tangent_space_descriptor)];
+    StructuredBuffer<PositionAndTangentSpace> position_and_tangent_space = g_position_and_tangent_space_buffers[NonUniformResourceIndex(instance.position_and_tangent_space_descriptor)];
     PositionAndTangentSpace pos_tan_0 = position_and_tangent_space[indices.x];
     PositionAndTangentSpace pos_tan_1 = position_and_tangent_space[indices.y];
     PositionAndTangentSpace pos_tan_2 = position_and_tangent_space[indices.z];
@@ -764,7 +770,7 @@ float3 SampleBsdf(SurfaceProperties surface_properties, float3 u, float3 v, out 
 LightRay SamplePointLight(float3 surface_pos, float u, out float pdf)
 {
     uint light_index = clamp(((uint)(u * (float)g_scene_constants.num_of_lights)), 0, g_scene_constants.num_of_lights - 1);
-    StructuredBuffer<Light> lights = ResourceDescriptorHeap[g_scene_constants.lights_descriptor];
+    StructuredBuffer<Light> lights = g_light_buffers[g_scene_constants.lights_descriptor];
     Light light = lights[light_index];
     pdf = 1.0f / (float)g_scene_constants.num_of_lights;
     return GetLightRay(light, surface_pos);
@@ -772,7 +778,7 @@ LightRay SamplePointLight(float3 surface_pos, float u, out float pdf)
 
 LightRay SampleEnvironmentMap(float3 u, out float pdf)
 {
-    StructuredBuffer<AliasMap> alias_table = ResourceDescriptorHeap[g_scene_constants.environment_alias_table];
+    StructuredBuffer<AliasMap> alias_table = g_alias_table_buffers[g_scene_constants.environment_alias_table];
     TextureCube<float4> environment_map = ResourceDescriptorHeap[g_scene_constants.environment_map_descriptor_id];
 
     // Importance sample the environment map texture.
@@ -1000,7 +1006,7 @@ void RayGeneration()
     uint instance_mask = 0xff;
     float4 u = 0.xxxx;
     VertexAttributes vertex_attributes;
-    StructuredBuffer<Instance> instances = ResourceDescriptorHeap[g_scene_constants.instances_descriptor];
+    StructuredBuffer<Instance> instances = g_instance_buffers[g_scene_constants.instances_descriptor];
     Instance instance;
 
     // Get data from visibility buffer.
@@ -1065,7 +1071,7 @@ void RayGeneration()
         }
 
         // Get surface properties for shading.
-        StructuredBuffer<Material> materials = ResourceDescriptorHeap[g_scene_constants.materials_descriptor];
+        StructuredBuffer<Material> materials = g_material_buffers[g_scene_constants.materials_descriptor];
         Material material = materials[instance.material_id];
         SurfaceProperties surface_properties = GetSurfaceProperties(material, vertex_attributes, -ray_state.direction);
 
@@ -1219,8 +1225,8 @@ void AnyHit(inout GeometryPayload payload, in BuiltInTriangleIntersectionAttribu
     uint primitive_index = PrimitiveIndex();
     float3 barycentric_weights = BarycentricWeights(attributes.barycentrics);
    
-    StructuredBuffer<Instance> instances = ResourceDescriptorHeap[g_scene_constants.instances_descriptor];
-    StructuredBuffer<Material> materials = ResourceDescriptorHeap[g_scene_constants.materials_descriptor];
+    StructuredBuffer<Instance> instances = g_instance_buffers[g_scene_constants.instances_descriptor];
+    StructuredBuffer<Material> materials = g_material_buffers[g_scene_constants.materials_descriptor];
     Instance instance = instances[instance_index];
     Material material = materials[instance.material_id];
 
@@ -1246,8 +1252,8 @@ void ShadowAnyHit(inout ShadowPayload payload, in BuiltInTriangleIntersectionAtt
     uint primitive_index = PrimitiveIndex();
     float3 barycentric_weights = BarycentricWeights(attributes.barycentrics);
    
-    StructuredBuffer<Instance> instances = ResourceDescriptorHeap[g_scene_constants.instances_descriptor];
-    StructuredBuffer<Material> materials = ResourceDescriptorHeap[g_scene_constants.materials_descriptor];
+    StructuredBuffer<Instance> instances = g_instance_buffers[g_scene_constants.instances_descriptor];
+    StructuredBuffer<Material> materials = g_material_buffers[g_scene_constants.materials_descriptor];
     Instance instance = instances[instance_index];
     Material material = materials[instance.material_id];
 

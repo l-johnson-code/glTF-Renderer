@@ -70,12 +70,43 @@ void Resources::Create(ID3D12Device* device)
 
 	allocator.Init(this->device.Get());
 
+	const UINT srv_descriptor_ranges = 10;
+	const UINT uav_descriptor_ranges = 10;
+	const UINT total_descriptor_ranges = srv_descriptor_ranges + uav_descriptor_ranges;
+	D3D12_DESCRIPTOR_RANGE descriptor_ranges[total_descriptor_ranges];
+	for (int i = 0; i < srv_descriptor_ranges; i++) {
+		descriptor_ranges[i] = {
+			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+			.NumDescriptors = (UINT)cbv_uav_srv_allocator.Capacity(),
+			.BaseShaderRegister = 0,
+			.RegisterSpace = (UINT)i,
+			.OffsetInDescriptorsFromTableStart = 0,
+		};
+	}
+	for (int i = 0; i < uav_descriptor_ranges; i++) {
+		descriptor_ranges[srv_descriptor_ranges + i] = {
+			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+			.NumDescriptors = (UINT)cbv_uav_srv_allocator.Capacity(),
+			.BaseShaderRegister = 0,
+			.RegisterSpace = (UINT)i,
+			.OffsetInDescriptorsFromTableStart = 0,
+		};
+	}
+	D3D12_DESCRIPTOR_RANGE sampler_descriptor_range = {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+		.NumDescriptors = (UINT)sampler_allocator.Capacity(),
+		.BaseShaderRegister = 0,
+		.RegisterSpace = 1,
+		.OffsetInDescriptorsFromTableStart = 0,
+	};
+	
 	CD3DX12_STATIC_SAMPLER_DESC static_samplers[3];
 	static_samplers[0].Init(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
 	static_samplers[1].Init(1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
 	static_samplers[2].Init(2, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
-
+	
 	CD3DX12_ROOT_PARAMETER compute_root_parameters[GENERIC_COMPUTE_ROOT_PARAMETER_COUNT];
+	compute_root_parameters[GENERIC_COMPUTE_ROOT_PARAMETER_RESOURCE_TABLE].InitAsDescriptorTable(std::size(descriptor_ranges), descriptor_ranges);
 	compute_root_parameters[GENERIC_COMPUTE_ROOT_PARAMETER_CONSTANT_BUFFER].InitAsConstantBufferView(0);
 
 	CD3DX12_ROOT_SIGNATURE_DESC compute_root_signature_desc(
@@ -97,6 +128,7 @@ void Resources::Create(ID3D12Device* device)
 	assert(SUCCEEDED(result));
 
 	CD3DX12_ROOT_PARAMETER graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_COUNT];
+	graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_RESOURCE_TABLE].InitAsDescriptorTable(std::size(descriptor_ranges), descriptor_ranges);
 	graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_FRAME].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 	graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_VERTEX_PER_DRAW].InitAsConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 	graphics_root_parameters[GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_FRAME].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);

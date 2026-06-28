@@ -309,6 +309,10 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 		this->resources.sampler_allocator.DescriptorHeap(),
 	};
 	this->graphics_command_list->SetDescriptorHeaps(std::size(descriptor_heaps), descriptor_heaps);
+	this->graphics_command_list->SetComputeRootSignature(this->resources.GenericComputeRootSignature());
+	this->graphics_command_list->SetComputeRootDescriptorTable(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_RESOURCE_TABLE, this->resources.cbv_uav_srv_allocator.GetGpuHandle(0));
+	this->graphics_command_list->SetGraphicsRootSignature(this->resources.GenericGraphicsRootSignature());
+	this->graphics_command_list->SetGraphicsRootDescriptorTable(Gpu::GENERIC_COMPUTE_ROOT_PARAMETER_RESOURCE_TABLE, this->resources.cbv_uav_srv_allocator.GetGpuHandle(0));
 
 	// Generate environment map.
 	if (environment_map.equirectangular_image.Resource()) {
