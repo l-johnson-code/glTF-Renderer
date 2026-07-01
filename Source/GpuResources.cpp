@@ -281,7 +281,9 @@ void Resources::Create(ID3D12Device1* device)
 	assert(SUCCEEDED(result));
 
 	// Create pipeline cache.
-	result = device->CreatePipelineLibrary(nullptr, 0, IID_PPV_ARGS(&this->pipeline_library));
+	uint64_t pipeline_cache_size = 0;
+	void* pipeline_cache = File::Load(pipeline_cache_path, &pipeline_cache_size);
+	result = device->CreatePipelineLibrary(pipeline_cache, pipeline_cache_size, IID_PPV_ARGS(&this->pipeline_library));
 	assert(SUCCEEDED(result));
 }
 
@@ -569,6 +571,8 @@ HRESULT Resources::CreateComputePipelineState(const ComputePipelineDesc* desc, I
 		return E_FAIL;
 	}
 
+	d3d12_desc.pRootSignature = generic_compute_root_signature.Get();
+
 	// Try to create pipeline from cache.
 	uint32_t hash = 0;
 	std::wstring pipeline_id;
@@ -577,12 +581,12 @@ HRESULT Resources::CreateComputePipelineState(const ComputePipelineDesc* desc, I
 		pipeline_id = std::format(L"{:x}", hash);
 		result = this->pipeline_library->LoadComputePipeline(pipeline_id.c_str(), &d3d12_desc, IID_PPV_ARGS(pipeline_state));
 		if (SUCCEEDED(result)) {
+			FreeShader(d3d12_desc.CS);
 			return S_OK;
 		}
 	}
 
 	// Create pipeline from scratch.
-	d3d12_desc.pRootSignature = generic_compute_root_signature.Get();
 	result = this->device->CreateComputePipelineState(&d3d12_desc, IID_PPV_ARGS(pipeline_state));
 	if (FAILED(result)) {
 		FreeShader(d3d12_desc.CS);
@@ -594,6 +598,7 @@ HRESULT Resources::CreateComputePipelineState(const ComputePipelineDesc* desc, I
 	if (this->pipeline_library.Get()) {
 		result = this->pipeline_library->StorePipeline(pipeline_id.c_str(), *pipeline_state);
 	}
+	FreeShader(d3d12_desc.CS);
 	
 	return S_OK;
 }
@@ -637,19 +642,6 @@ HRESULT Resources::CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc,
 		return E_FAIL;
 	}
 
-	// Try to create pipeline from cache.
-	uint32_t hash = 0;
-	std::wstring pipeline_id;
-	if (this->pipeline_library.Get()) {
-		hash = HashGraphicsPipelineDesc(desc);
-		pipeline_id = std::format(L"{:x}", hash);
-		result = this->pipeline_library->LoadGraphicsPipeline(pipeline_id.c_str(), &d3d12_desc, IID_PPV_ARGS(pipeline_state));
-		if (SUCCEEDED(result)) {
-			return S_OK;
-		}
-	}
-
-	// Create pipeline from scratch.
 	d3d12_desc.pRootSignature = generic_graphics_root_signature.Get();
 	d3d12_desc.BlendState = desc->blend_state;
 	d3d12_desc.SampleMask = std::numeric_limits<UINT>::max();
@@ -664,6 +656,22 @@ HRESULT Resources::CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc,
 	d3d12_desc.DSVFormat = desc->depth_stencil_format;
 	d3d12_desc.SampleDesc.Count = 1;
 	d3d12_desc.SampleDesc.Quality = 0;
+
+	// Try to create pipeline from cache.
+	uint32_t hash = 0;
+	std::wstring pipeline_id;
+	if (this->pipeline_library.Get()) {
+		hash = HashGraphicsPipelineDesc(desc);
+		pipeline_id = std::format(L"{:x}", hash);
+		result = this->pipeline_library->LoadGraphicsPipeline(pipeline_id.c_str(), &d3d12_desc, IID_PPV_ARGS(pipeline_state));
+		if (SUCCEEDED(result)) {
+			return S_OK;
+			FreeShader(d3d12_desc.VS);
+			FreeShader(d3d12_desc.PS);
+		}
+	}
+	
+	// Create pipeline from scratch.
 	result = this->device->CreateGraphicsPipelineState(&d3d12_desc, IID_PPV_ARGS(pipeline_state));
 	if (FAILED(result)) {
 		FreeShader(d3d12_desc.VS);
@@ -676,8 +684,29 @@ HRESULT Resources::CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc,
 	if (this->pipeline_library.Get()) {
 		result = this->pipeline_library->StorePipeline(pipeline_id.c_str(), *pipeline_state);
 	}
+
+	FreeShader(d3d12_desc.VS);
+	FreeShader(d3d12_desc.PS);
 	
 	return S_OK;
+}
+
+void Resources::SavePipelineCache()
+{
+	if (this->pipeline_library.Get()) {
+		size_t size = this->pipeline_library->GetSerializedSize();
+		void* pipeline_cache = Allocate(size);
+		if (!pipeline_cache) {
+			return;
+		}
+		HRESULT result = this->pipeline_library->Serialize(pipeline_cache, size);
+		if (FAILED(result)) {
+			Free(pipeline_cache);
+			return;
+		}
+		bool file_saved = File::Save(pipeline_cache_path, pipeline_cache, size);
+		Free(pipeline_cache);
+	}
 }
 
 HRESULT Resources::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name)

@@ -551,6 +551,7 @@ int main(int argc, char* argv[])
 	// Wait for all outstanding GPU work to complete before releasing resources.
 	renderer.WaitForOutstandingWork();
 	renderer.upload_buffer.WaitForAllSubmissionsToComplete();
+	renderer.resources.SavePipelineCache();
 	g_gltf.Unload();
 
 	// Release resources.

@@ -212,6 +212,7 @@ class Resources {
 	HRESULT CreateComputePipelineState(const ComputePipelineDesc* desc, ID3D12PipelineState** pipeline_state);
 	HRESULT CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	HRESULT CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc, ID3D12PipelineState** pipeline_state);
+	void SavePipelineCache();
 	HRESULT CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name = nullptr);
 	int CreateShaderResourceView(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC* desc);
 	int CreateUnorderedAccessView(ID3D12Resource* resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc);
@@ -222,6 +223,8 @@ class Resources {
 	ID3D12RootSignature* GenericGraphicsRootSignature() { return generic_graphics_root_signature.Get(); }
 	
 	private:
+
+	const char* pipeline_cache_path = "PipelineCache.bin";
 
 	Microsoft::WRL::ComPtr<ID3D12Device1> device;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> generic_compute_root_signature;
