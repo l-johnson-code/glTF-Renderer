@@ -202,7 +202,7 @@ class Resources {
 
 	GpuAllocator allocator;
 	
-	void Create(ID3D12Device* device);
+	void Create(ID3D12Device1* device);
 	HRESULT CreateBuffer(const BufferDesc* desc, Buffer* buffer);
 	void FreeBuffer(Buffer* buffer);
 	HRESULT CreateTexture(const TextureDesc* desc, Texture* texture);
@@ -223,9 +223,10 @@ class Resources {
 	
 	private:
 
-	Microsoft::WRL::ComPtr<ID3D12Device> device;
+	Microsoft::WRL::ComPtr<ID3D12Device1> device;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> generic_compute_root_signature;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> generic_graphics_root_signature;
+	Microsoft::WRL::ComPtr<ID3D12PipelineLibrary> pipeline_library;
 };
 
 }

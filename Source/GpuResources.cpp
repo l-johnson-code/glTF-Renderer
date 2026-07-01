@@ -1,6 +1,7 @@
 #include "GpuResources.h"
 
 #include <cassert>
+#include <format>
 
 #include <directx/d3d12.h>
 #include <directx/d3dx12_core.h>
@@ -17,7 +18,135 @@
 
 namespace Gpu {
 
-void Resources::Create(ID3D12Device* device)
+constexpr uint32_t pcg(uint32_t v)
+{
+	uint32_t state = v * 747796405u + 2891336453u;
+	uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+	return (word >> 22u) ^ word;
+}
+
+constexpr uint32_t HashString(uint32_t hash, const char* string)
+{
+	if (string) {
+		for (int i = 0; string[i] != '\0'; i++) {
+			hash = pcg((uint32_t)string[i] + hash);
+		}
+	}
+	return hash;
+}
+
+constexpr uint32_t HashField(uint32_t hash, uint32_t field)
+{
+	return pcg(field + hash);
+}
+
+static uint32_t HashComputePipelineDesc(const ComputePipelineDesc* desc)
+{
+	ProfileZoneScoped();
+	return HashString(0, desc->compute_shader);
+}
+
+constexpr uint32_t HashBlendStates(uint32_t hash, uint8_t render_target_count, const D3D12_BLEND_DESC* blend_desc)
+{
+	hash = HashField(hash, blend_desc->AlphaToCoverageEnable);
+	hash = HashField(hash, blend_desc->IndependentBlendEnable);
+	int blend_states = blend_desc->IndependentBlendEnable ? render_target_count : 1;
+	if (blend_desc->IndependentBlendEnable) {
+		for (int i = 0; i < render_target_count; i++) {
+			hash = HashField(hash, blend_desc->RenderTarget[i].BlendEnable);
+			hash = HashField(hash, blend_desc->RenderTarget[i].LogicOpEnable);
+			hash = HashField(hash, blend_desc->RenderTarget[i].SrcBlend);
+			hash = HashField(hash, blend_desc->RenderTarget[i].DestBlend);
+			hash = HashField(hash, blend_desc->RenderTarget[i].BlendOp);
+			hash = HashField(hash, blend_desc->RenderTarget[i].SrcBlendAlpha);
+			hash = HashField(hash, blend_desc->RenderTarget[i].DestBlendAlpha);
+			hash = HashField(hash, blend_desc->RenderTarget[i].BlendOpAlpha);
+			hash = HashField(hash, blend_desc->RenderTarget[i].LogicOp);
+			hash = HashField(hash, blend_desc->RenderTarget[i].RenderTargetWriteMask);
+		}
+	}
+	return hash;
+}
+
+constexpr uint32_t HashRasterizerState(uint32_t hash, const D3D12_RASTERIZER_DESC* rasterizer_desc)
+{
+	hash = HashField(hash, rasterizer_desc->FillMode);
+	hash = HashField(hash, rasterizer_desc->CullMode);
+	hash = HashField(hash, rasterizer_desc->FrontCounterClockwise);
+	hash = HashField(hash, rasterizer_desc->DepthBias);
+	hash = HashField(hash, rasterizer_desc->DepthBiasClamp);
+	hash = HashField(hash, rasterizer_desc->SlopeScaledDepthBias);
+	hash = HashField(hash, rasterizer_desc->DepthClipEnable);
+	hash = HashField(hash, rasterizer_desc->MultisampleEnable);
+	hash = HashField(hash, rasterizer_desc->AntialiasedLineEnable);
+	hash = HashField(hash, rasterizer_desc->ForcedSampleCount);
+	hash = HashField(hash, rasterizer_desc->ConservativeRaster);
+	return hash;
+}
+
+constexpr uint32_t HashDepthStencilOp(uint32_t hash, const D3D12_DEPTH_STENCILOP_DESC* depth_stencil_op_desc)
+{
+	hash = HashField(hash, depth_stencil_op_desc->StencilFailOp);
+	hash = HashField(hash, depth_stencil_op_desc->StencilDepthFailOp);
+	hash = HashField(hash, depth_stencil_op_desc->StencilPassOp);
+	hash = HashField(hash, depth_stencil_op_desc->StencilFunc);
+	return hash;
+}
+
+constexpr uint32_t HashDepthStencilState(uint32_t hash, const D3D12_DEPTH_STENCIL_DESC* depth_stencil_desc)
+{
+	hash = HashField(hash, depth_stencil_desc->DepthEnable);
+	hash = HashField(hash, depth_stencil_desc->DepthWriteMask);
+	hash = HashField(hash, depth_stencil_desc->DepthFunc);
+	hash = HashField(hash, depth_stencil_desc->StencilEnable);
+	hash = HashField(hash, depth_stencil_desc->StencilReadMask);
+	hash = HashField(hash, depth_stencil_desc->StencilWriteMask);
+	hash = HashDepthStencilOp(hash, &depth_stencil_desc->FrontFace);
+	hash = HashDepthStencilOp(hash, &depth_stencil_desc->BackFace);
+	return hash;
+}
+
+constexpr uint32_t HashInputLayout(uint32_t hash, const D3D12_INPUT_LAYOUT_DESC* input_layout_desc)
+{
+	for (int i = 0; i < input_layout_desc->NumElements; i++) {
+		hash = HashString(hash, input_layout_desc->pInputElementDescs->SemanticName);
+		hash = HashField(hash, input_layout_desc->pInputElementDescs->SemanticIndex);
+		hash = HashField(hash, input_layout_desc->pInputElementDescs->Format);
+		hash = HashField(hash, input_layout_desc->pInputElementDescs->InputSlot);
+		hash = HashField(hash, input_layout_desc->pInputElementDescs->AlignedByteOffset);
+		hash = HashField(hash, input_layout_desc->pInputElementDescs->InputSlotClass);
+		hash = HashField(hash, input_layout_desc->pInputElementDescs->InstanceDataStepRate);
+	}
+	hash = HashField(hash, input_layout_desc->NumElements);
+	return hash;
+}
+
+constexpr uint32_t HashRenderTargetFormats(uint32_t hash, uint8_t render_target_count, const DXGI_FORMAT* render_target_formats)
+{
+	hash = HashField(hash, render_target_count);
+	for (int i = 0; i < render_target_count; i++) {
+		hash = HashField(hash, render_target_formats[i]);
+	}
+	return hash;
+}
+
+static uint32_t HashGraphicsPipelineDesc(const GraphicsPipelineDesc* desc)
+{
+	ProfileZoneScoped();
+	uint32_t hash = 0;
+	hash = HashString(hash, desc->pixel_shader);
+	hash = HashString(hash, desc->vertex_shader);
+	hash = HashBlendStates(hash, desc->render_target_count, &desc->blend_state);
+	hash = HashRasterizerState(hash, &desc->rasterizer_state);
+	hash = HashDepthStencilState(hash, &desc->depth_stencil_state);
+	hash = HashInputLayout(hash, &desc->input_layout);
+	hash = HashField(hash, desc->primitive_topology_type);
+	hash = HashRenderTargetFormats(hash, desc->render_target_count, desc->render_target_formats);
+	hash = HashField(hash, desc->depth_stencil_format);
+	return hash;
+}
+
+void Resources::Create(ID3D12Device1* device)
 {
 	ProfileZoneScoped();
 	HRESULT result = S_OK;
@@ -149,6 +278,10 @@ void Resources::Create(ID3D12Device* device)
 		D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED
 	);
 	result = CreateRootSignature(&graphics_root_signature_desc, &this->generic_graphics_root_signature, "Generic Graphics Root Signature");
+	assert(SUCCEEDED(result));
+
+	// Create pipeline cache.
+	result = device->CreatePipelineLibrary(nullptr, 0, IID_PPV_ARGS(&this->pipeline_library));
 	assert(SUCCEEDED(result));
 }
 
@@ -436,7 +569,17 @@ HRESULT Resources::CreateComputePipelineState(const ComputePipelineDesc* desc, I
 		return E_FAIL;
 	}
 
-	// TODO: Check if pipeline exists in cache, create pipeline from cache if it does.
+	// Try to create pipeline from cache.
+	uint32_t hash = 0;
+	std::wstring pipeline_id;
+	if (this->pipeline_library.Get()) {
+		hash = HashComputePipelineDesc(desc);
+		pipeline_id = std::format(L"{:x}", hash);
+		result = this->pipeline_library->LoadComputePipeline(pipeline_id.c_str(), &d3d12_desc, IID_PPV_ARGS(pipeline_state));
+		if (SUCCEEDED(result)) {
+			return S_OK;
+		}
+	}
 
 	// Create pipeline from scratch.
 	d3d12_desc.pRootSignature = generic_compute_root_signature.Get();
@@ -447,7 +590,10 @@ HRESULT Resources::CreateComputePipelineState(const ComputePipelineDesc* desc, I
 	}
 	SetName(*pipeline_state, desc->name);
 
-	// TODO: Store pipeline in cache.
+	// Store pipeline in cache.
+	if (this->pipeline_library.Get()) {
+		result = this->pipeline_library->StorePipeline(pipeline_id.c_str(), *pipeline_state);
+	}
 	
 	return S_OK;
 }
@@ -491,7 +637,17 @@ HRESULT Resources::CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc,
 		return E_FAIL;
 	}
 
-	// TODO: Check if pipeline exists in cache, create pipeline from cache if it does.
+	// Try to create pipeline from cache.
+	uint32_t hash = 0;
+	std::wstring pipeline_id;
+	if (this->pipeline_library.Get()) {
+		hash = HashGraphicsPipelineDesc(desc);
+		pipeline_id = std::format(L"{:x}", hash);
+		result = this->pipeline_library->LoadGraphicsPipeline(pipeline_id.c_str(), &d3d12_desc, IID_PPV_ARGS(pipeline_state));
+		if (SUCCEEDED(result)) {
+			return S_OK;
+		}
+	}
 
 	// Create pipeline from scratch.
 	d3d12_desc.pRootSignature = generic_graphics_root_signature.Get();
@@ -516,7 +672,10 @@ HRESULT Resources::CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc,
 	}
 	SetName(*pipeline_state, desc->name);
 
-	// TODO: Store pipeline in cache.
+	// Store pipeline in cache.
+	if (this->pipeline_library.Get()) {
+		result = this->pipeline_library->StorePipeline(pipeline_id.c_str(), *pipeline_state);
+	}
 	
 	return S_OK;
 }
