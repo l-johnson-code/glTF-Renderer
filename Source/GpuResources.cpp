@@ -284,6 +284,11 @@ void Resources::Create(ID3D12Device1* device)
 	uint64_t pipeline_cache_size = 0;
 	void* pipeline_cache = File::Load(pipeline_cache_path, &pipeline_cache_size);
 	result = device->CreatePipelineLibrary(pipeline_cache, pipeline_cache_size, IID_PPV_ARGS(&this->pipeline_library));
+	// Create a new cache if the loaded cache was created for a different device or driver version.
+	if (result == D3D12_ERROR_DRIVER_VERSION_MISMATCH || result == D3D12_ERROR_ADAPTER_NOT_FOUND) {
+		File::Free(pipeline_cache);
+		result = device->CreatePipelineLibrary(nullptr, 0, IID_PPV_ARGS(&this->pipeline_library));
+	}
 	assert(SUCCEEDED(result));
 }
 
