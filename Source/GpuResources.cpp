@@ -557,22 +557,10 @@ HRESULT Resources::CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, ID
 	return result;
 }
 
-HRESULT Resources::CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
-{
-	ProfileZoneScoped();
-	HRESULT result = device->CreateComputePipelineState(desc, IID_PPV_ARGS(pipeline_state));
-	assert(SUCCEEDED(result));
-	if (FAILED(result)) {
-		return result;
-	}
-	if (name) {
-		SetName(*pipeline_state, name);
-	}
-	return result;
-}
-
 HRESULT Resources::CreateComputePipelineState(const ComputePipelineDesc* desc, ID3D12PipelineState** pipeline_state)
 {
+	ProfileZoneScoped();
+	
 	HRESULT result = S_OK;
 	D3D12_COMPUTE_PIPELINE_STATE_DESC d3d12_desc = {};
 
@@ -618,22 +606,10 @@ HRESULT Resources::CreateComputePipelineState(const ComputePipelineDesc* desc, I
 	return S_OK;
 }
 
-HRESULT Resources::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name)
-{
-	ProfileZoneScoped();
-	HRESULT result = device->CreateGraphicsPipelineState(desc, IID_PPV_ARGS(pipeline_state));
-	assert(SUCCEEDED(result));
-	if (FAILED(result)) {
-		return result;
-	}
-	if (name) {
-		SetName(*pipeline_state, name);
-	}
-	return result;
-}
-
 HRESULT Resources::CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc, ID3D12PipelineState** pipeline_state)
 {
+	ProfileZoneScoped();
+
 	HRESULT result = S_OK;
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC d3d12_desc = {};
 

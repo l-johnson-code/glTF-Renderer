@@ -207,10 +207,7 @@ class Resources {
 	void FreeBuffer(Buffer* buffer);
 	HRESULT CreateTexture(const TextureDesc* desc, Texture* texture);
 	void FreeTexture(Texture* texture);
-	HRESULT CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name = nullptr);
-	HRESULT CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	HRESULT CreateComputePipelineState(const ComputePipelineDesc* desc, ID3D12PipelineState** pipeline_state);
-	HRESULT CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** pipeline_state, const char* name = nullptr);
 	HRESULT CreateGraphicsPipelineState(const GraphicsPipelineDesc* desc, ID3D12PipelineState** pipeline_state);
 	void SavePipelineCache();
 	HRESULT CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, ID3D12StateObject** state_object, const char* name = nullptr);
@@ -223,13 +220,15 @@ class Resources {
 	ID3D12RootSignature* GenericGraphicsRootSignature() { return generic_graphics_root_signature.Get(); }
 	
 	private:
-
+	
 	std::string pipeline_cache_path;
-
+	
 	Microsoft::WRL::ComPtr<ID3D12Device1> device;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> generic_compute_root_signature;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> generic_graphics_root_signature;
 	Microsoft::WRL::ComPtr<ID3D12PipelineLibrary> pipeline_library;
+	
+	HRESULT CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC* desc, ID3D12RootSignature** root_signature, const char* name = nullptr);
 };
 
 }
