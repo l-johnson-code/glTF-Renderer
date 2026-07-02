@@ -10,6 +10,7 @@
 #include <directx/dxgiformat.h>
 #include <glm/gtx/texture.hpp>
 #include <stb/stb_image.h>
+#include <SDL3/SDL.h>
 
 #include "Config.h"
 #include "DirectXHelpers.h"
@@ -282,11 +283,14 @@ void Resources::Create(ID3D12Device1* device)
 
 	// Create pipeline cache.
 	if (!Config::disable_pipeline_cache) {
+		// Use the exe directory because the working directory can be changed by the windows file dialog.
+		this->pipeline_cache_path = std::string(SDL_GetBasePath());
+		this->pipeline_cache_path.append("PipelineCache.bin");
 		if (Config::clear_pipeline_cache) { 
 			result = device->CreatePipelineLibrary(nullptr, 0, IID_PPV_ARGS(&this->pipeline_library));
 		} else {
 			uint64_t pipeline_cache_size = 0;
-			void* pipeline_cache = File::Load(pipeline_cache_path, &pipeline_cache_size);
+			void* pipeline_cache = File::Load(pipeline_cache_path.c_str(), &pipeline_cache_size);
 			result = device->CreatePipelineLibrary(pipeline_cache, pipeline_cache_size, IID_PPV_ARGS(&this->pipeline_library));
 			// Create a new cache if the loaded cache was created for a different device or driver version.
 			if (result == D3D12_ERROR_DRIVER_VERSION_MISMATCH || result == D3D12_ERROR_ADAPTER_NOT_FOUND) {
@@ -715,7 +719,7 @@ void Resources::SavePipelineCache()
 			Free(pipeline_cache);
 			return;
 		}
-		bool file_saved = File::Save(pipeline_cache_path, pipeline_cache, size);
+		bool file_saved = File::Save(pipeline_cache_path.c_str(), pipeline_cache, size);
 		Free(pipeline_cache);
 	}
 }

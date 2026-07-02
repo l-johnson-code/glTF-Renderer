@@ -224,7 +224,7 @@ class Resources {
 	
 	private:
 
-	const char* pipeline_cache_path = "PipelineCache.bin";
+	std::string pipeline_cache_path;
 
 	Microsoft::WRL::ComPtr<ID3D12Device1> device;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> generic_compute_root_signature;
