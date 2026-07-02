@@ -25,6 +25,8 @@ class Config {
 	// Runtime configuration.
 	static bool enable_d3d12_debug_layer;
 	static bool enable_gpu_based_validation;
+	static bool disable_pipeline_cache;
+	static bool clear_pipeline_cache;
 	static std::string load_gltf;
 	static std::string load_environment;
 	static bool fullscreen;

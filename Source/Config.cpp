@@ -5,6 +5,8 @@
 
 bool Config::enable_d3d12_debug_layer = false;
 bool Config::enable_gpu_based_validation = false;
+bool Config::disable_pipeline_cache = false;
+bool Config::clear_pipeline_cache = false;
 std::string Config::load_gltf;
 std::string Config::load_environment;
 bool Config::fullscreen = false;
@@ -48,6 +50,8 @@ void Config::ParseCommandLineArguments(const char* const* arguments, int argumen
         std::string_view argument(arguments[i]);
         if (ParseBoolean(argument, "--d3d12-debug-layer", &Config::enable_d3d12_debug_layer)) {
         } else if (ParseBoolean(argument, "--gpu-based-validation", &Config::enable_gpu_based_validation)) {
+        } else if (ParseBoolean(argument, "--disable-pipeline-cache", &Config::disable_pipeline_cache)) {
+        } else if (ParseBoolean(argument, "--clear-pipeline-cache", &Config::clear_pipeline_cache)) {
         } else if (ParseBoolean(argument, "--fullscreen", &Config::fullscreen)) {
         } else if (ParseString(argument, "--environment-map=", &load_environment)) {
         } else if (ParseString(argument, "--gltf=", &load_gltf)) {
