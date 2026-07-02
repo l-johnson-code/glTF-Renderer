@@ -77,6 +77,12 @@ class CommandContext
     void SetGraphicsRootSignature(ID3D12RootSignature* root_signature);
 	void SetGraphicsRootDescriptorTable(uint32_t index, D3D12_GPU_DESCRIPTOR_HANDLE descriptor_start);
 	void SetGraphicsRootConstantBufferView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address);
+    template<typename T>
+    void SetGraphicsRootConstantBufferView(uint32_t index, const T* data)
+    {
+        D3D12_GPU_VIRTUAL_ADDRESS constant_buffer = CreateConstantBuffer(data);
+        SetGraphicsRootConstantBufferView(index, constant_buffer);
+    }
     void SetGraphicsRootShaderResourceView(uint32_t index, D3D12_GPU_VIRTUAL_ADDRESS gpu_address);
     void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY primitive_topology);
     void SetIndexBuffer(const D3D12_INDEX_BUFFER_VIEW* view);
