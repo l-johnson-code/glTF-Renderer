@@ -12,6 +12,7 @@
 
 #include "BufferAllocator.h"
 #include "Config.h"
+#include "DebugDraw.h"
 #include "DescriptorAllocator.h"
 #include "DirectXHelpers.h"
 #include "GpuResources.h"
@@ -165,6 +166,8 @@ bool Renderer::Init(HWND window, RenderSettings* settings)
 	upload_buffer.Begin();
 
 	CreateRenderTargets();
+	result = DebugDraw::Init(&this->resources, 100000);
+	assert(SUCCEEDED(result));
 	gpu_skinner.Create(&this->resources);
 	tone_mapper.Create(&this->resources);
 	environment_map.Init(&this->resources);
@@ -369,6 +372,11 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	// Tone mapping.
 	command_context.BeginEvent("Tone Mapping");
 	this->tone_mapper.Run(&command_context, this->display.Uav(), &this->settings.tone_mapper_config);
+	command_context.EndEvent();
+
+	command_context.BeginEvent("Debug Lines");
+	glm::mat4x4 world_to_clip = camera->GetViewToClip() * camera->GetWorldToView();
+	DebugDraw::Render(&command_context, &world_to_clip);
 	command_context.EndEvent();
 
 	command_context.BeginEvent("ImGui");

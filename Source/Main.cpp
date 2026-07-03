@@ -8,6 +8,7 @@
 #include "AnimationPlayer.h"
 #include "Camera.h"
 #include "CameraController.h"
+#include "DebugDraw.h"
 #include "Gltf.h"
 #include "imgui.h"
 #include "Profiling.h"
@@ -505,7 +506,6 @@ int main(int argc, char* argv[])
 			g_render_settings.pathtracer.reset = true;
 		}
 
-
 		float delta_time = g_timer.Delta();
 
 		if (g_camera_free_mode) {
@@ -513,6 +513,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Per frame stuff.
+		DebugDraw::RemoveExpiredVertices(delta_time);
 		ImGui_ImplDX12_NewFrame();
 		ImGui_ImplSDL3_NewFrame();
 		ImGui::NewFrame();
