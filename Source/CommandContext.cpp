@@ -139,6 +139,16 @@ void CommandContext::SetRenderTargets(uint32_t render_target_count, const D3D12_
     this->command_list->OMSetRenderTargets(render_target_count, render_targets, false, depth_stencil);
 }
 
+void CommandContext::Draw(uint32_t vertex_count, uint32_t vertex_start_location)
+{
+    this->command_list->DrawInstanced(vertex_count, 1, vertex_start_location, 0);
+}
+
+void CommandContext::DrawIndexed(uint32_t index_count, uint32_t index_start_location, int base_vertex_location)
+{
+    this->command_list->DrawIndexedInstanced(index_count, 1, index_start_location, base_vertex_location, 0);
+}
+
 void CommandContext::DrawInstanced(uint32_t vertex_count_per_instance, uint32_t instance_count, uint32_t vertex_start_location, uint32_t instance_start_location)
 {
     this->command_list->DrawInstanced(vertex_count_per_instance, instance_count, vertex_start_location, instance_start_location);

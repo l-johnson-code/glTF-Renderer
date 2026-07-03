@@ -92,6 +92,8 @@ class CommandContext
     void ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE render_target_view, const float* color);
     void ClearDepthStencilView(D3D12_CPU_DESCRIPTOR_HANDLE depth_stencil_view, float depth);
     void SetRenderTargets(uint32_t render_target_count, const D3D12_CPU_DESCRIPTOR_HANDLE* render_targets, const D3D12_CPU_DESCRIPTOR_HANDLE* depth_stencil);
+    void Draw(uint32_t vertex_count, uint32_t vertex_start_location = 0);
+    void DrawIndexed(uint32_t index_count, uint32_t index_start_location = 0, int base_vertex_location = 0);
 	void DrawInstanced(uint32_t vertex_count_per_instance, uint32_t instance_count, uint32_t vertex_start_location, uint32_t instance_start_location);
 	void DrawIndexedInstanced(uint32_t index_count_per_instance, uint32_t instance_count, uint32_t index_start_location, int base_vertex_location, uint32_t instance_start_location);
     
