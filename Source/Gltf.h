@@ -8,6 +8,7 @@
 
 #include "Animation.h"
 #include "Camera.h"
+#include "Culling.h"
 #include "DescriptorAllocator.h"
 #include "Mesh.h"
 #include "RayTracingAccelerationStructure.h"
@@ -60,6 +61,7 @@ class Gltf {
     };
 
     struct Primitive {
+        Aabb aabb;
         Mesh mesh;
         RaytracingAccelerationStructure::Blas blas;
         int material_id = 0;

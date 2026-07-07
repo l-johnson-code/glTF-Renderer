@@ -166,6 +166,8 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 	tinygltf::Accessor* position_accessor = &gltf->accessors[gltf_primitive->attributes["POSITION"]];
 	::Mesh::PositionAndTangentSpace* dest = (::Mesh::PositionAndTangentSpace*)primitive->mesh.QueuePositionAndTangentSpaceUpdate(upload_buffer);
 	auto position_it = tinygltf::tools::Iterator<3, float>(gltf, position_accessor);
+	primitive->aabb.start = glm::vec3(position_accessor->minValues[0], position_accessor->minValues[1], position_accessor->minValues[2]);
+	primitive->aabb.end = glm::vec3(position_accessor->maxValues[0], position_accessor->maxValues[1], position_accessor->maxValues[2]);
 
 	if ((desc.flags & ::Mesh::FLAG_TANGENT_SPACE)) {
 		if (gltf_primitive->attributes.contains("TANGENT")) {

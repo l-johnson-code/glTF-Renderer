@@ -124,6 +124,7 @@ target_sources(glTF PRIVATE
     "Source/CommandContext.h"
     "Source/Config.cpp"
     "Source/Config.h"
+    "Source/Culling.h"
     "Source/DebugDraw.cpp"
     "Source/DebugDraw.h"
     "Source/DescriptorAllocator.cpp"

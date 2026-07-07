@@ -65,7 +65,7 @@ class Rasterizer {
 
     // Forward renderer.
 	void SetViewportAndScissorRects(CommandContext* context, int width, int height);
-	void GatherRenderObjects(Gltf* gltf, int scene);
+	void GatherRenderObjects(Gltf* gltf, int scene, glm::mat4x4 world_to_clip);
 	void SortRenderObjects(glm::vec3 camera_pos);
 	void DrawRenderObjects(CommandContext* context, Gltf* gltf, const std::vector<RenderObject>& render_objects);
 };

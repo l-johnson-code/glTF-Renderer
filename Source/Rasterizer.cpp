@@ -56,18 +56,27 @@ void Rasterizer::Resize(uint16_t width, uint16_t height)
 	result = gpu_resources->CreateTexture(&transmission_desc, &this->transmission);
 }
 
-void Rasterizer::GatherRenderObjects(Gltf* gltf, int scene)
+void Rasterizer::GatherRenderObjects(Gltf* gltf, int scene, glm::mat4x4 world_to_clip)
 {
 	opaque_render_objects.clear();
 	alpha_mask_render_objects.clear();
 	alpha_render_objects.clear();
 	transparent_render_objects.clear();
 
+	FrustumPlanes frustum_planes = ExtractPlanesFromMatrix(world_to_clip);
+
 	gltf->TraverseScene(scene, [&](Gltf* gltf, int node_id) {
 		const Gltf::Node& node = gltf->nodes[node_id];
 		if (node.mesh_id != -1) {
 			const Gltf::Mesh& mesh = gltf->meshes[node.mesh_id];
 			for (int i = 0; i < mesh.primitives.size(); i++) {
+
+				// Frustum culling.
+				Obb obb = ObbFromAabb(mesh.primitives[i].aabb, node.global_transform);
+				bool frustum_cull = OutsideFrustum(frustum_planes, obb);
+				if (frustum_cull) {
+					continue;
+				}
 
 				// Gather the data needed to render an object.
 				int material_id = mesh.primitives[i].material_id;
@@ -142,7 +151,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	glm::vec3 camera_pos = view_to_world[3];
     
     // Gather everything to draw.
-	GatherRenderObjects(execute_params->gltf, execute_params->scene);
+	GatherRenderObjects(execute_params->gltf, execute_params->scene, world_to_clip);
 	SortRenderObjects(camera_pos);
 
 	// Prepare render targets.
