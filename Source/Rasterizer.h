@@ -12,6 +12,7 @@ class Rasterizer {
     public:
 
     struct Settings {
+        bool frustum_culling = true;
 		int transmission_downsample_sample_pattern = 1;
 		float bloom_strength = 0.01f;
 		int bloom_radius = 4;
@@ -65,7 +66,7 @@ class Rasterizer {
 
     // Forward renderer.
 	void SetViewportAndScissorRects(CommandContext* context, int width, int height);
-	void GatherRenderObjects(Gltf* gltf, int scene, glm::mat4x4 world_to_clip);
+	void GatherRenderObjects(Gltf* gltf, int scene, glm::mat4x4 world_to_clip, const Settings* settings);
 	void SortRenderObjects(glm::vec3 camera_pos);
 	void DrawRenderObjects(CommandContext* context, Gltf* gltf, const std::vector<RenderObject>& render_objects);
 };

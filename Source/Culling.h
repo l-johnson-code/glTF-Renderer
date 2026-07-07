@@ -24,9 +24,10 @@ struct FrustumPlanes {
 
 inline Obb ObbFromAabb(Aabb aabb, glm::mat4x4 transform)
 {
+    glm::vec3 aabb_centre = 0.5f * (aabb.start + aabb.end);
     Obb obb;
-    obb.centre = transform[3];
-    obb.extent = aabb.end - aabb.start;
+    obb.centre = transform * glm::vec4(aabb_centre, 1.0f);
+    obb.extent = aabb.end - aabb_centre;
     obb.axis[0] = transform[0];
     obb.axis[1] = transform[1];
     obb.axis[2] = transform[2];
