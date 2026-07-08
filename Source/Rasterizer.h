@@ -13,6 +13,7 @@ class Rasterizer {
 
     struct Settings {
         bool frustum_culling = true;
+        bool draw_bounding_boxes = false;
 		int transmission_downsample_sample_pattern = 1;
 		float bloom_strength = 0.01f;
 		int bloom_radius = 4;

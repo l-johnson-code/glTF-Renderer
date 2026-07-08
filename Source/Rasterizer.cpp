@@ -4,6 +4,8 @@
 #include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_core.h>
 
+#include "DebugDraw.h"
+
 void Rasterizer::Init(Gpu::Resources* gpu_resources, uint16_t width, uint16_t height)
 {
 	this->gpu_resources = gpu_resources;
@@ -91,6 +93,11 @@ void Rasterizer::GatherRenderObjects(Gltf* gltf, int scene, glm::mat4x4 world_to
 					.primitive_id = i,
 					.material_id = material_id,
 				};
+
+				// Draw bounding boxes.
+				if (settings->draw_bounding_boxes) {
+					DebugDraw::DrawBox(mesh.primitives[i].aabb.start, mesh.primitives[i].aabb.end, node.global_transform, glm::vec3(0.0f, 1.0f, 0.0f), 0.0f);
+				}
 
 				// Bin the render object depending on material properties.
 				const Gltf::Material& material = gltf->materials[material_id];
