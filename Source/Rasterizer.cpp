@@ -74,7 +74,7 @@ void Rasterizer::GatherRenderObjects(Gltf* gltf, int scene, glm::mat4x4 world_to
 			for (int i = 0; i < mesh.primitives.size(); i++) {
 
 				// Frustum culling.
-				if (settings->frustum_culling) {
+				if (settings->frustum_culling && (node.dynamic_mesh == -1)) {
 					Obb obb = ObbFromAabb(mesh.primitives[i].aabb, node.global_transform);
 					bool cull = OutsideFrustum(frustum_planes, obb);
 					if (cull) {
