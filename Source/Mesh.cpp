@@ -206,8 +206,7 @@ HRESULT Mesh::Create(Gpu::Resources* resources, const Desc* desc, const char* na
 	VertexAllocation allocations[] = {
 		desc->flags & FLAG_INDEX ? IndexBuffer::GetAllocationSize(num_of_indices, desc->index_format) : null_allocation,
 		VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(PositionAndTangentSpace)),
-		desc->flags & FLAG_TEXCOORD_0 ? VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(glm::vec2)) : null_allocation,
-		desc->flags & FLAG_TEXCOORD_1 ? VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(glm::vec2)) : null_allocation,
+		desc->flags & FLAG_TEXCOORD ? VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(glm::vec2)) : null_allocation,
 		desc->flags & FLAG_COLOR ? VertexBuffer::GetAllocationSize(num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM) : null_allocation,
 		desc->flags & FLAG_JOINT_WEIGHT ? VertexBuffer::GetAllocationSize(num_of_vertices, sizeof(JointWeight)) : null_allocation,
 	};
@@ -230,17 +229,14 @@ HRESULT Mesh::Create(Gpu::Resources* resources, const Desc* desc, const char* na
     	index.Create(buffer.Resource(), base_address + offsets[0], resources, num_of_indices, desc->index_format);
 	}
 	position_and_tangent_space.Create(buffer.Resource(), base_address + offsets[1], resources, num_of_vertices, sizeof(PositionAndTangentSpace));
-    if (desc->flags & FLAG_TEXCOORD_0) {
-		texcoords[0].Create(buffer.Resource(), base_address + offsets[2], resources, num_of_vertices, sizeof(glm::vec2));
-	}
-    if (desc->flags & FLAG_TEXCOORD_1) {
-		texcoords[1].Create(buffer.Resource(), base_address + offsets[3], resources, num_of_vertices, sizeof(glm::vec2));
+    if (desc->flags & FLAG_TEXCOORD) {
+		texcoords.Create(buffer.Resource(), base_address + offsets[2], resources, num_of_vertices, sizeof(glm::vec2));
 	}
     if (desc->flags & FLAG_COLOR) {
-		color.Create(buffer.Resource(), base_address + offsets[4], resources, num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM);
+		color.Create(buffer.Resource(), base_address + offsets[3], resources, num_of_vertices, DXGI_FORMAT_R16G16B16A16_UNORM);
 	}
     if (desc->flags & FLAG_JOINT_WEIGHT) {
-		joint_weight.Create(buffer.Resource(), base_address + offsets[5], resources, num_of_vertices, sizeof(JointWeight));
+		joint_weight.Create(buffer.Resource(), base_address + offsets[4], resources, num_of_vertices, sizeof(JointWeight));
 	}
 
 	return S_OK;
@@ -257,16 +253,10 @@ void* Mesh::QueuePositionAndTangentSpaceUpdate(UploadBuffer* upload_buffer)
 	return position_and_tangent_space.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
-void* Mesh::QueueTexcoord0Update(UploadBuffer* upload_buffer)
+void* Mesh::QueueTexcoordUpdate(UploadBuffer* upload_buffer)
 {
-	assert(flags & FLAG_TEXCOORD_0);
-	return texcoords[0].QueueUpdate(upload_buffer, buffer.Resource());
-}
-
-void* Mesh::QueueTexcoord1Update(UploadBuffer* upload_buffer)
-{
-	assert(flags & FLAG_TEXCOORD_1);
-	return texcoords[1].QueueUpdate(upload_buffer, buffer.Resource());
+	assert(flags & FLAG_TEXCOORD);
+	return texcoords.QueueUpdate(upload_buffer, buffer.Resource());
 }
 
 void* Mesh::QueueColorUpdate(UploadBuffer* upload_buffer)
@@ -286,8 +276,7 @@ void Mesh::Destroy(Gpu::Resources* resources)
 	resources->FreeBuffer(&this->buffer);
 	index.Destroy(resources);
 	position_and_tangent_space.Destroy(resources);
-	texcoords[0].Destroy(resources);
-	texcoords[1].Destroy(resources);
+	texcoords.Destroy(resources);
 	color.Destroy(resources);
 	joint_weight.Destroy(resources);
 }

@@ -259,8 +259,7 @@ void Pathtracer::CreateVBufferPipelines()
     D3D12_INPUT_ELEMENT_DESC alpha_tested_input_layout[] = {
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"COLOR", 0, DXGI_FORMAT_R16G16B16A16_UNORM, 3, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"COLOR", 0, DXGI_FORMAT_R16G16B16A16_UNORM, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 	};
     
     Gpu::GraphicsPipelineDesc alpha_tested_pipeline_desc = {
@@ -370,10 +369,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 					.normal_transform = glm::inverseTranspose(node.global_transform),
 					.index_descriptor = mesh.index.descriptor,
 					.position_and_tangent_space_descriptor = mesh.position_and_tangent_space.descriptor,
-					.texcoord_descriptors = {
-						mesh.texcoords[0].descriptor,
-						mesh.texcoords[1].descriptor,
-					},
+					.texcoord_descriptor = mesh.texcoords.descriptor,
 					.color_descriptor = mesh.color.descriptor,
 					.material_id = primitives[i].material_id,
 				};
@@ -409,7 +405,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
                                         .vertex_count = mesh.num_of_vertices,
                                         .index = mesh.index.view,
                                         .vertices = dynamic_mesh.flags & DynamicMesh::FLAG_POSITION ? dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->view : mesh.position_and_tangent_space.view,
-                                        .tex_coords = { mesh.texcoords[0].view, mesh.texcoords[1].view },
+                                        .tex_coords = mesh.texcoords.view,
                                         .color = mesh.color.view,
                                         .material_id = primitives[i].material_id,
                                     });
@@ -436,7 +432,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
                                     .vertex_count = mesh.num_of_vertices,
                                     .index = mesh.index.view,
                                     .vertices = mesh.position_and_tangent_space.view,
-                                    .tex_coords = { mesh.texcoords[0].view, mesh.texcoords[1].view },
+                                    .tex_coords = mesh.texcoords.view,
                                     .color = mesh.color.view,
                                     .material_id = primitives[i].material_id,
                                 });
@@ -588,8 +584,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
             context->SetGraphicsRootConstantBufferView(Gpu::GENERIC_GRAPHICS_ROOT_PARAMETER_CONSTANT_BUFFER_PIXEL_PER_DRAW, context->CreateConstantBuffer(&cb_pixel));
             D3D12_VERTEX_BUFFER_VIEW vertex_views[] = {
                 alpha_vertex.vertices,
-                alpha_vertex.tex_coords[0],
-                alpha_vertex.tex_coords[1],
+                alpha_vertex.tex_coords,
                 alpha_vertex.color,
             };
             context->SetVertexBuffers(0, std::size(vertex_views), vertex_views);

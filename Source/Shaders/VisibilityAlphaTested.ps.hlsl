@@ -2,7 +2,7 @@
 
 struct PSIn {
 	float4 pos: SV_POSITION;
-    float2 tex_coords[2]: TEXCOORD;
+    float2 tex_coords: TEXCOORD;
     float4 color: COLOR;
 	uint primitive_id: SV_PrimitiveID;
 	bool front_face: SV_IsFrontFace;

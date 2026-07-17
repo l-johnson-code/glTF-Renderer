@@ -1,12 +1,12 @@
 struct VSIn {
 	float3 pos: POSITION;
-    float2 tex_coords[2]: TEXCOORD;
+    float2 tex_coords: TEXCOORD;
     float4 color: COLOR;
 };
 
 struct VSOut {
 	float4 pos: SV_POSITION;
-    float2 tex_coords[2]: TEXCOORD;
+    float2 tex_coords: TEXCOORD;
     float4 color: COLOR;
 };
 
@@ -29,8 +29,7 @@ VSOut main(VSIn input)
 	output.pos = mul(per_frame.world_to_clip, world_pos);
 
     output.color = input.color;
-    output.tex_coords[0] = input.tex_coords[0];
-    output.tex_coords[1] = input.tex_coords[1];
+    output.tex_coords = input.tex_coords;
 
 	return output;
 }

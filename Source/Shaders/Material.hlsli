@@ -14,7 +14,6 @@ enum AlphaMode {
 struct TextureAddress {
 	int descriptor;
 	int sampler_index;
-	int tex_coord;
 };
 
 struct Material {
@@ -56,17 +55,15 @@ struct Material {
 	float attenuation_distance;
 	float3 attenuation_color;
 	TextureAddress thickness;
-	float padding;
 };
 
-float4 SampleTexture(in Texture2D<float4> texture, in TextureAddress address, in float2 tex_coords[2])
+float4 SampleTexture(Texture2D<float4> texture, TextureAddress address, float2 uv)
 {
 	SamplerState texture_sampler = SamplerDescriptorHeap[address.sampler_index];
-	float2 uv = tex_coords[address.tex_coord];
 	return texture.SampleLevel(texture_sampler, uv, 0); // TODO: This doesn't support mip mapping, but is used because raytracing can't use the standard sample function!
 }
 
-float4 GetBaseColor(Material material, float2 texcoords[2], float4 vertex_color)
+float4 GetBaseColor(Material material, float2 texcoords, float4 vertex_color)
 {
 	float4 base_color = material.base_color_factor;
 	base_color *= vertex_color;
@@ -87,7 +84,7 @@ float GetAlpha(Material material, float4 base_color)
     }
 }
 
-float3 GetShadingNormal(Material material, float2 texcoords[2], float3 geometric_normal, float3x3 tangent_to_world)
+float3 GetShadingNormal(Material material, float2 texcoords, float3 geometric_normal, float3x3 tangent_to_world)
 {
     float3 shading_normal = geometric_normal;
 	if (material.normal.descriptor != -1) {
@@ -98,7 +95,7 @@ float3 GetShadingNormal(Material material, float2 texcoords[2], float3 geometric
     return shading_normal;
 }
 
-float2 GetMetalnessRoughness(Material material, float2 texcoords[2])
+float2 GetMetalnessRoughness(Material material, float2 texcoords)
 {
     float metalness = material.metalness_factor;
 	float roughness = material.roughness_factor;
@@ -110,7 +107,7 @@ float2 GetMetalnessRoughness(Material material, float2 texcoords[2])
     return float2(metalness, roughness);
 }
 
-float GetOcclusion(Material material, float2 texcoords[2])
+float GetOcclusion(Material material, float2 texcoords)
 {
     float occlusion = 1.0;
 	if (material.occlusion.descriptor != -1) {
@@ -120,7 +117,7 @@ float GetOcclusion(Material material, float2 texcoords[2])
     return occlusion;
 }
 
-float3 GetEmissive(Material material, float2 texcoords[2])
+float3 GetEmissive(Material material, float2 texcoords)
 {
     // Emissive.
 	float3 emissive = material.emissive_factor;
@@ -130,7 +127,7 @@ float3 GetEmissive(Material material, float2 texcoords[2])
     return emissive;
 }
 
-float GetSpecularFactor(Material material, float2 texcoords[2])
+float GetSpecularFactor(Material material, float2 texcoords)
 {
     float specular_factor = material.specular_factor;
 	if (material.specular.descriptor != -1) {
@@ -139,7 +136,7 @@ float GetSpecularFactor(Material material, float2 texcoords[2])
     return specular_factor;
 }
 
-float3 GetSpecularColor(Material material, float2 texcoords[2])
+float3 GetSpecularColor(Material material, float2 texcoords)
 {
 	float3 specular_color = material.specular_color_factor;
 	if (material.specular_color.descriptor != -1) {
@@ -148,7 +145,7 @@ float3 GetSpecularColor(Material material, float2 texcoords[2])
     return specular_color;
 }
 
-float GetClearcoat(Material material, float2 texcoords[2])
+float GetClearcoat(Material material, float2 texcoords)
 {
     float clearcoat = material.clearcoat_factor;
 	if (material.clearcoat.descriptor != -1) {
@@ -157,7 +154,7 @@ float GetClearcoat(Material material, float2 texcoords[2])
     return clearcoat;
 }
 
-float GetClearcoatRoughness(Material material, float2 texcoords[2])
+float GetClearcoatRoughness(Material material, float2 texcoords)
 {
 	float clearcoat_roughness = material.clearcoat_roughness_factor;
 	if (material.clearcoat_roughness.descriptor != -1) {
@@ -166,7 +163,7 @@ float GetClearcoatRoughness(Material material, float2 texcoords[2])
     return clearcoat_roughness;
 }
 
-float3 GetClearcoatNormal(Material material, float2 texcoords[2], float3 geometric_normal, float3x3 tangent_to_world)
+float3 GetClearcoatNormal(Material material, float2 texcoords, float3 geometric_normal, float3x3 tangent_to_world)
 {
 	float3 clearcoat_normal = geometric_normal;
 	if (material.clearcoat_normal.descriptor != -1) {
@@ -177,7 +174,7 @@ float3 GetClearcoatNormal(Material material, float2 texcoords[2], float3 geometr
     return clearcoat_normal;
 }
 
-float3 GetSheenColor(Material material, float2 texcoords[2])
+float3 GetSheenColor(Material material, float2 texcoords)
 {
 	float3 sheen_color = material.sheen_color_factor;
 	if (material.sheen_color.descriptor != -1) {
@@ -186,7 +183,7 @@ float3 GetSheenColor(Material material, float2 texcoords[2])
 	return sheen_color;
 }
 
-float GetSheenRoughness(Material material, float2 texcoords[2])
+float GetSheenRoughness(Material material, float2 texcoords)
 {
 	float sheen_roughness = material.sheen_roughness_factor;
 	if (material.sheen_roughness.descriptor != -1) {
@@ -195,7 +192,7 @@ float GetSheenRoughness(Material material, float2 texcoords[2])
 	return sheen_roughness;
 }
 
-float GetTransmission(Material material, float2 texcoords[2])
+float GetTransmission(Material material, float2 texcoords)
 {
     float transmissive = material.transmission_factor;
 	if (material.transmission.descriptor != -1) {
@@ -204,7 +201,7 @@ float GetTransmission(Material material, float2 texcoords[2])
     return transmissive;
 }
 
-float GetThickness(Material material, float2 texcoords[2])
+float GetThickness(Material material, float2 texcoords)
 {
     float thickness = material.thickness_factor;
 	if (material.thickness.descriptor != -1) {
@@ -213,7 +210,7 @@ float GetThickness(Material material, float2 texcoords[2])
     return thickness;
 }
 
-float GetAnisotropyStrengthAndDirection(Material material, float2 texcoords[2], out float2 direction)
+float GetAnisotropyStrengthAndDirection(Material material, float2 texcoords, out float2 direction)
 {
 	// Anisotropy.
 	float strength = material.anisotropy_strength;

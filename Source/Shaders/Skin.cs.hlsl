@@ -2,7 +2,7 @@
 #include "Vertex.hlsli"
 
 enum MeshFlags {
-    MESH_FLAG_JOINT_WEIGHT = 1 << 5,
+    MESH_FLAG_JOINT_WEIGHT = 1 << 4,
 };
 
 enum MorphFlags {

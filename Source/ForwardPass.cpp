@@ -32,9 +32,8 @@ void ForwardPass::CreatePipeline(Gpu::Resources* resources, uint32_t flags)
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 		{"TANGENT_SPACE", 0, DXGI_FORMAT_R10G10B10A2_UNORM, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"COLOR", 0, DXGI_FORMAT_R16G16B16A16_UNORM, 3, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"PREVIOUS_POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 4, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+		{"COLOR", 0, DXGI_FORMAT_R16G16B16A16_UNORM, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"PREVIOUS_POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 3, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
 	};
 
 	Gpu::GraphicsPipelineDesc pipeline_desc = {
@@ -194,8 +193,7 @@ void ForwardPass::Draw(CommandContext* context, Mesh* model, int material_id, gl
 	// Set the vertex buffer.
 	D3D12_VERTEX_BUFFER_VIEW vertex_buffers[] = {
 		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_POSITION) ? dynamic_mesh->GetCurrentPositionAndTangentSpaceBuffer()->view : model->position_and_tangent_space.view, 
-		model->texcoords[0].view,
-		model->texcoords[1].view,
+		model->texcoords.view,
 		model->color.view,
 		// TODO: We don't always want to use the previous position buffer, such as on a new frame.
 		dynamic_mesh && (dynamic_mesh->flags & DynamicMesh::FLAG_POSITION) ? dynamic_mesh->GetCurrentPositionAndTangentSpaceBuffer()->view : model->position_and_tangent_space.view

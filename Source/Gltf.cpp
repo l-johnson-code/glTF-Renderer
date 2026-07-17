@@ -128,8 +128,7 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 
 	desc.flags |= gltf_primitive->indices != -1 ? ::Mesh::FLAG_INDEX : 0;
 	desc.flags |= gltf_primitive->attributes.contains("NORMAL") ? ::Mesh::FLAG_TANGENT_SPACE : 0;
-	desc.flags |= gltf_primitive->attributes.contains("TEXCOORD_0") ? ::Mesh::FLAG_TEXCOORD_0 : 0;
-	desc.flags |= gltf_primitive->attributes.contains("TEXCOORD_1") ? ::Mesh::FLAG_TEXCOORD_1 : 0;
+	desc.flags |= gltf_primitive->attributes.contains("TEXCOORD_0") ? ::Mesh::FLAG_TEXCOORD : 0;
 	desc.flags |= gltf_primitive->attributes.contains("COLOR_0") ? ::Mesh::FLAG_COLOR : 0;
 	desc.flags |= gltf_primitive->attributes.contains("JOINTS_0") && gltf_primitive->attributes.contains("WEIGHTS_0")? ::Mesh::FLAG_JOINT_WEIGHT : 0;
 
@@ -215,16 +214,10 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 		}
 	}
 
-	if (desc.flags & ::Mesh::FLAG_TEXCOORD_0) {
+	if (desc.flags & ::Mesh::FLAG_TEXCOORD) {
 		tinygltf::Accessor* texcoord_0_accessor = &gltf->accessors[gltf_primitive->attributes["TEXCOORD_0"]];
-		glm::vec2* dest = (glm::vec2*)primitive->mesh.QueueTexcoord0Update(upload_buffer);
+		glm::vec2* dest = (glm::vec2*)primitive->mesh.QueueTexcoordUpdate(upload_buffer);
 		tinygltf::tools::Copy(dest, gltf, texcoord_0_accessor);
-	}
-
-	if (desc.flags & ::Mesh::FLAG_TEXCOORD_1) {
-		tinygltf::Accessor* texcoord_1_accessor = &gltf->accessors[gltf_primitive->attributes["TEXCOORD_1"]];
-		glm::vec2* dest = (glm::vec2*)primitive->mesh.QueueTexcoord1Update(upload_buffer);
-		tinygltf::tools::Copy(dest, gltf, texcoord_1_accessor);
 	}
 
 	if (desc.flags & ::Mesh::FLAG_COLOR) {
@@ -308,7 +301,7 @@ void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* 
 	}
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_index, int tex_coord, tinygltf::Value* texture_transform, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_index, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	Material::Texture material_texture;
 	if (texture_index != -1) {
@@ -322,7 +315,6 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 			material_texture = {
 				.texture = this->textures[texture_source].Srv(),
 				.sampler = texture->sampler == -1 ? 0 : this->gpu_resources->gltf_sampler_allocator.GetAbsoluteIndex(texture->sampler),
-				.tex_coord = tex_coord < ::Mesh::MAX_TEXCOORDS ? tex_coord : 0,
 			};
 		} else {
 			// TODO: Create a default magenta texture.
@@ -333,18 +325,18 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 
 Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
-	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], srgb, gpu_resources, upload_buffer);
+	return GetTexture(gltf, texture_info->index, srgb, gpu_resources, upload_buffer);
 }
 
 Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	*scale = texture_info->scale;
-	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], false, gpu_resources, upload_buffer);
+	return GetTexture(gltf, texture_info->index, false, gpu_resources, upload_buffer);
 }
 
 Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
-	return GetTexture(gltf, texture_info->index, texture_info->texCoord, &texture_info->extensions["KHR_texture_transform"], false, gpu_resources, upload_buffer);
+	return GetTexture(gltf, texture_info->index, false, gpu_resources, upload_buffer);
 }
 
 Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
@@ -357,21 +349,14 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::
 
 	auto index_value = texture_info->Get("index");
 	int index = index_value.GetNumberAsInt();
-	auto tex_coord_value = texture_info->Get("texCoord");
-	int tex_coord = tex_coord_value.GetNumberAsInt();
 	if (scale) {
 		auto scale_value = texture_info->Get("scale");
 		if (scale_value.IsNumber()) {
 			*scale = scale_value.GetNumberAsDouble();
 		}
 	}
-	auto extensions = texture_info->Get("extensions");
-	tinygltf::Value transform_extension;
-	if (extensions.IsObject()) {
-		transform_extension = extensions.Get("KHR_texture_transform");
-	}
 
-	return GetTexture(gltf, index, tex_coord, &transform_extension, srgb, gpu_resources, upload_buffer);
+	return GetTexture(gltf, index, srgb, gpu_resources, upload_buffer);
 }
 
 void Gltf::LoadMaterials(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)

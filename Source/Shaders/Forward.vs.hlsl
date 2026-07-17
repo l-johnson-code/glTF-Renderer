@@ -3,7 +3,7 @@
 struct VSIn {
 	float3 pos: POSITION;
 	float4 tangent_space: TANGENT_SPACE;
-	float2 tex_coords[2]: TEXCOORD;
+	float2 tex_coords: TEXCOORD;
 	float4 color: COLOR;
 	float3 previous_pos: PREVIOUS_POS;
 };
@@ -12,7 +12,7 @@ struct VSOut {
 	float4 pos: SV_POSITION;
 	float4 normal: NORMAL;
 	float4 tangent: TANGENT;
-	float2 tex_coords[2]: TEXCOORD;
+	float2 tex_coords: TEXCOORD;
 	float4 color: COLOR;
 	float4 previous_pos: POSITION;
 	float3 world_pos: POS;
@@ -45,8 +45,7 @@ VSOut main(VSIn input)
 	output.normal.xyz = mul(per_model.model_to_world_normals, float4(output.normal.xyz, 0)).xyz;
 	output.tangent.xyz = mul(per_model.model_to_world, float4(output.tangent.xyz, 0)).xyz;
 
-	output.tex_coords[0] = input.tex_coords[0];
-	output.tex_coords[1] = input.tex_coords[1];
+	output.tex_coords = input.tex_coords;
 
 	output.color = input.color;
 

@@ -15,8 +15,7 @@ enum DebugOutput {
     DEBUG_OUTPUT_VERTEX_NORMAL,
     DEBUG_OUTPUT_VERTEX_TANGENT,
     DEBUG_OUTPUT_VERTEX_BITANGENT,
-    DEBUG_OUTPUT_TEXCOORD_0,
-    DEBUG_OUTPUT_TEXCOORD_1,
+    DEBUG_OUTPUT_TEXCOORD,
     DEBUG_OUTPUT_COLOR,
     DEBUG_OUTPUT_ALPHA,
     DEBUG_OUTPUT_SHADING_NORMAL,
@@ -84,7 +83,7 @@ struct Instance {
 	float4x4 normal_transform;
 	int index_descriptor;
 	int position_and_tangent_space_descriptor;
-	int texcoord_descriptors[2];
+	int texcoord_descriptor;
 	int color_descriptor;
 	int material_id;
 };
@@ -96,7 +95,7 @@ struct VertexAttributes {
     float4 tangent;
     float3 bitangent;
     float4 color;
-    float2 texcoords[2];
+    float2 texcoords;
 };
 
 struct PositionAndTangentSpace {
@@ -317,9 +316,7 @@ void GetRemainingVertexAttributes(Instance instance, float3 indices, float3 bary
     
     attributes.bitangent = CalculateBitangent(attributes.normal, attributes.tangent); // TODO: Should bitangents be calculated per vertex, and then interpolated with barycentric weights instead?
     attributes.color = GetVertexColor(instance.color_descriptor, indices, barycentric_weights);
-    for (int i = 0; i < 2; i++) {
-        attributes.texcoords[i] = GetTexcoord(instance.texcoord_descriptors[i], indices, barycentric_weights);
-    }
+    attributes.texcoords = GetTexcoord(instance.texcoord_descriptor, indices, barycentric_weights);
 }
 
 void FlipNormals(in out VertexAttributes attributes)
@@ -1062,11 +1059,8 @@ void RayGeneration()
         } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_VERTEX_BITANGENT) {
             ray_state.color = (vertex_attributes.bitangent + 1) / 2;
             break;
-        } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_TEXCOORD_0) {
-            ray_state.color = float3(vertex_attributes.texcoords[0], 0);
-            break;
-        } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_TEXCOORD_1) {
-            ray_state.color = float3(vertex_attributes.texcoords[1], 0);
+        } else if (g_scene_constants.debug_output == DEBUG_OUTPUT_TEXCOORD) {
+            ray_state.color = float3(vertex_attributes.texcoords, 0);
             break;
         }
 
@@ -1233,10 +1227,7 @@ void AnyHit(inout GeometryPayload payload, in BuiltInTriangleIntersectionAttribu
     // Get interpolated vertex attributes.
     uint3 vertices = GetIndices(instance.index_descriptor, primitive_index);
     float4 base_color = GetVertexColor(instance.color_descriptor, vertices, barycentric_weights);
-    float2 texcoords[2];
-    for (int i = 0; i < 2; i++) {
-        texcoords[i] = GetTexcoord(instance.texcoord_descriptors[i], vertices, barycentric_weights);
-    }
+    float2 texcoords = GetTexcoord(instance.texcoord_descriptor, vertices, barycentric_weights);
     base_color = GetBaseColor(material, texcoords, base_color);
 
     if (base_color.a < material.alpha_cutoff) {
@@ -1260,10 +1251,7 @@ void ShadowAnyHit(inout ShadowPayload payload, in BuiltInTriangleIntersectionAtt
     // Get interpolated vertex attributes.
     uint3 vertices = GetIndices(instance.index_descriptor, primitive_index);
     float4 base_color = GetVertexColor(instance.color_descriptor, vertices, barycentric_weights);
-    float2 texcoords[2];
-    for (int i = 0; i < 2; i++) {
-        texcoords[i] = GetTexcoord(instance.texcoord_descriptors[i], vertices, barycentric_weights);
-    }
+    float2 texcoords = GetTexcoord(instance.texcoord_descriptor, vertices, barycentric_weights);
     base_color = GetBaseColor(material, texcoords, base_color);
     float alpha = GetAlpha(material, base_color);
     payload.transmission *= 1 - alpha;

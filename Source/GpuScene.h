@@ -35,12 +35,10 @@ class GpuScene {
     struct TextureSample {
 		int descriptor = -1;
         int sampler = 0;
-        int tex_coord = 0;
         TextureSample() = default;
         TextureSample(const Gltf::Material::Texture& texture) {
             this->descriptor = texture.texture;
             this->sampler = texture.sampler;
-            this->tex_coord = texture.tex_coord;
         }
     };
 
@@ -83,7 +81,6 @@ class GpuScene {
         float attenuation_distance = 0;
         glm::vec3 attenuation_color = glm::vec3(1.0, 1.0, 1.0);
         TextureSample thickness_texture;
-        float padding;
         Material() = default;
         Material(const Gltf::Material& material) {
             this->flags = material.flags;

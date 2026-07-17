@@ -5,17 +5,16 @@
 enum MeshFlags {
 	MESH_FLAG_INDEX = 1 << 0,
 	MESH_FLAG_TANGENT_SPACE = 1 << 1,
-	MESH_FLAG_TEXCOORD_0 = 1 << 2,
-	MESH_FLAG_TEXCOORD_1 = 1 << 3,
-	MESH_FLAG_COLOR = 1 << 4,
-	MESH_FLAG_JOINT_WEIGHT = 1 << 5,
+	MESH_FLAG_TEXCOORD = 1 << 2,
+	MESH_FLAG_COLOR = 1 << 3,
+	MESH_FLAG_JOINT_WEIGHT = 1 << 4,
 };
 
 struct PSIn {
 	float4 pos: SV_POSITION;
 	float4 normal: NORMAL;
 	float4 tangent: TANGENT;
-	float2 tex_coords[2]: TEXCOORD;
+	float2 tex_coords: TEXCOORD;
 	float4 color: COLOR;
 	float4 previous_pos: POSITION;
 	float3 world_pos: POS;

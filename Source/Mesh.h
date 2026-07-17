@@ -36,8 +36,6 @@ struct IndexBuffer {
 
 struct Mesh {
 
-    static constexpr int MAX_TEXCOORDS = 2;
-
     struct PositionAndTangentSpace {
         glm::vec3 position;
         glm::uint32_t encoded_tangent_space;
@@ -59,10 +57,9 @@ struct Mesh {
     enum Flags {
         FLAG_INDEX = 1 << 0,
         FLAG_TANGENT_SPACE = 1 << 1,
-        FLAG_TEXCOORD_0 = 1 << 2,
-        FLAG_TEXCOORD_1 = 1 << 3,
-        FLAG_COLOR = 1 << 4,
-        FLAG_JOINT_WEIGHT = 1 << 5,
+        FLAG_TEXCOORD = 1 << 2,
+        FLAG_COLOR = 1 << 3,
+        FLAG_JOINT_WEIGHT = 1 << 4,
     };
 
     D3D12_PRIMITIVE_TOPOLOGY topology;
@@ -74,7 +71,7 @@ struct Mesh {
 
     IndexBuffer index;
     VertexBuffer position_and_tangent_space;
-    VertexBuffer texcoords[MAX_TEXCOORDS];
+    VertexBuffer texcoords;
     VertexBuffer color;
     VertexBuffer joint_weight;
 
@@ -84,8 +81,7 @@ struct Mesh {
     HRESULT Create(Gpu::Resources* resources, const Desc* desc, const char* name = nullptr);
     void* QueueIndexUpdate(UploadBuffer* upload_buffer);
     void* QueuePositionAndTangentSpaceUpdate(UploadBuffer* upload_buffer);
-    void* QueueTexcoord0Update(UploadBuffer* upload_buffer);
-    void* QueueTexcoord1Update(UploadBuffer* upload_buffer);
+    void* QueueTexcoordUpdate(UploadBuffer* upload_buffer);
     void* QueueColorUpdate(UploadBuffer* upload_buffer);
     void* QueueJointWeightUpdate(UploadBuffer* upload_buffer);
     void Destroy(Gpu::Resources* resources);

@@ -26,8 +26,7 @@ class Pathtracer {
         DEBUG_OUTPUT_VERTEX_NORMAL,
         DEBUG_OUTPUT_VERTEX_TANGENT,
         DEBUG_OUTPUT_VERTEX_BITANGENT,
-        DEBUG_OUTPUT_TEXCOORD_0,
-        DEBUG_OUTPUT_TEXCOORD_1,
+        DEBUG_OUTPUT_TEXCOORD,
         DEBUG_OUTPUT_COLOR,
         DEBUG_OUTPUT_ALPHA,
         DEBUG_OUTPUT_SHADING_NORMAL,
@@ -139,7 +138,7 @@ class Pathtracer {
 		glm::mat4x4 normal_transform;
 		int index_descriptor = -1;
 		int position_and_tangent_space_descriptor = -1;
-		int texcoord_descriptors[2] = {-1, -1};
+		int texcoord_descriptor = -1;
 		int color_descriptor = -1;
 		int material_id = 0;
 	};
@@ -158,7 +157,7 @@ class Pathtracer {
         uint32_t vertex_count;
         D3D12_INDEX_BUFFER_VIEW index;
         D3D12_VERTEX_BUFFER_VIEW vertices;
-        D3D12_VERTEX_BUFFER_VIEW tex_coords[2];
+        D3D12_VERTEX_BUFFER_VIEW tex_coords;
         D3D12_VERTEX_BUFFER_VIEW color;
         int material_id;
     };
