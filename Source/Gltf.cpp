@@ -308,37 +308,6 @@ void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* 
 	}
 }
 
-void Gltf::GetTextureTransform(tinygltf::Value* gltf_value, int* tex_coord, glm::vec2* offset, float* rotation, glm::vec2* scale)
-{
-	*offset = glm::vec2(0.0, 0.0);
-	*rotation = 0.0;
-	*scale = glm::vec2(1.0, 1.0);
-	
-	if (!gltf_value->IsObject()) {
-		return;
-	}
-
-	auto offset_value = gltf_value->Get("offset");
-	if (offset_value.ArrayLen() == 2) {
-		*offset = glm::vec2(offset_value.Get(0).GetNumberAsDouble(), offset_value.Get(1).GetNumberAsDouble());
-	}
-	auto rotation_value = gltf_value->Get("rotation");
-	if (rotation_value.IsNumber()) {
-		*rotation = rotation_value.GetNumberAsDouble();
-	}
-	auto scale_value = gltf_value->Get("scale");
-	if (scale_value.ArrayLen() == 2) {
-		*scale = glm::vec2(scale_value.Get(0).GetNumberAsDouble(), scale_value.Get(1).GetNumberAsDouble());
-	}
-	auto tex_coord_value = gltf_value->Get("texCoord");
-	if (tex_coord_value.IsInt()) {
-		int value = tex_coord_value.GetNumberAsInt();
-		if (value >= 0 && value < ::Mesh::MAX_TEXCOORDS) {
-			*tex_coord = value;
-		}
-	}
-}
-
 Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_index, int tex_coord, tinygltf::Value* texture_transform, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	Material::Texture material_texture;
@@ -355,7 +324,6 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 				.sampler = texture->sampler == -1 ? 0 : this->gpu_resources->gltf_sampler_allocator.GetAbsoluteIndex(texture->sampler),
 				.tex_coord = tex_coord < ::Mesh::MAX_TEXCOORDS ? tex_coord : 0,
 			};
-			GetTextureTransform(texture_transform, &material_texture.tex_coord, &material_texture.offset, &material_texture.rotation, &material_texture.scale);
 		} else {
 			// TODO: Create a default magenta texture.
 		}
@@ -863,7 +831,6 @@ bool Gltf::LoadFromGltf(const char* filepath, Gpu::Resources* gpu_resources, Upl
 	for (auto extension: model.extensionsRequired) {
 		if (
 			extension != "KHR_lights_punctual" && 
-			extension != "KHR_texture_transform" &&
 			extension != "KHR_materials_ior" &&
 			extension != "KHR_materials_specular" &&
 			extension != "KHR_materials_anisotropy" &&

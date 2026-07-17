@@ -15,9 +15,6 @@ struct TextureAddress {
 	int descriptor;
 	int sampler_index;
 	int tex_coord;
-	float rotation;
-	float2 offset;
-	float2 scale;
 };
 
 struct Material {
@@ -31,7 +28,6 @@ struct Material {
 	float alpha_cutoff;
 	float ior;
 	float normal_scale;
-	float pad_0;
 	TextureAddress normal;
 	TextureAddress albedo;
 	TextureAddress metallic_roughness;
@@ -44,13 +40,11 @@ struct Material {
 	float clearcoat_factor;
 	float clearcoat_roughness_factor;
 	float clearcoat_normal_scale;
-	float pad_1;
 	TextureAddress clearcoat;
 	TextureAddress clearcoat_roughness;
 	TextureAddress clearcoat_normal;
 	float anisotropy_strength;
 	float anisotropy_rotation;
-	float2 pad_2;
 	TextureAddress anisotropy;
 	float3 sheen_color_factor;
 	float sheen_roughness_factor;
@@ -58,40 +52,17 @@ struct Material {
 	TextureAddress sheen_roughness;
 	float transmission_factor;
 	float thickness_factor;
-	float2 pad_3;
 	TextureAddress transmission;
 	float attenuation_distance;
 	float3 attenuation_color;
 	TextureAddress thickness;
+	float padding;
 };
-
-float2 TransformUv(TextureAddress address, float2 uv)
-{
-	float3x3 translation = float3x3(
-		1, 0, address.offset.x,
-		0, 1, address.offset.y,
-		0, 0, 1
-	);
-	float3x3 rotation = float3x3(
-		cos(address.rotation), sin(address.rotation), 0,
-		-sin(address.rotation), cos(address.rotation), 0,
-		0, 0, 1
-	);
-	float3x3 scale = float3x3(
-		address.scale.x, 0, 0,
-		0, address.scale.y, 0,
-		0, 0, 1
-	);
-	float3x3 transform = mul(translation, mul(rotation, scale));
-	float2 uv_transformed = mul(transform, float3(uv, 1)).xy;
-	return uv_transformed;
-}
 
 float4 SampleTexture(in Texture2D<float4> texture, in TextureAddress address, in float2 tex_coords[2])
 {
 	SamplerState texture_sampler = SamplerDescriptorHeap[address.sampler_index];
 	float2 uv = tex_coords[address.tex_coord];
-	uv = TransformUv(address, uv);
 	return texture.SampleLevel(texture_sampler, uv, 0); // TODO: This doesn't support mip mapping, but is used because raytracing can't use the standard sample function!
 }
 

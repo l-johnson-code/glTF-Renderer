@@ -103,9 +103,6 @@ class Gltf {
             int texture = -1;
             int sampler = 0;
             int tex_coord = 0;
-            glm::vec2 offset = glm::vec2(0.0);
-            glm::vec2 scale = glm::vec2(1.0);
-            float rotation = 0.0;
         };
 
         uint32_t flags = FLAG_NONE;
@@ -206,7 +203,6 @@ class Gltf {
     void LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, Mesh* mesh);
     void LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primitive, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, Primitive* primitive);
     void CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target);
-    void GetTextureTransform(tinygltf::Value* gltf_value, int* tex_coord, glm::vec2* offset, float* rotation, glm::vec2* scale);
     Material::Texture GetTexture(tinygltf::Model* gltf, int texture_index, int tex_coord, tinygltf::Value* extensions, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer);
     Material::Texture GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer);
     Material::Texture GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer);
