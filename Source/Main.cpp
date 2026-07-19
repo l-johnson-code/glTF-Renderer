@@ -449,8 +449,9 @@ int main(int argc, char* argv[])
 	ImGui::GetStyle().ScaleAllSizes(g_window_scale);
 	ImGuiIO& io = ImGui::GetIO();
 	io.WantSaveIniSettings = false;
-	float font_size = 14.0 * g_window_scale;
-	io.Fonts->AddFontFromFileTTF("ProggyVector-Regular.ttf", font_size);
+	ImFontConfig font_config;
+	font_config.SizePixels = 14.0 * g_window_scale;
+	io.Fonts->AddFontDefaultVector(&font_config);
 
 	// Initialise the renderer.
 	int width, height;

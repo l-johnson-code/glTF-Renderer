@@ -270,7 +270,7 @@ add_custom_command(
 )
 
 # Copy resources to build directory.
-set(RESOURCES ${CMAKE_SOURCE_DIR}/Resources/Sheen_E.exr ${CMAKE_SOURCE_DIR}/Resources/ProggyVector-Regular.ttf)
+set(RESOURCES ${CMAKE_SOURCE_DIR}/Resources/Sheen_E.exr)
 add_custom_command(
     TARGET glTF POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:glTF> ${RESOURCES}
