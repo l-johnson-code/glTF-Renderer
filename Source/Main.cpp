@@ -157,6 +157,19 @@ void OpenEnvironmentFileDialog()
 	SDL_ShowOpenFileDialog(callback, nullptr, nullptr, filter, 2, nullptr, false);
 }
 
+void DrawNode(Gltf* gltf, int node_id)
+{
+	ImGui::PushID(node_id);
+	if (ImGui::TreeNode(gltf->nodes[node_id].name.c_str())) {
+		// Draw nodes children.
+		for (int i = gltf->nodes[node_id].child; i != -1; i = gltf->nodes[i].sibling) {
+			DrawNode(gltf, i);
+		}
+		ImGui::TreePop();
+	}
+	ImGui::PopID();
+}
+
 void DrawGltfTab(Gltf* gltf, Context* context)
 {
 	if (ImGui::Button("Load glTF")) {
@@ -220,6 +233,15 @@ void DrawGltfTab(Gltf* gltf, Context* context)
             g_render_settings.pathtracer.reset |= ImGui::SliderFloat("Animation Time", &context->animation_player.playhead, 0., gltf->animations[context->animation_player.animation].length);
         }
     }
+
+	// Nodes.
+	if (ImGui::CollapsingHeader("Nodes")) {
+		if (!gltf->scenes.empty()) {
+			for (int node_id : gltf->scenes[context->scene_id].nodes) {
+				DrawNode(gltf, node_id);
+			}
+		}
+	}
 }
 
 void DrawGraphicsTab()
@@ -413,8 +435,6 @@ void ProcessEvents()
 		}
 	}
 }
-
-
 
 int main(int argc, char* argv[])
 {
