@@ -160,7 +160,8 @@ void OpenEnvironmentFileDialog()
 void DrawNode(Gltf* gltf, int node_id)
 {
 	ImGui::PushID(node_id);
-	if (ImGui::TreeNode(gltf->nodes[node_id].name.c_str())) {
+	ImGuiTreeNodeFlags flags = gltf->nodes[node_id].child != -1 ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_Leaf;
+	if (ImGui::TreeNodeEx(gltf->nodes[node_id].name.c_str(), flags)) {
 		// Draw nodes children.
 		for (int i = gltf->nodes[node_id].child; i != -1; i = gltf->nodes[i].sibling) {
 			DrawNode(gltf, i);
