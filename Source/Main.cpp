@@ -203,9 +203,9 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 	if (context->node_id != -1) {
 		Gltf::Node& node = gltf->nodes[context->node_id];
 		ImGui::LabelText("Name", "%s", node.name.c_str());
-		ImGui::Input("Position", &node.local_transform.translation);
-		ImGui::Input("Rotation", &node.local_transform.rotation);
-		ImGui::Input("Scale", &node.local_transform.scale);
+		ImGui::Input("Position", &node.local_transform.translation, ImGuiInputTextFlags_ReadOnly);
+		ImGui::Input("Rotation", &node.local_transform.rotation, ImGuiInputTextFlags_ReadOnly);
+		ImGui::Input("Scale", &node.local_transform.scale, ImGuiInputTextFlags_ReadOnly);
 		if (node.camera_id != -1 && ImGui::BeginSection("Camera")) {
 			ImGui::EndSection();
 		}

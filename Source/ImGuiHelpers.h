@@ -82,19 +82,19 @@ void EndSection()
 	ImGui::PopID();
 }
 
-bool Input(const char* label, glm::vec3* v)
+bool Input(const char* label, glm::vec3* v, ImGuiInputFlags flags = ImGuiInputTextFlags_None)
 {
-	return ImGui::InputFloat3(label, &v->x);
+	return ImGui::InputFloat3(label, &v->x, "%.3f", flags);
 }
 
-bool Input(const char* label, glm::vec4* v)
+bool Input(const char* label, glm::vec4* v, ImGuiInputFlags flags = ImGuiInputTextFlags_None)
 {
-	return ImGui::InputFloat4(label, &v->x);
+	return ImGui::InputFloat4(label, &v->x, "%.3f", flags);
 }
 
-bool Input(const char* label, glm::quat* v)
+bool Input(const char* label, glm::quat* v, ImGuiInputFlags flags = ImGuiInputTextFlags_None)
 {
-	return ImGui::InputFloat4(label, &v->x);
+	return ImGui::InputFloat4(label, &v->x, "%.3f", flags);
 }
 
 bool ColorPicker(const char* label, glm::vec3* col)
