@@ -409,9 +409,7 @@ void ProcessEvents()
 				event_handled = g_orbit.ProcessEvent(&event);
 			}
 		}
-		if (!event_handled) {
-			event_handled = ImGui_ImplSDL3_ProcessEvent(&event);
-		}
+		ImGui_ImplSDL3_ProcessEvent(&event);
 		if (!event_handled) {
 			switch (event.type) {
 				case SDL_EVENT_QUIT: {
