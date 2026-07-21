@@ -18,6 +18,7 @@
 struct Context {
 	int scene_id = 0;
 	int camera_id = -1;
+	int node_id = -1;
 	AnimationPlayer animation_player;
 };
 
@@ -125,6 +126,29 @@ bool EnumWidget(const char* label, int* value, const char** strings, int num_of_
 	return value_changed;
 }
 
+template<typename T, int N>
+bool EnumWidget(const char* label, T* value, const char* (&strings)[N], int* values = nullptr)
+{
+	int cast = static_cast<int>(*value);
+	bool result = EnumWidget(label, &cast, strings, N, values);
+	*value = (T)cast;
+	return result;
+}
+
+bool BeginSection(const char* label)
+{
+	bool result = ImGui::CollapsingHeader(label);
+	if (result) {
+		ImGui::PushID(label);
+	}
+	return result;
+}
+
+void EndSection()
+{
+	ImGui::PopID();
+}
+
 void ScheduleGltfLoad(const char* filepath)
 {
 	Config::load_gltf = filepath;
@@ -161,7 +185,11 @@ void DrawNode(Gltf* gltf, int node_id)
 {
 	ImGui::PushID(node_id);
 	ImGuiTreeNodeFlags flags = gltf->nodes[node_id].child != -1 ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_Leaf;
-	if (ImGui::TreeNodeEx(gltf->nodes[node_id].name.c_str(), flags)) {
+	bool is_open = ImGui::TreeNodeEx(gltf->nodes[node_id].name.c_str(), flags | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen);
+	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+		g_context.node_id = node_id;
+	}
+	if (is_open) {
 		// Draw nodes children.
 		for (int i = gltf->nodes[node_id].child; i != -1; i = gltf->nodes[i].sibling) {
 			DrawNode(gltf, i);
@@ -171,44 +199,52 @@ void DrawNode(Gltf* gltf, int node_id)
 	ImGui::PopID();
 }
 
-void DrawGltfTab(Gltf* gltf, Context* context)
+void DrawMainMenuBar()
 {
-	if (ImGui::Button("Load glTF")) {
-		OpenGltfFileDialog();
+	if (ImGui::BeginMainMenuBar()) {
+		if (ImGui::BeginMenu("File")) {
+			if (ImGui::MenuItem("Load glTF")) {
+				OpenGltfFileDialog();
+			}
+			if (ImGui::MenuItem("Load Environment Map")) {
+				OpenEnvironmentFileDialog();
+			}
+			ImGui::EndMenu();
+		}
+		ImGui::EndMainMenuBar();
 	}
-	if (ImGui::Button("Load Environment Map")) {
-		OpenEnvironmentFileDialog();
+}
+
+void DrawScenePanel(Gltf* gltf, Context* context)
+{
+	// Scenes.
+	if (!gltf->scenes.empty()) {
+		if (ImGui::BeginCombo("Scene", gltf->scenes[context->scene_id].name.c_str())) {
+			for (int i = 0; i < gltf->scenes.size(); i++) {
+				bool is_selected = i == context->scene_id;
+				ImGui::PushID(i);
+				if (ImGui::Selectable(gltf->scenes[i].name.c_str(), &is_selected)) {
+					context->scene_id = i;
+				}
+				ImGui::PopID();
+			}
+			ImGui::EndCombo();
+		}
 	}
 
 	// Camera.
-    if (ImGui::CollapsingHeader("Camera")) {
-        ImGui::PushID("Camera");
+    if (BeginSection("Camera")) {
 		ImGui::Checkbox("Free Mode", &g_camera_free_mode);
         float vertical_fov_in_degrees = glm::degrees(camera.GetFov());
         ImGui::SliderFloat("FOV", &vertical_fov_in_degrees, 60., 120.);
         camera.SetFov(glm::radians(vertical_fov_in_degrees));
         ImGui::DragFloat("Near Plane", &camera.z_near, 1., 0., camera.z_near);
         ImGui::DragFloat("Far Plane", &camera.z_far, 1., camera.z_far);
-        ImGui::PopID();
-    }
-
-	// Scenes.
-    if (!gltf->scenes.empty()) {
-        if (ImGui::BeginCombo("Scene", gltf->scenes[context->scene_id].name.c_str())) {
-            for (int i = 0; i < gltf->scenes.size(); i++) {
-                bool is_selected = i == context->scene_id;
-                ImGui::PushID(i);
-                if (ImGui::Selectable(gltf->scenes[i].name.c_str(), &is_selected)) {
-                    context->scene_id = i;
-                }
-                ImGui::PopID();
-            }
-            ImGui::EndCombo();
-        }
+		EndSection();
     }
 
     // Animations.
-    if (!gltf->animations.empty()) {
+    if (!gltf->animations.empty() && BeginSection("Animation")) {
         if (ImGui::BeginCombo("Animation", context->animation_player.animation == -1 ? "None" : gltf->animations[context->animation_player.animation].name.c_str())) {
             bool is_selected = context->animation_player.animation == -1;
             if (ImGui::Selectable("None", &is_selected)) {
@@ -227,38 +263,81 @@ void DrawGltfTab(Gltf* gltf, Context* context)
             ImGui::EndCombo();
         }
         if (ImGui::Button(context->animation_player.playing ? "Pause" : "Play")) {
-            context->animation_player.playing = !context->animation_player.playing;
+			context->animation_player.playing = !context->animation_player.playing;
         };
         ImGui::Checkbox("Loop", &context->animation_player.loop);
         if (context->animation_player.animation != -1) {
-            g_render_settings.pathtracer.reset |= ImGui::SliderFloat("Animation Time", &context->animation_player.playhead, 0., gltf->animations[context->animation_player.animation].length);
+			g_render_settings.pathtracer.reset |= ImGui::SliderFloat("Animation Time", &context->animation_player.playhead, 0., gltf->animations[context->animation_player.animation].length);
         }
+		EndSection();
     }
+}
 
-	// Nodes.
-	if (ImGui::CollapsingHeader("Nodes")) {
-		if (!gltf->scenes.empty()) {
-			for (int node_id : gltf->scenes[context->scene_id].nodes) {
-				DrawNode(gltf, node_id);
+void DrawPropertiesPanel(Gltf* gltf, Context* context)
+{
+	if (context->node_id != -1) {
+		Gltf::Node& node = gltf->nodes[context->node_id];
+		ImGui::LabelText("Name", "%s", node.name.c_str());
+		ImGui::InputFloat3("Position", &node.local_transform.translation.x);
+		ImGui::InputFloat4("Rotation", &node.local_transform.rotation.x);
+		ImGui::InputFloat3("Scale", &node.local_transform.scale.x);
+		if (node.camera_id != -1 && BeginSection("Camera")) {
+			EndSection();
+		}
+		if (node.light_id != -1 && BeginSection("Light")) {
+			Gltf::Light& light = gltf->lights[node.light_id];
+			const char* light_type_strings[] = {
+				"Point",
+				"Spot",
+				"Directional",
+			};
+			EnumWidget("Type", &light.type, light_type_strings);
+			ImGui::ColorPicker3("Color", &light.color.x);
+			ImGui::InputFloat("Intensity", &light.intensity);
+			ImGui::InputFloat("Cutoff", &light.cutoff);
+			if (light.type == Gltf::Light::TYPE_SPOT) {
+				ImGui::InputFloat("Inner Angle", &light.inner_angle);
+				ImGui::InputFloat("Outer Angle", &light.outer_angle);
 			}
+			EndSection();
+		}
+		if (node.mesh_id != -1 && BeginSection("Mesh")) {
+			Gltf::Mesh& mesh = gltf->meshes[node.mesh_id];
+			ImGui::LabelText("Name", "%s", mesh.name.c_str());
+			for (int i = 0; i < mesh.primitives.size(); i++) {
+				ImGui::PushID(i);
+				Gltf::Primitive& primitive = mesh.primitives[i];
+				ImGui::PopID();
+			}
+			EndSection();
 		}
 	}
 }
 
-void DrawGraphicsTab()
+void DrawNodesPanel(Gltf* gltf, Context* context)
+{
+	if (!gltf->scenes.empty()) {
+		for (int node_id : gltf->scenes[context->scene_id].nodes) {
+			DrawNode(gltf, node_id);
+		}
+	}
+}
+
+void DrawGraphicsPanel()
 {
     // Tone mapping.
-	if (ImGui::CollapsingHeader("Tonemapping")) {
+	if (BeginSection("Tonemapping")) {
 		const char* tone_mapper_strings[] = {
 			"None",
 			"AgX",
 		};
-		EnumWidget("Tone Mapper", &g_render_settings.tone_mapper_config.tonemapper, tone_mapper_strings, std::size(tone_mapper_strings));
+		EnumWidget("Tone Mapper", &g_render_settings.tone_mapper_config.tonemapper, tone_mapper_strings);
 		ImGui::InputFloat("Exposure", &g_render_settings.tone_mapper_config.exposure);
+		EndSection();
 	}
 
 	// Display.
-	if (ImGui::CollapsingHeader("Display")) {
+	if (BeginSection("Display")) {
 		bool fullscreen = SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN ? true : false;
 		if (ImGui::Checkbox("Fullscreen", &fullscreen)) {
 			SDL_SetWindowFullscreen(g_window, fullscreen);
@@ -267,14 +346,15 @@ void DrawGraphicsTab()
 		if (ImGui::Checkbox("VSync", &v_sync)) {
 			g_render_settings.vsync_interval = v_sync ? 1 : 0;
 		}
+		EndSection();
 	}
 
-	if (ImGui::CollapsingHeader("Renderer")) {
+	if (BeginSection("Renderer")) {
 		const char* renderer_type_strings[] = {
 			"Rasterizer",
 			"Pathtracer",
 		};
-		g_render_settings.pathtracer.reset |= EnumWidget("Renderer Type", (int*)&g_render_settings.renderer_type, renderer_type_strings, std::size(renderer_type_strings));
+		g_render_settings.pathtracer.reset |= EnumWidget("Renderer Type", &g_render_settings.renderer_type, renderer_type_strings);
 
 		if (g_render_settings.renderer_type == Renderer::RENDERER_TYPE_RASTERIZER) {
 			ImGui::Checkbox("Frustum Culling", &g_render_settings.raster.frustum_culling);
@@ -327,7 +407,7 @@ void DrawGraphicsTab()
         		"Environment Map Color",
         		"Environment Map PDF",
 			};
-			g_render_settings.pathtracer.reset |= EnumWidget("Debug Output", &g_render_settings.pathtracer.debug_output, debug_output_strings, Pathtracer::DEBUG_OUTPUT_COUNT);
+			g_render_settings.pathtracer.reset |= EnumWidget("Debug Output", &g_render_settings.pathtracer.debug_output, debug_output_strings);
 
 			g_render_settings.pathtracer.reset |= ImGui::Checkbox("Use Frame As Seed", &g_render_settings.pathtracer.use_frame_as_seed);
 			ImGui::BeginDisabled(g_render_settings.pathtracer.use_frame_as_seed);
@@ -368,30 +448,36 @@ void DrawGraphicsTab()
 
 			g_render_settings.pathtracer.reset |= BitflagCheckbox("Shading Normal Adaptation", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHADING_NORMAL_ADAPTATION);
 		}
+		EndSection();
 	}
 }
 
 void DrawUi()
 {
 	ProfileZoneScoped();
-	ImGui::SetNextWindowPos(ImVec2(0., 0.));
-	ImGuiIO& io = ImGui::GetIO();
-	ImGui::SetNextWindowSize(ImVec2(500 * g_window_scale, io.DisplaySize.y));
-	ImGui::Begin("UI", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
+	ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
-	if (ImGui::BeginTabBar("Tabs"))
+	DrawMainMenuBar();
+
+	if (ImGui::Begin("Nodes")) {
+		DrawNodesPanel(&g_gltf, &g_context);
+	}
+	ImGui::End();
+
+	if (ImGui::Begin("Scene"))
 	{
-		if (ImGui::BeginTabItem("glTF"))
-		{
-			DrawGltfTab(&g_gltf, &g_context);
-			ImGui::EndTabItem();
-		}
-		if (ImGui::BeginTabItem("Graphics"))
-		{
-			DrawGraphicsTab();
-			ImGui::EndTabItem();
-		}
-		ImGui::EndTabBar();
+		DrawScenePanel(&g_gltf, &g_context);
+	}
+	ImGui::End();
+
+	if (ImGui::Begin("Graphics"))
+	{
+		DrawGraphicsPanel();
+	}
+	ImGui::End();
+
+	if (ImGui::Begin("Properties")) {
+		DrawPropertiesPanel(&g_gltf, &g_context);
 	}
 	ImGui::End();
 }
@@ -468,6 +554,7 @@ int main(int argc, char* argv[])
 	ImGui::GetStyle().ScaleAllSizes(g_window_scale);
 	ImGuiIO& io = ImGui::GetIO();
 	io.WantSaveIniSettings = false;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	ImFontConfig font_config;
 	font_config.SizePixels = 14.0 * g_window_scale;
 	io.Fonts->AddFontDefaultVector(&font_config);
