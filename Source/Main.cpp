@@ -10,7 +10,7 @@
 #include "CameraController.h"
 #include "DebugDraw.h"
 #include "Gltf.h"
-#include "imgui.h"
+#include "ImGuiHelpers.h"
 #include "Profiling.h"
 #include "Renderer.h"
 #include "Timer.h"
@@ -72,81 +72,6 @@ void LoadEnvironmentMap(const char* filepath)
 	renderer.environment_map.LoadEnvironmentMapImage(&renderer.upload_buffer, filepath, &renderer.map);
 	renderer.upload_buffer.WaitForSubmissionToComplete(renderer.upload_buffer.Submit());
 	g_render_settings.pathtracer.reset = true;
-}
-
-bool BitflagCheckbox(const char* label, uint32_t* bits, uint32_t flag)
-{
-	bool temp_bool = *bits & flag;
-	bool result = ImGui::Checkbox(label, &temp_bool);
-	*bits = temp_bool ? *bits | flag : *bits & ~flag;
-	return result;
-}
-
-bool BeginEnumWidget(const char* label, int* value, const char** strings, int num_of_strings, int* values = nullptr)
-{
-	int current_value = 0;
-	if (values) {
-		for (int i = 0; i < num_of_strings; i++) {
-			if (values[i] == *value) {
-				current_value = i;
-				break;
-			}
-		}
-	} else {
-		current_value = *value;
-	}
-	return ImGui::BeginCombo(label, strings[current_value]);
-}
-
-bool AddEnumWidgetItem(int i, int* value, const char** strings, int* values = nullptr)
-{
-	bool value_changed = false;
-	bool is_selected = values ? values[i] == *value : i == *value;
-	if (ImGui::Selectable(strings[i], &is_selected)) {
-		value_changed = values ? values[i] != *value : i != *value;
-		*value = values ? values[i] : i;
-	}
-	return value_changed;
-}
-
-void EndEnumWidget()
-{
-	ImGui::EndCombo();
-}
-
-bool EnumWidget(const char* label, int* value, const char** strings, int num_of_strings, int* values = nullptr)
-{
-	bool value_changed = false;
-	if (BeginEnumWidget(label, value, strings, num_of_strings, values)) {
-		for (int i = 0; i < num_of_strings; i++) {
-			value_changed |= AddEnumWidgetItem(i, value, strings, values);
-		}
-		EndEnumWidget();
-	}
-	return value_changed;
-}
-
-template<typename T, int N>
-bool EnumWidget(const char* label, T* value, const char* (&strings)[N], int* values = nullptr)
-{
-	int cast = static_cast<int>(*value);
-	bool result = EnumWidget(label, &cast, strings, N, values);
-	*value = (T)cast;
-	return result;
-}
-
-bool BeginSection(const char* label)
-{
-	bool result = ImGui::CollapsingHeader(label);
-	if (result) {
-		ImGui::PushID(label);
-	}
-	return result;
-}
-
-void EndSection()
-{
-	ImGui::PopID();
 }
 
 void ScheduleGltfLoad(const char* filepath)
@@ -233,18 +158,18 @@ void DrawScenePanel(Gltf* gltf, Context* context)
 	}
 
 	// Camera.
-    if (BeginSection("Camera")) {
+    if (ImGui::BeginSection("Camera")) {
 		ImGui::Checkbox("Free Mode", &g_camera_free_mode);
         float vertical_fov_in_degrees = glm::degrees(camera.GetFov());
         ImGui::SliderFloat("FOV", &vertical_fov_in_degrees, 60., 120.);
         camera.SetFov(glm::radians(vertical_fov_in_degrees));
         ImGui::DragFloat("Near Plane", &camera.z_near, 1., 0., camera.z_near);
         ImGui::DragFloat("Far Plane", &camera.z_far, 1., camera.z_far);
-		EndSection();
+		ImGui::EndSection();
     }
 
     // Animations.
-    if (!gltf->animations.empty() && BeginSection("Animation")) {
+    if (!gltf->animations.empty() && ImGui::BeginSection("Animation")) {
         if (ImGui::BeginCombo("Animation", context->animation_player.animation == -1 ? "None" : gltf->animations[context->animation_player.animation].name.c_str())) {
             bool is_selected = context->animation_player.animation == -1;
             if (ImGui::Selectable("None", &is_selected)) {
@@ -269,7 +194,7 @@ void DrawScenePanel(Gltf* gltf, Context* context)
         if (context->animation_player.animation != -1) {
 			g_render_settings.pathtracer.reset |= ImGui::SliderFloat("Animation Time", &context->animation_player.playhead, 0., gltf->animations[context->animation_player.animation].length);
         }
-		EndSection();
+		ImGui::EndSection();
     }
 }
 
@@ -278,30 +203,30 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 	if (context->node_id != -1) {
 		Gltf::Node& node = gltf->nodes[context->node_id];
 		ImGui::LabelText("Name", "%s", node.name.c_str());
-		ImGui::InputFloat3("Position", &node.local_transform.translation.x);
-		ImGui::InputFloat4("Rotation", &node.local_transform.rotation.x);
-		ImGui::InputFloat3("Scale", &node.local_transform.scale.x);
-		if (node.camera_id != -1 && BeginSection("Camera")) {
-			EndSection();
+		ImGui::Input("Position", &node.local_transform.translation);
+		ImGui::Input("Rotation", &node.local_transform.rotation);
+		ImGui::Input("Scale", &node.local_transform.scale);
+		if (node.camera_id != -1 && ImGui::BeginSection("Camera")) {
+			ImGui::EndSection();
 		}
-		if (node.light_id != -1 && BeginSection("Light")) {
+		if (node.light_id != -1 && ImGui::BeginSection("Light")) {
 			Gltf::Light& light = gltf->lights[node.light_id];
 			const char* light_type_strings[] = {
 				"Point",
 				"Spot",
 				"Directional",
 			};
-			EnumWidget("Type", &light.type, light_type_strings);
-			ImGui::ColorPicker3("Color", &light.color.x);
+			ImGui::Enum("Type", &light.type, light_type_strings);
+			ImGui::ColorPicker("Color", &light.color);
 			ImGui::InputFloat("Intensity", &light.intensity);
 			ImGui::InputFloat("Cutoff", &light.cutoff);
 			if (light.type == Gltf::Light::TYPE_SPOT) {
 				ImGui::InputFloat("Inner Angle", &light.inner_angle);
 				ImGui::InputFloat("Outer Angle", &light.outer_angle);
 			}
-			EndSection();
+			ImGui::EndSection();
 		}
-		if (node.mesh_id != -1 && BeginSection("Mesh")) {
+		if (node.mesh_id != -1 && ImGui::BeginSection("Mesh")) {
 			Gltf::Mesh& mesh = gltf->meshes[node.mesh_id];
 			ImGui::LabelText("Name", "%s", mesh.name.c_str());
 			for (int i = 0; i < mesh.primitives.size(); i++) {
@@ -309,7 +234,7 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 				Gltf::Primitive& primitive = mesh.primitives[i];
 				ImGui::PopID();
 			}
-			EndSection();
+			ImGui::EndSection();
 		}
 	}
 }
@@ -326,18 +251,18 @@ void DrawNodesPanel(Gltf* gltf, Context* context)
 void DrawGraphicsPanel()
 {
     // Tone mapping.
-	if (BeginSection("Tonemapping")) {
+	if (ImGui::BeginSection("Tonemapping")) {
 		const char* tone_mapper_strings[] = {
 			"None",
 			"AgX",
 		};
-		EnumWidget("Tone Mapper", &g_render_settings.tone_mapper_config.tonemapper, tone_mapper_strings);
+		ImGui::Enum("Tone Mapper", &g_render_settings.tone_mapper_config.tonemapper, tone_mapper_strings);
 		ImGui::InputFloat("Exposure", &g_render_settings.tone_mapper_config.exposure);
-		EndSection();
+		ImGui::EndSection();
 	}
 
 	// Display.
-	if (BeginSection("Display")) {
+	if (ImGui::BeginSection("Display")) {
 		bool fullscreen = SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN ? true : false;
 		if (ImGui::Checkbox("Fullscreen", &fullscreen)) {
 			SDL_SetWindowFullscreen(g_window, fullscreen);
@@ -346,15 +271,15 @@ void DrawGraphicsPanel()
 		if (ImGui::Checkbox("VSync", &v_sync)) {
 			g_render_settings.vsync_interval = v_sync ? 1 : 0;
 		}
-		EndSection();
+		ImGui::EndSection();
 	}
 
-	if (BeginSection("Renderer")) {
+	if (ImGui::BeginSection("Renderer")) {
 		const char* renderer_type_strings[] = {
 			"Rasterizer",
 			"Pathtracer",
 		};
-		g_render_settings.pathtracer.reset |= EnumWidget("Renderer Type", &g_render_settings.renderer_type, renderer_type_strings);
+		g_render_settings.pathtracer.reset |= ImGui::Enum("Renderer Type", &g_render_settings.renderer_type, renderer_type_strings);
 
 		if (g_render_settings.renderer_type == Renderer::RENDERER_TYPE_RASTERIZER) {
 			ImGui::Checkbox("Frustum Culling", &g_render_settings.raster.frustum_culling);
@@ -407,7 +332,7 @@ void DrawGraphicsPanel()
         		"Environment Map Color",
         		"Environment Map PDF",
 			};
-			g_render_settings.pathtracer.reset |= EnumWidget("Debug Output", &g_render_settings.pathtracer.debug_output, debug_output_strings);
+			g_render_settings.pathtracer.reset |= ImGui::Enum("Debug Output", &g_render_settings.pathtracer.debug_output, debug_output_strings);
 
 			g_render_settings.pathtracer.reset |= ImGui::Checkbox("Use Frame As Seed", &g_render_settings.pathtracer.use_frame_as_seed);
 			ImGui::BeginDisabled(g_render_settings.pathtracer.use_frame_as_seed);
@@ -416,39 +341,39 @@ void DrawGraphicsPanel()
 			
 			g_render_settings.pathtracer.reset |= ImGui::Checkbox("Jitter Matrix", &g_render_settings.pathtracer.jitter_matrix);
 
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Enable Point Lights", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_POINT_LIGHTS);
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Shadow Rays", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHADOW_RAYS);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Enable Point Lights", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_POINT_LIGHTS);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Shadow Rays", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHADOW_RAYS);
 			ImGui::BeginDisabled(!(g_render_settings.pathtracer.flags & Pathtracer::FLAG_SHADOW_RAYS));
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Alpha Shadows", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ALPHA_SHADOWS);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Alpha Shadows", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ALPHA_SHADOWS);
 			ImGui::EndDisabled();
 
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Indirect Environment Only", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_INDIRECT_ENVIRONMENT_ONLY);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Indirect Environment Only", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_INDIRECT_ENVIRONMENT_ONLY);
 
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Cull Backface Triangles", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_CULL_BACKFACE);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Cull Backface Triangles", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_CULL_BACKFACE);
 
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Accumulate", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ACCUMULATE);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Accumulate", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ACCUMULATE);
 			ImGui::BeginDisabled(!(g_render_settings.pathtracer.flags & Pathtracer::FLAG_ACCUMULATE));
 			ImGui::InputInt("Max Accumulated Frames", &g_render_settings.pathtracer.max_accumulated_frames);
 			ImGui::EndDisabled();
 
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Enable Environment", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ENVIRONMENT_MAP);
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Importance Sample Environment Map", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ENVIRONMENT_MIS);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Enable Environment", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ENVIRONMENT_MAP);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Importance Sample Environment Map", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_ENVIRONMENT_MIS);
 
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Enable Luminance Clamp", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_LUMINANCE_CLAMP);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Enable Luminance Clamp", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_LUMINANCE_CLAMP);
 			ImGui::BeginDisabled(!(g_render_settings.pathtracer.flags & Pathtracer::FLAG_LUMINANCE_CLAMP));
 			g_render_settings.pathtracer.reset |= ImGui::InputFloat("Luminance Clamp", &g_render_settings.pathtracer.luminance_clamp);
 			ImGui::EndDisabled();
 
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Material Diffuse White", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_MATERIAL_DIFFUSE_WHITE);
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Use Geometric Normal", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_MATERIAL_USE_GEOMETRIC_NORMALS);
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Use Multiple Importance Sampling", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_MATERIAL_MIS);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Material Diffuse White", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_MATERIAL_DIFFUSE_WHITE);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Use Geometric Normal", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_MATERIAL_USE_GEOMETRIC_NORMALS);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Use Multiple Importance Sampling", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_MATERIAL_MIS);
 
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Show NAN", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHOW_NAN);
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Show INF", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHOW_INF);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Show NAN", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHOW_NAN);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Show INF", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHOW_INF);
 
-			g_render_settings.pathtracer.reset |= BitflagCheckbox("Shading Normal Adaptation", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHADING_NORMAL_ADAPTATION);
+			g_render_settings.pathtracer.reset |= ImGui::BitflagCheckbox("Shading Normal Adaptation", &g_render_settings.pathtracer.flags, Pathtracer::FLAG_SHADING_NORMAL_ADAPTATION);
 		}
-		EndSection();
+		ImGui::EndSection();
 	}
 }
 

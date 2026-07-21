@@ -147,6 +147,7 @@ target_sources(glTF PRIVATE
     "Source/GpuScene.h"
     "Source/GpuSkin.cpp"
     "Source/GpuSkin.h"
+    "Source/ImGuiHelpers.h"
     "Source/Main.cpp"
     "Source/Memory.cpp"
     "Source/Memory.h"
