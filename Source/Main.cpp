@@ -106,18 +106,21 @@ void OpenEnvironmentFileDialog()
 	SDL_ShowOpenFileDialog(callback, nullptr, nullptr, filter, 2, nullptr, false);
 }
 
-void DrawNode(Gltf* gltf, int node_id)
+void DrawNode(Gltf* gltf, Context* context, int node_id)
 {
 	ImGui::PushID(node_id);
 	ImGuiTreeNodeFlags flags = gltf->nodes[node_id].child != -1 ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_Leaf;
+	if (context->node_id == node_id) {
+		flags |= ImGuiTreeNodeFlags_Selected;
+	}
 	bool is_open = ImGui::TreeNodeEx(gltf->nodes[node_id].name.c_str(), flags | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen);
 	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-		g_context.node_id = node_id;
+		context->node_id = node_id;
 	}
 	if (is_open) {
 		// Draw nodes children.
 		for (int i = gltf->nodes[node_id].child; i != -1; i = gltf->nodes[i].sibling) {
-			DrawNode(gltf, i);
+			DrawNode(gltf, context, i);
 		}
 		ImGui::TreePop();
 	}
@@ -243,7 +246,7 @@ void DrawNodesPanel(Gltf* gltf, Context* context)
 {
 	if (!gltf->scenes.empty()) {
 		for (int node_id : gltf->scenes[context->scene_id].nodes) {
-			DrawNode(gltf, node_id);
+			DrawNode(gltf, context, node_id);
 		}
 	}
 }
