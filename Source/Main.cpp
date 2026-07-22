@@ -63,6 +63,8 @@ void Unload()
 	renderer.upload_buffer.WaitForAllSubmissionsToComplete();
 	g_gltf.Unload();
 	g_context.scene_id = 0;
+	g_context.camera_id = -1;
+	g_context.node_id = -1;
 	g_render_settings.pathtracer.reset = true;
 }
 
