@@ -239,13 +239,13 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 				"Spot",
 				"Directional",
 			};
-			ImGui::Enum("Type", &light.type, light_type_strings);
-			ImGui::ColorEdit("Color", &light.color);
-			ImGui::InputFloat("Intensity", &light.intensity);
-			ImGui::InputFloat("Cutoff", &light.cutoff);
+			ImGui::LabelText("Type", "%s", light_type_strings[light.type]);
+			ImGui::ColorEdit("Color", &light.color, ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoDragDrop);
+			ImGui::InputFloat("Intensity", &light.intensity, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
+			ImGui::InputFloat("Cutoff", &light.cutoff, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
 			if (light.type == Gltf::Light::TYPE_SPOT) {
-				ImGui::InputFloat("Inner Angle", &light.inner_angle);
-				ImGui::InputFloat("Outer Angle", &light.outer_angle);
+				ImGui::InputFloat("Inner Angle", &light.inner_angle, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
+				ImGui::InputFloat("Outer Angle", &light.outer_angle, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
 			}
 			ImGui::EndSection();
 		}
