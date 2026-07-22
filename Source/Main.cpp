@@ -217,13 +217,14 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 		}
 		if (node.light_id != -1 && ImGui::BeginSection("Light")) {
 			Gltf::Light& light = gltf->lights[node.light_id];
+			ImGui::InputInt("Index", &node.light_id, 0, 0, ImGuiInputTextFlags_ReadOnly);
 			const char* light_type_strings[] = {
 				"Point",
 				"Spot",
 				"Directional",
 			};
 			ImGui::Enum("Type", &light.type, light_type_strings);
-			ImGui::ColorPicker("Color", &light.color);
+			ImGui::ColorEdit("Color", &light.color);
 			ImGui::InputFloat("Intensity", &light.intensity);
 			ImGui::InputFloat("Cutoff", &light.cutoff);
 			if (light.type == Gltf::Light::TYPE_SPOT) {

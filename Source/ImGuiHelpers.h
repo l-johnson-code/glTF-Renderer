@@ -108,6 +108,11 @@ bool Input(const char* label, glm::quat* v, ImGuiInputFlags flags = ImGuiInputTe
 	return ImGui::InputFloat4(label, &v->x, "%.3f", flags);
 }
 
+bool ColorEdit(const char* label, glm::vec3* col)
+{
+	return ImGui::ColorEdit3(label, &col->x);
+}
+
 bool ColorPicker(const char* label, glm::vec3* col)
 {
 	return ImGui::ColorPicker3(label, &col->x);
