@@ -43,29 +43,29 @@ float GetWindowScaling(HWND window)
 	return (float)GetDpiForWindow(window) / 96.; 
 }
 
-void LoadGltf(const char* filepath)
-{
-	g_context.animation_player = AnimationPlayer();
-	renderer.WaitForOutstandingWork();
-	renderer.upload_buffer.WaitForAllSubmissionsToComplete();
-	g_gltf.Unload();
-	renderer.upload_buffer.Begin();
-	g_gltf.LoadFromGltf(filepath, &renderer.resources, &renderer.upload_buffer);
-	g_context.scene_id = 0;
-	renderer.upload_buffer.WaitForSubmissionToComplete(renderer.upload_buffer.Submit());
-	g_render_settings.pathtracer.reset = true;
-}
-
 void Unload()
 {
-	g_context.animation_player = AnimationPlayer();
+	// Wait for all uploads to complete before freeing the currently loaded scene.
 	renderer.WaitForOutstandingWork();
 	renderer.upload_buffer.WaitForAllSubmissionsToComplete();
 	g_gltf.Unload();
+	
+	// Reset context.
+	g_context.animation_player = AnimationPlayer();
 	g_context.scene_id = 0;
 	g_context.camera_id = -1;
 	g_context.node_id = -1;
+
+	// Invalidate pathtracer.
 	g_render_settings.pathtracer.reset = true;
+}
+
+void LoadGltf(const char* filepath)
+{
+	Unload();
+	renderer.upload_buffer.Begin();
+	g_gltf.LoadFromGltf(filepath, &renderer.resources, &renderer.upload_buffer);
+	renderer.upload_buffer.WaitForSubmissionToComplete(renderer.upload_buffer.Submit());
 }
 
 void LoadEnvironmentMap(const char* filepath)
