@@ -213,6 +213,22 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 		ImGui::Input("Rotation", &node.local_transform.rotation, ImGuiInputTextFlags_ReadOnly);
 		ImGui::Input("Scale", &node.local_transform.scale, ImGuiInputTextFlags_ReadOnly);
 		if (node.camera_id != -1 && ImGui::BeginSection("Camera")) {
+			ImGui::InputInt("Index", &node.camera_id, 0, 0, ImGuiInputTextFlags_ReadOnly);
+			Camera& camera = gltf->cameras[node.camera_id];
+			const char* camera_type_strings[] = {
+				"Perspective",
+				"Orthographic",
+			};
+			ImGui::LabelText("Type", "%s", camera_type_strings[camera.GetType()]);
+			if (camera.GetType() == Camera::CAMERA_TYPE_PERSPECTIVE) {
+				ImGui::InputFloat("FOV", &camera, &Camera::GetFov, &Camera::SetFov, ImGuiInputTextFlags_ReadOnly);
+				ImGui::InputFloat("Aspect Ratio", &camera, &Camera::GetAspectRatio, &Camera::SetAspectRatio, ImGuiInputTextFlags_ReadOnly);
+			} else {
+				ImGui::InputFloat("X Mag", &camera, &Camera::GetXMag, &Camera::SetXMag, ImGuiInputTextFlags_ReadOnly);
+				ImGui::InputFloat("Y Mag", &camera, &Camera::GetYMag, &Camera::SetYMag, ImGuiInputTextFlags_ReadOnly);
+			}
+			ImGui::InputFloat("Near Plane", &camera.z_near, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
+			ImGui::InputFloat("Far Plane", &camera.z_far, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
 			ImGui::EndSection();
 		}
 		if (node.light_id != -1 && ImGui::BeginSection("Light")) {
