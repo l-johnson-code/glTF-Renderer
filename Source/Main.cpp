@@ -116,7 +116,7 @@ void DrawNode(Gltf* gltf, Context* context, int node_id)
 	if (context->node_id == node_id) {
 		flags |= ImGuiTreeNodeFlags_Selected;
 	}
-	bool is_open = ImGui::TreeNodeEx(gltf->nodes[node_id].name.c_str(), flags | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen);
+	bool is_open = ImGui::TreeNodeEx("", flags | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen, "[%i] %s", node_id, gltf->nodes[node_id].name.c_str());
 	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
 		context->node_id = node_id;
 	}
