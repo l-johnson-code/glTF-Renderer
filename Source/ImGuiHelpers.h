@@ -82,6 +82,17 @@ void EndSection()
 	ImGui::PopID();
 }
 
+template<typename T, typename G, typename S>
+bool InputFloat(const char* label, T* object, G getter, S setter, ImGuiInputFlags flags = ImGuiInputTextFlags_None)
+{
+	float v = (object->*getter)();
+	bool value_changed = ImGui::InputFloat(label, &v, 0.0f, 0.0f, "%.3f", flags);
+	if (value_changed) {
+		(object->*setter)(v);
+	}
+	return value_changed;
+}
+
 bool Input(const char* label, glm::vec3* v, ImGuiInputFlags flags = ImGuiInputTextFlags_None)
 {
 	return ImGui::InputFloat3(label, &v->x, "%.3f", flags);
