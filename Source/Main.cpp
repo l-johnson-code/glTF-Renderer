@@ -2,6 +2,7 @@
 
 #include <imgui/backends/imgui_impl_dx12.h>
 #include <imgui/backends/imgui_impl_sdl3.h>
+#include <imgui/imgui_internal.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
 
@@ -383,7 +384,35 @@ void DrawGraphicsPanel()
 void DrawUi()
 {
 	ProfileZoneScoped();
-	ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+	ImGuiID dockspace_id = ImGui::GetID("Dockspace");
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+	// Setup initial docking layout.
+	if (ImGui::DockBuilderGetNode(dockspace_id) == nullptr)
+	{
+		// Main panel.
+		ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+		ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+		
+		// Left panel.
+		ImGuiID dock_id_left = 0;
+		ImGuiID dock_id_main = 0;
+		ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, &dock_id_left, &dock_id_main);
+		
+		// Right panel.
+		ImGuiID dock_id_right = 0;
+		ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.2f, &dock_id_right, &dock_id_main);
+		ImGuiID dock_id_right_up = 0;
+		ImGuiID dock_id_right_bottom = 0;
+		ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Up, 0.5f, &dock_id_right_up, &dock_id_right_bottom);
+
+		ImGui::DockBuilderDockWindow("Nodes", dock_id_right_up);
+		ImGui::DockBuilderDockWindow("Scene", dock_id_left);
+		ImGui::DockBuilderDockWindow("Graphics", dock_id_left);
+		ImGui::DockBuilderDockWindow("Properties", dock_id_right_bottom);
+		ImGui::DockBuilderFinish(dockspace_id);
+	}
+	ImGui::DockSpaceOverViewport(dockspace_id, viewport, ImGuiDockNodeFlags_PassthruCentralNode);
 
 	DrawMainMenuBar();
 
