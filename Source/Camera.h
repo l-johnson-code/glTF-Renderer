@@ -41,7 +41,7 @@ class Camera {
 
     CameraType GetType()
     {
-        return type;
+        return this->type;
     }
 
     float GetFov()
@@ -65,6 +65,26 @@ class Camera {
     void SetAspectRatio(float aspect_ratio)
     {
         this->aspect_ratio = aspect_ratio;
+    }
+
+    float GetXMag()
+    {
+        return this->x_mag;
+    }
+
+    void SetXMag(float x_mag)
+    {
+        this->x_mag = x_mag;
+    }
+
+    float GetYMag()
+    {
+        return this->y_mag;
+    }
+
+    void SetYMag(float y_mag)
+    {
+        this->y_mag = y_mag;
     }
 
     void SetWorldToView(glm::mat4x4 world_to_view)
