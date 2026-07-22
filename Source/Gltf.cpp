@@ -537,14 +537,14 @@ void Gltf::LoadScenes(tinygltf::Model* gltf)
 void Gltf::LoadCameras(tinygltf::Model* gltf)
 {
 	ProfileZoneScoped();
-	for (auto gltf_camera: gltf->cameras) {
-		Camera camera;
-		if (gltf_camera.type == "Perspective") {
-			camera.Perspective(gltf_camera.perspective.aspectRatio, gltf_camera.perspective.yfov, gltf_camera.perspective.zfar, gltf_camera.perspective.znear);
-		} else if (gltf_camera.type == "Orthographic") {
-			camera.Orthographic(gltf_camera.orthographic.xmag, gltf_camera.orthographic.ymag, gltf_camera.orthographic.zfar, gltf_camera.orthographic.znear);
+	this->cameras.resize(gltf->cameras.size());
+	for (int i = 0; i < gltf->cameras.size(); i++) {
+		const tinygltf::Camera& gltf_camera = gltf->cameras[i];
+		if (gltf_camera.type == "perspective") {
+			this->cameras[i].Perspective(gltf_camera.perspective.aspectRatio, gltf_camera.perspective.yfov, gltf_camera.perspective.zfar, gltf_camera.perspective.znear);
+		} else if (gltf_camera.type == "orthographic") {
+			this->cameras[i].Orthographic(gltf_camera.orthographic.xmag, gltf_camera.orthographic.ymag, gltf_camera.orthographic.zfar, gltf_camera.orthographic.znear);
 		}
-		this->cameras.emplace_back(camera);
 	}
 }
 
@@ -834,6 +834,7 @@ bool Gltf::LoadFromGltf(const char* filepath, Gpu::Resources* gpu_resources, Upl
 	LoadSkins(&model);
 	LoadAnimations(&model);
 	LoadLights(&model);
+	LoadCameras(&model);
 	CreateDynamicMesh(gpu_resources);
 
 	return true;
