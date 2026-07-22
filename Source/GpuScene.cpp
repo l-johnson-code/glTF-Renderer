@@ -72,7 +72,7 @@ void GpuScene::Update(Gltf* gltf, int scene)
 		}
 	});
 	if (lights_staging.data()) {
-		memcpy(this->lights.Current().Pointer(), lights_staging.data(), lights_staging.size());
+		memcpy(this->lights.Current().Pointer(), lights_staging.data(), lights_staging.size() * sizeof(Light));
 	}
 
 	materials.Next();
