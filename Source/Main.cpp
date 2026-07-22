@@ -243,6 +243,12 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 			}
 			ImGui::EndSection();
 		}
+		if (node.skin_id != -1 && ImGui::BeginSection("Skin")) {
+			Gltf::Skin& skin = gltf->skins[node.skin_id];
+			ImGui::InputInt("Skin ID", &node.skin_id, 0, 0, ImGuiInputTextFlags_ReadOnly);
+			ImGui::LabelText("Skin Root", "[%i] %s", skin.joints[0], gltf->nodes[skin.joints[0]].name.c_str());
+			ImGui::EndSection();
+		}
 	}
 }
 
