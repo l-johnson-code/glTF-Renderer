@@ -45,7 +45,7 @@ public:
     EnvironmentMap::Map map;
 
 	bool Init(HWND window, RenderSettings* settings);
-	void DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* render_settings);
+	void DrawFrame(Gltf* gltf, Camera* camera, RenderSettings* render_settings);
 	void Destroy();
 	void WaitForOutstandingWork();
 
@@ -101,7 +101,7 @@ private:
 	void EndFrame();
 
 	// Skinning.
-	void PerformSkinning(CommandContext* context, Gltf* gltf, int scene);
+	void PerformSkinning(CommandContext* context, Gltf* gltf);
 
 	// UI.
 	void InitializeImGui();

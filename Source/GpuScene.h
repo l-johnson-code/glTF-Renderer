@@ -7,7 +7,7 @@ class GpuScene {
     public:
 
     HRESULT Init(Gpu::Resources* resources);
-    void Update(Gltf* gltf, int scene_id);
+    void Update(Gltf* gltf);
     int LightCount() { return lights_staging.size(); };
     Gpu::Buffer& LightBuffer() { return lights.Current(); };
     Gpu::Buffer& MaterialBuffer() { return materials.Current(); };

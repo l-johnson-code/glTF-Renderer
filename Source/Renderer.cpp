@@ -284,7 +284,7 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 	}
 }
 
-void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* settings)
+void Renderer::DrawFrame(Gltf* gltf, Camera* camera, RenderSettings* settings)
 {
 	// Apply any settings changes that require a pipeline flush, such as changing resolution.
 	ApplySettingsChanges(settings);
@@ -327,17 +327,16 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 		command_context.EndEvent();
 	}
 
-	gpu_scene.Update(gltf, scene);
+	gpu_scene.Update(gltf);
 
 	command_context.BeginEvent("Skinning");
 	gpu_skinner.Bind(&command_context);
-	PerformSkinning(&command_context, gltf, scene);
+	PerformSkinning(&command_context, gltf);
 	command_context.EndEvent();
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 		Rasterizer::ExecuteParams params = {
 			.gltf = gltf,
-        	.scene = scene,
         	.camera = camera,
         	.gpu_scene = &this->gpu_scene,
         	.environment_map = environment_map_loaded ? &map : nullptr,
@@ -347,7 +346,6 @@ void Renderer::DrawFrame(Gltf* gltf, int scene, Camera* camera, RenderSettings* 
 	} else {
 		Pathtracer::ExecuteParams params = {
 			.gltf = gltf,
-        	.scene = scene,
         	.camera = camera,
         	.width = this->display_width,
         	.height = this->display_height,
@@ -473,9 +471,9 @@ void Renderer::CreateRenderTargets()
 	this->resources.CreateTexture(&desc, &this->display);
 }
 
-void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf, int scene)
+void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf)
 {
-	gltf->TraverseScene(scene, [&](Gltf* gltf, int node_id) {
+	gltf->TraverseScene([&](Gltf* gltf, int node_id) {
 		const Gltf::Node& node = gltf->nodes[node_id];
 		bool skinned = node.skin_id != -1;
 		bool morphed = node.current_weights.size() > 0;

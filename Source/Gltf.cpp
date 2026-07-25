@@ -20,10 +20,10 @@
 #include "UploadBuffer.h"
 #include "TinyGltfTools.h"
 
-void Gltf::TraverseScene(int scene, const std::function<void(Gltf*, int)>& lambda)
+void Gltf::TraverseScene(const std::function<void(Gltf*, int)>& lambda)
 {
 	ProfileZoneScoped();
-	for (auto node_id: scenes[scene].nodes) {
+	for (auto node_id: root_nodes) {
 		TraverseNode(node_id, lambda);
 	}
 }
@@ -40,7 +40,6 @@ void Gltf::TraverseNode(int node_id, const std::function<void(Gltf*, int)>& lamb
 void Gltf::Unload()
 {
 	ProfileZoneScoped();
-	scenes = std::vector<Scene>(1);
 	
 	// Need to explicitly free descriptors for all meshes and textures.
 	for (Mesh& mesh: meshes) {
@@ -61,10 +60,11 @@ void Gltf::Unload()
 		gpu_resources->gltf_sampler_allocator.Reset();
 	}
 	
+	root_nodes.clear();
+    nodes.clear();
 	cameras.clear();
 	meshes.clear();
     materials.clear();
-    nodes.clear();
     skins.clear();
     dynamic_primitives.clear();
     animations.clear();
@@ -524,16 +524,6 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, U
 	}
 }
 
-void Gltf::LoadScenes(tinygltf::Model* gltf)
-{
-	ProfileZoneScoped();
-	this->scenes.resize(gltf->scenes.size());
-	for (int i = 0; i < gltf->scenes.size(); i++) {
-		this->scenes[i].name = gltf->scenes[i].name;
-		this->scenes[i].nodes = gltf->scenes[i].nodes;
-	}
-}
-
 void Gltf::LoadCameras(tinygltf::Model* gltf)
 {
 	ProfileZoneScoped();
@@ -551,6 +541,10 @@ void Gltf::LoadCameras(tinygltf::Model* gltf)
 void Gltf::LoadNodes(tinygltf::Model* gltf)
 {
 	ProfileZoneScoped();
+	this->root_nodes.resize(gltf->scenes[0].nodes.size());
+	for (int i = 0; i < gltf->scenes[0].nodes.size(); i++) {
+		this->root_nodes[i] = gltf->scenes[0].nodes[i];
+	}
 	this->nodes.resize(gltf->nodes.size());
 
 	for (int i = 0; i < gltf->nodes.size(); i++) {
@@ -825,11 +819,16 @@ bool Gltf::LoadFromGltf(const char* filepath, Gpu::Resources* gpu_resources, Upl
 		}
 	}
 
+	// Only support files with a single scene.
+	if (model.scenes.size() != 1) {
+		SPDLOG_WARN("glTF file contains more than one scene.");
+		return false;
+	}
+
 	LoadSamplers(&model);
 	ReserveTextures(&model);
 	LoadMeshes(&model, gpu_resources, upload_buffer);
 	LoadMaterials(&model, gpu_resources, upload_buffer);
-	LoadScenes(&model);
 	LoadNodes(&model);
 	LoadSkins(&model);
 	LoadAnimations(&model);
@@ -910,7 +909,7 @@ void Gltf::Animate(Animation* animation, float time)
     }
 }
 
-void Gltf::CalculateGlobalTransforms(int scene)
+void Gltf::CalculateGlobalTransforms()
 {
 	glm::mat4x4 coordinate_system_transform = glm::mat4x4(
 		1., 0., 0., 0.,
@@ -918,8 +917,8 @@ void Gltf::CalculateGlobalTransforms(int scene)
 		0., -1., 0., 0.,
 		0., 0., 0., 1.
 	);
-	for (int i = 0; i < scenes[scene].nodes.size(); i++) {
-    	CalculateGlobalTransforms(&this->nodes[this->scenes[scene].nodes[i]], coordinate_system_transform);
+	for (int i = 0; i < root_nodes.size(); i++) {
+    	CalculateGlobalTransforms(&this->nodes[this->root_nodes[i]], coordinate_system_transform);
 	}
 }
 

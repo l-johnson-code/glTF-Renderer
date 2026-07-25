@@ -37,11 +37,11 @@ HRESULT GpuScene::Init(Gpu::Resources* resources)
 	return S_OK;
 }
 
-void GpuScene::Update(Gltf* gltf, int scene)
+void GpuScene::Update(Gltf* gltf)
 {
 	lights.Next();
 	lights_staging.clear();
-	gltf->TraverseScene(scene, [&](Gltf* gltf, int node_id) {
+	gltf->TraverseScene([&](Gltf* gltf, int node_id) {
 		const Gltf::Node& node = gltf->nodes[node_id];
 		int light_id = node.light_id;
 		if (light_id != -1) {

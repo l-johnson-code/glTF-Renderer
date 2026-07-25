@@ -17,7 +17,6 @@
 #include "Timer.h"
 
 struct Context {
-	int scene_id = 0;
 	int camera_id = -1;
 	int node_id = -1;
 	AnimationPlayer animation_player;
@@ -52,7 +51,6 @@ void Unload()
 	
 	// Reset context.
 	g_context.animation_player = AnimationPlayer();
-	g_context.scene_id = 0;
 	g_context.camera_id = -1;
 	g_context.node_id = -1;
 
@@ -148,21 +146,6 @@ void DrawMainMenuBar()
 
 void DrawScenePanel(Gltf* gltf, Context* context)
 {
-	// Scenes.
-	if (!gltf->scenes.empty()) {
-		if (ImGui::BeginCombo("Scene", gltf->scenes[context->scene_id].name.c_str())) {
-			for (int i = 0; i < gltf->scenes.size(); i++) {
-				bool is_selected = i == context->scene_id;
-				ImGui::PushID(i);
-				if (ImGui::Selectable(gltf->scenes[i].name.c_str(), &is_selected)) {
-					context->scene_id = i;
-				}
-				ImGui::PopID();
-			}
-			ImGui::EndCombo();
-		}
-	}
-
 	// Camera.
     if (ImGui::BeginSection("Camera")) {
 		ImGui::Checkbox("Free Mode", &g_camera_free_mode);
@@ -270,10 +253,8 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 
 void DrawNodesPanel(Gltf* gltf, Context* context)
 {
-	if (!gltf->scenes.empty()) {
-		for (int node_id : gltf->scenes[context->scene_id].nodes) {
-			DrawNode(gltf, context, node_id);
-		}
+	for (int node_id : gltf->root_nodes) {
+		DrawNode(gltf, context, node_id);
 	}
 }
 
@@ -625,7 +606,7 @@ int main(int argc, char* argv[])
 		}
 		{
 			ProfileZoneScopedN("Global Transforms");
-			g_gltf.CalculateGlobalTransforms(g_context.scene_id);
+			g_gltf.CalculateGlobalTransforms();
 		}
 		{
 			ProfileZoneScopedN("ImGui Draw List");
@@ -633,7 +614,7 @@ int main(int argc, char* argv[])
 		}
 		{
 			ProfileZoneScopedN("Draw Frame");
-			renderer.DrawFrame(&g_gltf, g_context.scene_id, &camera, &g_render_settings);
+			renderer.DrawFrame(&g_gltf, &camera, &g_render_settings);
 		}
 		g_render_settings.pathtracer.reset = false;
 		ProfileMarkFrame();

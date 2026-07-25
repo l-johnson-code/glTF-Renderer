@@ -343,7 +343,7 @@ void Pathtracer::UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAc
     acceleration_structure->EndBlasBuilds(context);
 }
 
-void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure)
+void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
 {
     mesh_instances.clear();
     vertex_buffers.clear();
@@ -356,7 +356,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, Ra
 		MASK_NONE = 1 << 0,
 		MASK_ALPHA_BLEND = 1 << 1,
 	};
-	gltf->TraverseScene(scene_id, [&](Gltf* gltf, int node_id) {
+	gltf->TraverseScene([&](Gltf* gltf, int node_id) {
 		const Gltf::Node& node = gltf->nodes[node_id];
 		int mesh_id = node.mesh_id;
 		if (mesh_id != -1) {
@@ -504,7 +504,7 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
 		UpdateAllBlas(context, execute_params->gltf, &this->acceleration_structure);
         context->EndEvent();
         context->BeginEvent("TLAS");
-		BuildTlas(context, execute_params->gltf, execute_params->scene, &this->acceleration_structure);
+		BuildTlas(context, execute_params->gltf, &this->acceleration_structure);
         context->EndEvent();
         context->EndEvent();
 

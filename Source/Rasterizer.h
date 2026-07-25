@@ -22,7 +22,6 @@ class Rasterizer {
 
     struct ExecuteParams {
         Gltf* gltf = nullptr;
-        int scene = 0;
         Camera* camera = nullptr;
         GpuScene* gpu_scene = nullptr;
         EnvironmentMap::Map* environment_map = nullptr;
@@ -67,7 +66,7 @@ class Rasterizer {
 
     // Forward renderer.
 	void SetViewportAndScissorRects(CommandContext* context, int width, int height);
-	void GatherRenderObjects(Gltf* gltf, int scene, glm::mat4x4 world_to_clip, const Settings* settings);
+	void GatherRenderObjects(Gltf* gltf, glm::mat4x4 world_to_clip, const Settings* settings);
 	void SortRenderObjects(glm::vec3 camera_pos);
 	void DrawRenderObjects(CommandContext* context, Gltf* gltf, const std::vector<RenderObject>& render_objects);
 };

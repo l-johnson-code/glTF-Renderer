@@ -94,7 +94,6 @@ class Pathtracer {
 
     struct ExecuteParams {
         Gltf* gltf = nullptr;
-        int scene = 0;
         Camera* camera = nullptr;
         uint32_t width = 0;
         uint32_t height = 0;
@@ -192,5 +191,5 @@ class Pathtracer {
     void CreateVBufferPipelines();
     void BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 	void UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
-	void BuildTlas(CommandContext* context, Gltf* gltf, int scene_id, RaytracingAccelerationStructure* acceleration_structure);
+	void BuildTlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
 };

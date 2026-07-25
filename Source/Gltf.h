@@ -41,11 +41,6 @@ class Gltf {
         std::vector<float> current_weights;
     };
 
-    struct Scene {
-        std::string name;
-        std::vector<int> nodes;
-    };
-
     struct Light {
         enum Type {
             TYPE_POINT,
@@ -175,7 +170,7 @@ class Gltf {
 
     std::string filename;
     std::vector<Camera> cameras;
-    std::vector<Scene> scenes = std::vector<Scene>(1);
+    std::vector<int> root_nodes;
     std::vector<Mesh> meshes;
     std::vector<Material> materials;
     std::vector<Node> nodes;
@@ -189,9 +184,9 @@ class Gltf {
     bool LoadFromGltf(const char* filepath, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer);
     void Unload();
     void ApplyRestTransforms();
-    void CalculateGlobalTransforms(int scene);
+    void CalculateGlobalTransforms();
     void Animate(Animation* animation, float time);
-    void TraverseScene(int scene, const std::function<void(Gltf*, int)>& lambda);
+    void TraverseScene(const std::function<void(Gltf*, int)>& lambda);
     void TraverseNode(int node, const std::function<void(Gltf*, int)>& lambda);
     
     private:
@@ -208,7 +203,6 @@ class Gltf {
     Material::Texture GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer);
     Material::Texture GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer);
     void LoadMaterials(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer);
-    void LoadScenes(tinygltf::Model* gltf);
     void LoadCameras(tinygltf::Model* gltf);
     void LoadNodes(tinygltf::Model* gltf);
     void LoadAnimations(tinygltf::Model* gltf);
