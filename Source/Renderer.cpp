@@ -284,7 +284,7 @@ void Renderer::ApplySettingsChanges(const Renderer::RenderSettings* new_settings
 	}
 }
 
-void Renderer::DrawFrame(Gltf* gltf, Camera* camera, RenderSettings* settings)
+void Renderer::DrawFrame(Scene* scene, Camera* camera, RenderSettings* settings)
 {
 	// Apply any settings changes that require a pipeline flush, such as changing resolution.
 	ApplySettingsChanges(settings);
@@ -327,16 +327,16 @@ void Renderer::DrawFrame(Gltf* gltf, Camera* camera, RenderSettings* settings)
 		command_context.EndEvent();
 	}
 
-	gpu_scene.Update(gltf);
+	gpu_scene.Update(scene);
 
 	command_context.BeginEvent("Skinning");
 	gpu_skinner.Bind(&command_context);
-	PerformSkinning(&command_context, gltf);
+	PerformSkinning(&command_context, scene);
 	command_context.EndEvent();
 
 	if (settings->renderer_type == RENDERER_TYPE_RASTERIZER) {
 		Rasterizer::ExecuteParams params = {
-			.gltf = gltf,
+			.scene = scene,
         	.camera = camera,
         	.gpu_scene = &this->gpu_scene,
         	.environment_map = environment_map_loaded ? &map : nullptr,
@@ -345,7 +345,7 @@ void Renderer::DrawFrame(Gltf* gltf, Camera* camera, RenderSettings* settings)
 		rasterizer.DrawScene(&command_context, &settings->raster, &params);
 	} else {
 		Pathtracer::ExecuteParams params = {
-			.gltf = gltf,
+			.scene = scene,
         	.camera = camera,
         	.width = this->display_width,
         	.height = this->display_height,
@@ -471,15 +471,15 @@ void Renderer::CreateRenderTargets()
 	this->resources.CreateTexture(&desc, &this->display);
 }
 
-void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf)
+void Renderer::PerformSkinning(CommandContext* context, Scene* scene)
 {
-	gltf->TraverseScene([&](Gltf* gltf, int node_id) {
-		const Gltf::Node& node = gltf->nodes[node_id];
+	scene->TraverseScene([&](Scene* scene, int node_id) {
+		const Scene::Node& node = scene->nodes[node_id];
 		bool skinned = node.skin_id != -1;
 		bool morphed = node.current_weights.size() > 0;
 		if (skinned || morphed) {
-			std::vector<Gltf::Primitive>& primitive = gltf->meshes[node.mesh_id].primitives;
-			std::vector<DynamicMesh>& dynamic = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_meshes;
+			std::vector<Scene::Primitive>& primitive = scene->meshes[node.mesh_id].primitives;
+			std::vector<DynamicMesh>& dynamic = scene->dynamic_primitives[node.dynamic_mesh].dynamic_meshes;
 
 			// Perform gpu skinning.
 			for (int i = 0; i < primitive.size(); i++) {
@@ -487,11 +487,11 @@ void Renderer::PerformSkinning(CommandContext* context, Gltf* gltf)
 
 				// Calculate and upload bones to gpu.
 				if (skinned) {
-					Gltf::Skin& skin = gltf->skins[node.skin_id];
+					Scene::Skin& skin = scene->skins[node.skin_id];
 					GpuSkin::Bone* bones = (GpuSkin::Bone*)(dynamic[i].GetCurrentBonePointer());
 					for (int i = 0; i < skin.joints.size(); i++) {
 						int joint = skin.joints[i];
-						bones[i].transform = glm::affineInverse(node.global_transform) * gltf->nodes[joint].global_transform * skin.inverse_bind_poses[i];
+						bones[i].transform = glm::affineInverse(node.global_transform) * scene->nodes[joint].global_transform * skin.inverse_bind_poses[i];
 						bones[i].inverse_transpose = glm::inverseTranspose(glm::mat3x3(bones[i].transform));
 					}
 				}

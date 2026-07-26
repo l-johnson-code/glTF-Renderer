@@ -8,7 +8,7 @@
 
 #include "CommandContext.h"
 #include "EnvironmentMap.h"
-#include "Gltf.h"
+#include "Scene.h"
 #include "GpuResources.h"
 #include "GpuScene.h"
 #include "ShaderTableBuilder.h"
@@ -93,7 +93,7 @@ class Pathtracer {
 	};
 
     struct ExecuteParams {
-        Gltf* gltf = nullptr;
+        Scene* scene = nullptr;
         Camera* camera = nullptr;
         uint32_t width = 0;
         uint32_t height = 0;
@@ -189,7 +189,7 @@ class Pathtracer {
     int iterations = 0;
 
     void CreateVBufferPipelines();
-    void BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
-	void UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
-	void BuildTlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure);
+    void BuildAllBlas(CommandContext* context, Scene* scene, RaytracingAccelerationStructure* acceleration_structure);
+	void UpdateAllBlas(CommandContext* context, Scene* scene, RaytracingAccelerationStructure* acceleration_structure);
+	void BuildTlas(CommandContext* context, Scene* scene, RaytracingAccelerationStructure* acceleration_structure);
 };

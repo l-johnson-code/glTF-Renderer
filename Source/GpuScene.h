@@ -1,13 +1,13 @@
 #pragma once
 
-#include "Gltf.h"
+#include "Scene.h"
 
 class GpuScene {
 
     public:
 
     HRESULT Init(Gpu::Resources* resources);
-    void Update(Gltf* gltf);
+    void Update(Scene* scene);
     int LightCount() { return lights_staging.size(); };
     Gpu::Buffer& LightBuffer() { return lights.Current(); };
     Gpu::Buffer& MaterialBuffer() { return materials.Current(); };
@@ -36,7 +36,7 @@ class GpuScene {
 		int descriptor = -1;
         int sampler = 0;
         TextureSample() = default;
-        TextureSample(const Gltf::Material::Texture& texture) {
+        TextureSample(const Scene::Material::Texture& texture) {
             this->descriptor = texture.texture;
             this->sampler = texture.sampler;
         }
@@ -82,7 +82,7 @@ class GpuScene {
         glm::vec3 attenuation_color = glm::vec3(1.0, 1.0, 1.0);
         TextureSample thickness_texture;
         Material() = default;
-        Material(const Gltf::Material& material) {
+        Material(const Scene::Material& material) {
             this->flags = material.flags;
 			this->alpha_mode = material.alpha_mode;
             this->metalness_factor = material.metalness_factor;
@@ -96,7 +96,7 @@ class GpuScene {
             this->metallic_roughness = TextureSample(material.metallic_roughness);
             this->occlusion = TextureSample(material.occlusion);
             this->emissive = TextureSample(material.emissive);
-            this->alpha_cutoff = material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK ? material.alpha_cutoff : 0.0f;
+            this->alpha_cutoff = material.alpha_mode == Scene::Material::ALPHA_MODE_MASK ? material.alpha_cutoff : 0.0f;
             this->ior = material.ior;
             this->specular_color_factor = material.specular_color_factor;
             this->specular_factor = material.specular_factor;

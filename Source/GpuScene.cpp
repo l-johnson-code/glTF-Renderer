@@ -37,24 +37,24 @@ HRESULT GpuScene::Init(Gpu::Resources* resources)
 	return S_OK;
 }
 
-void GpuScene::Update(Gltf* gltf)
+void GpuScene::Update(Scene* scene)
 {
 	lights.Next();
 	lights_staging.clear();
-	gltf->TraverseScene([&](Gltf* gltf, int node_id) {
-		const Gltf::Node& node = gltf->nodes[node_id];
+	scene->TraverseScene([&](Scene* scene, int node_id) {
+		const Scene::Node& node = scene->nodes[node_id];
 		int light_id = node.light_id;
 		if (light_id != -1) {
-			const Gltf::Light& scene_light = gltf->lights[light_id];
+			const Scene::Light& scene_light = scene->lights[light_id];
 			Light light;
 			switch (scene_light.type) {
-				case Gltf::Light::TYPE_POINT:
+				case Scene::Light::TYPE_POINT:
 					light.type = Light::TYPE_POINT;
 					break;
-				case Gltf::Light::TYPE_SPOT:
+				case Scene::Light::TYPE_SPOT:
 					light.type = Light::TYPE_SPOT;
 					break;
-				case Gltf::Light::TYPE_DIRECTIONAL:
+				case Scene::Light::TYPE_DIRECTIONAL:
 					light.type = Light::TYPE_DIRECTIONAL;
 					break;
 			}
@@ -77,8 +77,8 @@ void GpuScene::Update(Gltf* gltf)
 
 	materials.Next();
 	Material* materials_pointer = (Material*)materials.Current().Pointer();
-	for (int i = 0; i < std::min((int)gltf->materials.size(), MAX_MATERIALS); i++) {
-		materials_pointer[i] = Material(gltf->materials[i]);
+	for (int i = 0; i < std::min((int)scene->materials.size(), MAX_MATERIALS); i++) {
+		materials_pointer[i] = Material(scene->materials[i]);
 	}
 }
 

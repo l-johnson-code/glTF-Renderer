@@ -58,7 +58,7 @@ void Rasterizer::Resize(uint16_t width, uint16_t height)
 	result = gpu_resources->CreateTexture(&transmission_desc, &this->transmission);
 }
 
-void Rasterizer::GatherRenderObjects(Gltf* gltf, glm::mat4x4 world_to_clip, const Settings* settings)
+void Rasterizer::GatherRenderObjects(Scene* scene, glm::mat4x4 world_to_clip, const Settings* settings)
 {
 	opaque_render_objects.clear();
 	alpha_mask_render_objects.clear();
@@ -67,10 +67,10 @@ void Rasterizer::GatherRenderObjects(Gltf* gltf, glm::mat4x4 world_to_clip, cons
 
 	FrustumPlanes frustum_planes = ExtractPlanesFromMatrix(world_to_clip);
 
-	gltf->TraverseScene([&](Gltf* gltf, int node_id) {
-		const Gltf::Node& node = gltf->nodes[node_id];
+	scene->TraverseScene([&](Scene* scene, int node_id) {
+		const Scene::Node& node = scene->nodes[node_id];
 		if (node.mesh_id != -1) {
-			const Gltf::Mesh& mesh = gltf->meshes[node.mesh_id];
+			const Scene::Mesh& mesh = scene->meshes[node.mesh_id];
 			for (int i = 0; i < mesh.primitives.size(); i++) {
 
 				// Frustum culling.
@@ -100,10 +100,10 @@ void Rasterizer::GatherRenderObjects(Gltf* gltf, glm::mat4x4 world_to_clip, cons
 				}
 
 				// Bin the render object depending on material properties.
-				const Gltf::Material& material = gltf->materials[material_id];
-				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_BLEND) {
+				const Scene::Material& material = scene->materials[material_id];
+				if (material.alpha_mode == Scene::Material::ALPHA_MODE_BLEND) {
 					alpha_render_objects.push_back(render_object);
-				} else if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
+				} else if (material.alpha_mode == Scene::Material::ALPHA_MODE_MASK) {
 					alpha_mask_render_objects.push_back(render_object);
 				} else if (material.transmission_factor > 0.0f) {
 					transparent_render_objects.push_back(render_object);
@@ -126,13 +126,13 @@ void Rasterizer::SortRenderObjects(glm::vec3 camera_pos)
 	std::sort(transparent_render_objects.begin(), transparent_render_objects.end(), comparison);
 }
 
-void Rasterizer::DrawRenderObjects(CommandContext* context, Gltf* gltf, const std::vector<RenderObject>& render_objects)
+void Rasterizer::DrawRenderObjects(CommandContext* context, Scene* scene, const std::vector<RenderObject>& render_objects)
 {
 	for (auto& render_object: render_objects) {
-		DynamicMesh* dynamic_mesh = render_object.dynamic_mesh_id != -1 ? &gltf->dynamic_primitives[render_object.dynamic_mesh_id].dynamic_meshes[render_object.primitive_id] : nullptr;
+		DynamicMesh* dynamic_mesh = render_object.dynamic_mesh_id != -1 ? &scene->dynamic_primitives[render_object.dynamic_mesh_id].dynamic_meshes[render_object.primitive_id] : nullptr;
 		forward.Draw(
 			context,
-			&gltf->meshes[render_object.mesh_id].primitives[render_object.primitive_id].mesh,
+			&scene->meshes[render_object.mesh_id].primitives[render_object.primitive_id].mesh,
 			render_object.material_id,
 			render_object.transform,
 			render_object.normal_transform,
@@ -160,7 +160,7 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	glm::vec3 camera_pos = view_to_world[3];
     
     // Gather everything to draw.
-	GatherRenderObjects(execute_params->gltf, world_to_clip, settings);
+	GatherRenderObjects(execute_params->scene, world_to_clip, settings);
 	SortRenderObjects(camera_pos);
 
 	// Prepare render targets.
@@ -213,12 +213,12 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	forward.SetConfig(context, &config);
 	forward.BindRenderTargets(context, render_rtv, motion_vectors.Rtv(), depth.Dsv());
 	forward.BindPipeline(context, ForwardPass::PIPELINE_FLAGS_NONE);
-	DrawRenderObjects(context, execute_params->gltf, opaque_render_objects);
+	DrawRenderObjects(context, execute_params->scene, opaque_render_objects);
 	context->EndEvent();
 
 	context->BeginEvent("Alpha Tested");
 	// TODO: Create a separate pipeline for alpha mask instead of sharing the opaque pass. This could potentially improve performance of the opaque rendering.
-	DrawRenderObjects(context, execute_params->gltf, alpha_mask_render_objects);
+	DrawRenderObjects(context, execute_params->scene, alpha_mask_render_objects);
 	context->EndEvent();
 
 	context->BeginEvent("Background");
@@ -254,12 +254,12 @@ void Rasterizer::DrawScene(CommandContext* context, const Settings* settings, co
 	// Render transmissives.
 	context->BeginEvent("Transmissive");
 	forward.BindPipeline(context, ForwardPass::PIPELINE_FLAGS_ALPHA_BLEND);
-	DrawRenderObjects(context, execute_params->gltf, transparent_render_objects);
+	DrawRenderObjects(context, execute_params->scene, transparent_render_objects);
 	context->EndEvent();
 	
 	// Render alpha blended geometry.
 	context->BeginEvent("Alpha Blended");
-	DrawRenderObjects(context, execute_params->gltf, alpha_render_objects);
+	DrawRenderObjects(context, execute_params->scene, alpha_render_objects);
 	context->EndEvent();
 
 	// Transition render targets to read state for post processing.

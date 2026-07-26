@@ -190,9 +190,9 @@ void Resources::Create(ID3D12Device1* device)
 	};
 	this->device->CreateSampler(&default_sampler, sampler_allocator.GetCpuHandle(default_sampler_index));
 
-	int gltf_sampler_count = sampler_allocator.Capacity() - sampler_allocator.Size();
-	int gltf_samplers_start = sampler_allocator.Allocate(gltf_sampler_count);
-	gltf_sampler_allocator.Create(&sampler_allocator, gltf_samplers_start, gltf_sampler_count); // Dynamic samplers.
+	int scene_sampler_count = sampler_allocator.Capacity() - sampler_allocator.Size();
+	int scene_samplers_start = sampler_allocator.Allocate(scene_sampler_count);
+	scene_sampler_allocator.Create(&sampler_allocator, scene_samplers_start, scene_sampler_count); // Dynamic samplers.
 
 	// Render target and depth stencil views.
 	rtv_allocator.Create(this->device.Get());

@@ -8,7 +8,7 @@
 
 #include "Camera.h"
 #include "EnvironmentMap.h"
-#include "Gltf.h"
+#include "Scene.h"
 #include "GpuResources.h"
 #include "GpuScene.h"
 #include "GpuSkin.h"
@@ -45,7 +45,7 @@ public:
     EnvironmentMap::Map map;
 
 	bool Init(HWND window, RenderSettings* settings);
-	void DrawFrame(Gltf* gltf, Camera* camera, RenderSettings* render_settings);
+	void DrawFrame(Scene* scene, Camera* camera, RenderSettings* render_settings);
 	void Destroy();
 	void WaitForOutstandingWork();
 
@@ -101,7 +101,7 @@ private:
 	void EndFrame();
 
 	// Skinning.
-	void PerformSkinning(CommandContext* context, Gltf* gltf);
+	void PerformSkinning(CommandContext* context, Scene* scene);
 
 	// UI.
 	void InitializeImGui();

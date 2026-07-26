@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Gltf.h"
+#include "Scene.h"
 
 class AnimationPlayer {
 
@@ -10,5 +10,5 @@ class AnimationPlayer {
     float playhead = 0;
     bool playing = false;
     bool loop = true;
-    void Tick(Gltf* gltf, float delta_time);
+    void Tick(Scene* Scene, float delta_time);
 };

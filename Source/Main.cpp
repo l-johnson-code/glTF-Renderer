@@ -10,7 +10,7 @@
 #include "Camera.h"
 #include "CameraController.h"
 #include "DebugDraw.h"
-#include "Gltf.h"
+#include "Scene.h"
 #include "ImGuiHelpers.h"
 #include "Profiling.h"
 #include "Renderer.h"
@@ -31,7 +31,7 @@ OrbitController g_orbit(glm::vec3(), 1., 0., 0.);
 FreeController g_free(glm::vec3(0, -1, 0), 0, 0);
 bool g_camera_free_mode = false;
 Timer g_timer;
-Gltf g_gltf;
+Scene g_scene;
 Context g_context;
 
 // Configuration.
@@ -47,7 +47,7 @@ void Unload()
 	// Wait for all uploads to complete before freeing the currently loaded scene.
 	renderer.WaitForOutstandingWork();
 	renderer.upload_buffer.WaitForAllSubmissionsToComplete();
-	g_gltf.Unload();
+	g_scene.Unload();
 	
 	// Reset context.
 	g_context.animation_player = AnimationPlayer();
@@ -62,7 +62,7 @@ void LoadGltf(const char* filepath)
 {
 	Unload();
 	renderer.upload_buffer.Begin();
-	g_gltf.LoadFromGltf(filepath, &renderer.resources, &renderer.upload_buffer);
+	g_scene.LoadFromGltf(filepath, &renderer.resources, &renderer.upload_buffer);
 	renderer.upload_buffer.WaitForSubmissionToComplete(renderer.upload_buffer.Submit());
 }
 
@@ -107,21 +107,21 @@ void OpenEnvironmentFileDialog()
 	SDL_ShowOpenFileDialog(callback, nullptr, nullptr, filter, 2, nullptr, false);
 }
 
-void DrawNode(Gltf* gltf, Context* context, int node_id)
+void DrawNode(Scene* scene, Context* context, int node_id)
 {
 	ImGui::PushID(node_id);
-	ImGuiTreeNodeFlags flags = gltf->nodes[node_id].child != -1 ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_Leaf;
+	ImGuiTreeNodeFlags flags = scene->nodes[node_id].child != -1 ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_Leaf;
 	if (context->node_id == node_id) {
 		flags |= ImGuiTreeNodeFlags_Selected;
 	}
-	bool is_open = ImGui::TreeNodeEx("", flags | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen, "[%i] %s", node_id, gltf->nodes[node_id].name.c_str());
+	bool is_open = ImGui::TreeNodeEx("", flags | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen, "[%i] %s", node_id, scene->nodes[node_id].name.c_str());
 	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
 		context->node_id = node_id;
 	}
 	if (is_open) {
 		// Draw nodes children.
-		for (int i = gltf->nodes[node_id].child; i != -1; i = gltf->nodes[i].sibling) {
-			DrawNode(gltf, context, i);
+		for (int i = scene->nodes[node_id].child; i != -1; i = scene->nodes[i].sibling) {
+			DrawNode(scene, context, i);
 		}
 		ImGui::TreePop();
 	}
@@ -144,7 +144,7 @@ void DrawMainMenuBar()
 	}
 }
 
-void DrawScenePanel(Gltf* gltf, Context* context)
+void DrawScenePanel(Scene* scene, Context* context)
 {
 	// Camera.
     if (ImGui::BeginSection("Camera")) {
@@ -158,17 +158,17 @@ void DrawScenePanel(Gltf* gltf, Context* context)
     }
 
     // Animations.
-    if (!gltf->animations.empty() && ImGui::BeginSection("Animation")) {
-        if (ImGui::BeginCombo("Animation", context->animation_player.animation == -1 ? "None" : gltf->animations[context->animation_player.animation].name.c_str())) {
+    if (!scene->animations.empty() && ImGui::BeginSection("Animation")) {
+        if (ImGui::BeginCombo("Animation", context->animation_player.animation == -1 ? "None" : scene->animations[context->animation_player.animation].name.c_str())) {
             bool is_selected = context->animation_player.animation == -1;
             if (ImGui::Selectable("None", &is_selected)) {
                 context->animation_player.animation = -1;
 				g_render_settings.pathtracer.reset = true;
             }
-            for (int i = 0; i < gltf->animations.size(); i++) {
+            for (int i = 0; i < scene->animations.size(); i++) {
                 bool is_selected = i == context->animation_player.animation;
                 ImGui::PushID(i);
-                if (ImGui::Selectable(gltf->animations[i].name.c_str(), &is_selected)) {
+                if (ImGui::Selectable(scene->animations[i].name.c_str(), &is_selected)) {
                     context->animation_player.animation = i;
 					g_render_settings.pathtracer.reset = true;
                 }
@@ -181,23 +181,23 @@ void DrawScenePanel(Gltf* gltf, Context* context)
         };
         ImGui::Checkbox("Loop", &context->animation_player.loop);
         if (context->animation_player.animation != -1) {
-			g_render_settings.pathtracer.reset |= ImGui::SliderFloat("Animation Time", &context->animation_player.playhead, 0., gltf->animations[context->animation_player.animation].length);
+			g_render_settings.pathtracer.reset |= ImGui::SliderFloat("Animation Time", &context->animation_player.playhead, 0., scene->animations[context->animation_player.animation].length);
         }
 		ImGui::EndSection();
     }
 }
 
-void DrawPropertiesPanel(Gltf* gltf, Context* context)
+void DrawPropertiesPanel(Scene* scene, Context* context)
 {
 	if (context->node_id != -1) {
-		Gltf::Node& node = gltf->nodes[context->node_id];
+		Scene::Node& node = scene->nodes[context->node_id];
 		ImGui::LabelText("Name", "%s", node.name.c_str());
 		ImGui::Input("Position", &node.local_transform.translation, ImGuiInputTextFlags_ReadOnly);
 		ImGui::Input("Rotation", &node.local_transform.rotation, ImGuiInputTextFlags_ReadOnly);
 		ImGui::Input("Scale", &node.local_transform.scale, ImGuiInputTextFlags_ReadOnly);
 		if (node.camera_id != -1 && ImGui::BeginSection("Camera")) {
 			ImGui::InputInt("Index", &node.camera_id, 0, 0, ImGuiInputTextFlags_ReadOnly);
-			Camera& camera = gltf->cameras[node.camera_id];
+			Camera& camera = scene->cameras[node.camera_id];
 			const char* camera_type_strings[] = {
 				"Perspective",
 				"Orthographic",
@@ -215,7 +215,7 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 			ImGui::EndSection();
 		}
 		if (node.light_id != -1 && ImGui::BeginSection("Light")) {
-			Gltf::Light& light = gltf->lights[node.light_id];
+			Scene::Light& light = scene->lights[node.light_id];
 			ImGui::InputInt("Index", &node.light_id, 0, 0, ImGuiInputTextFlags_ReadOnly);
 			const char* light_type_strings[] = {
 				"Point",
@@ -226,35 +226,35 @@ void DrawPropertiesPanel(Gltf* gltf, Context* context)
 			ImGui::ColorEdit("Color", &light.color, ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoDragDrop);
 			ImGui::InputFloat("Intensity", &light.intensity, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
 			ImGui::InputFloat("Cutoff", &light.cutoff, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
-			if (light.type == Gltf::Light::TYPE_SPOT) {
+			if (light.type == Scene::Light::TYPE_SPOT) {
 				ImGui::InputFloat("Inner Angle", &light.inner_angle, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
 				ImGui::InputFloat("Outer Angle", &light.outer_angle, 0.0f, 0.0f, "%.3f", ImGuiInputTextFlags_ReadOnly);
 			}
 			ImGui::EndSection();
 		}
 		if (node.mesh_id != -1 && ImGui::BeginSection("Mesh")) {
-			Gltf::Mesh& mesh = gltf->meshes[node.mesh_id];
+			Scene::Mesh& mesh = scene->meshes[node.mesh_id];
 			ImGui::LabelText("Name", "%s", mesh.name.c_str());
 			for (int i = 0; i < mesh.primitives.size(); i++) {
 				ImGui::PushID(i);
-				Gltf::Primitive& primitive = mesh.primitives[i];
+				Scene::Primitive& primitive = mesh.primitives[i];
 				ImGui::PopID();
 			}
 			ImGui::EndSection();
 		}
 		if (node.skin_id != -1 && ImGui::BeginSection("Skin")) {
-			Gltf::Skin& skin = gltf->skins[node.skin_id];
+			Scene::Skin& skin = scene->skins[node.skin_id];
 			ImGui::InputInt("Skin ID", &node.skin_id, 0, 0, ImGuiInputTextFlags_ReadOnly);
-			ImGui::LabelText("Skin Root", "[%i] %s", skin.joints[0], gltf->nodes[skin.joints[0]].name.c_str());
+			ImGui::LabelText("Skin Root", "[%i] %s", skin.joints[0], scene->nodes[skin.joints[0]].name.c_str());
 			ImGui::EndSection();
 		}
 	}
 }
 
-void DrawNodesPanel(Gltf* gltf, Context* context)
+void DrawNodesPanel(Scene* scene, Context* context)
 {
-	for (int node_id : gltf->root_nodes) {
-		DrawNode(gltf, context, node_id);
+	for (int node_id : scene->root_nodes) {
+		DrawNode(scene, context, node_id);
 	}
 }
 
@@ -423,13 +423,13 @@ void DrawUi()
 	DrawMainMenuBar();
 
 	if (ImGui::Begin("Nodes")) {
-		DrawNodesPanel(&g_gltf, &g_context);
+		DrawNodesPanel(&g_scene, &g_context);
 	}
 	ImGui::End();
 
 	if (ImGui::Begin("Scene"))
 	{
-		DrawScenePanel(&g_gltf, &g_context);
+		DrawScenePanel(&g_scene, &g_context);
 	}
 	ImGui::End();
 
@@ -440,7 +440,7 @@ void DrawUi()
 	ImGui::End();
 
 	if (ImGui::Begin("Properties")) {
-		DrawPropertiesPanel(&g_gltf, &g_context);
+		DrawPropertiesPanel(&g_scene, &g_context);
 	}
 	ImGui::End();
 }
@@ -554,7 +554,7 @@ int main(int argc, char* argv[])
 
     renderer.Init(hwnd, &g_render_settings);
 
-	g_gltf.Init(&renderer.resources);
+	g_scene.Init(&renderer.resources);
 
 	g_timer.Create();
 
@@ -594,7 +594,7 @@ int main(int argc, char* argv[])
 		glm::mat4x4 camera_transform = g_camera_free_mode ? g_free.GetTransform() : g_orbit.GetTransform();
 		camera.SetWorldToView(camera_transform);
 
-		g_gltf.ApplyRestTransforms();
+		g_scene.ApplyRestTransforms();
 
 		// Animate.
 		if (g_context.animation_player.playing) {
@@ -602,11 +602,11 @@ int main(int argc, char* argv[])
 		}
 		{
 			ProfileZoneScopedN("Animate");
-			g_context.animation_player.Tick(&g_gltf, delta_time);
+			g_context.animation_player.Tick(&g_scene, delta_time);
 		}
 		{
 			ProfileZoneScopedN("Global Transforms");
-			g_gltf.CalculateGlobalTransforms();
+			g_scene.CalculateGlobalTransforms();
 		}
 		{
 			ProfileZoneScopedN("ImGui Draw List");
@@ -614,7 +614,7 @@ int main(int argc, char* argv[])
 		}
 		{
 			ProfileZoneScopedN("Draw Frame");
-			renderer.DrawFrame(&g_gltf, &camera, &g_render_settings);
+			renderer.DrawFrame(&g_scene, &camera, &g_render_settings);
 		}
 		g_render_settings.pathtracer.reset = false;
 		ProfileMarkFrame();
@@ -624,7 +624,7 @@ int main(int argc, char* argv[])
 	renderer.WaitForOutstandingWork();
 	renderer.upload_buffer.WaitForAllSubmissionsToComplete();
 	renderer.resources.SavePipelineCache();
-	g_gltf.Unload();
+	g_scene.Unload();
 
 	// Release resources.
 	ImGui_ImplDX12_Shutdown();

@@ -14,7 +14,7 @@
 #include "RayTracingAccelerationStructure.h"
 #include "UploadBuffer.h"
 
-class Gltf {
+class Scene {
     
     public:
 
@@ -186,8 +186,8 @@ class Gltf {
     void ApplyRestTransforms();
     void CalculateGlobalTransforms();
     void Animate(Animation* animation, float time);
-    void TraverseScene(const std::function<void(Gltf*, int)>& lambda);
-    void TraverseNode(int node, const std::function<void(Gltf*, int)>& lambda);
+    void TraverseScene(const std::function<void(Scene*, int)>& lambda);
+    void TraverseNode(int node, const std::function<void(Scene*, int)>& lambda);
     
     private:
 

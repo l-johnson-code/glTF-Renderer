@@ -1,4 +1,4 @@
-#include "Gltf.h"
+#include "Scene.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -20,7 +20,7 @@
 #include "UploadBuffer.h"
 #include "TinyGltfTools.h"
 
-void Gltf::TraverseScene(const std::function<void(Gltf*, int)>& lambda)
+void Scene::TraverseScene(const std::function<void(Scene*, int)>& lambda)
 {
 	ProfileZoneScoped();
 	for (auto node_id: root_nodes) {
@@ -28,7 +28,7 @@ void Gltf::TraverseScene(const std::function<void(Gltf*, int)>& lambda)
 	}
 }
 
-void Gltf::TraverseNode(int node_id, const std::function<void(Gltf*, int)>& lambda)
+void Scene::TraverseNode(int node_id, const std::function<void(Scene*, int)>& lambda)
 {
 	assert((node_id >= 0) && (node_id < nodes.size()));
 	lambda(this, node_id);
@@ -37,7 +37,7 @@ void Gltf::TraverseNode(int node_id, const std::function<void(Gltf*, int)>& lamb
 	}
 }
 
-void Gltf::Unload()
+void Scene::Unload()
 {
 	ProfileZoneScoped();
 	
@@ -57,7 +57,7 @@ void Gltf::Unload()
 	}
 	// We can free all dynamic samplers at once because this is the only class that uses them.
 	if (gpu_resources) {
-		gpu_resources->gltf_sampler_allocator.Reset();
+		gpu_resources->scene_sampler_allocator.Reset();
 	}
 	
 	root_nodes.clear();
@@ -72,7 +72,7 @@ void Gltf::Unload()
     textures.clear();
 }
 
-void Gltf::LoadMeshes(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+void Scene::LoadMeshes(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	// Create meshes.
@@ -82,7 +82,7 @@ void Gltf::LoadMeshes(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, Uplo
 	}
 }
 
-void Gltf::LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, Mesh* mesh)
+void Scene::LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, Mesh* mesh)
 {
 	mesh->name = gltf_mesh->name;
 	mesh->primitives.resize(gltf_mesh->primitives.size());
@@ -95,7 +95,7 @@ void Gltf::LoadMesh(tinygltf::Model* gltf, tinygltf::Mesh* gltf_mesh, Gpu::Resou
 	}
 }
 
-void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primitive, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, Primitive* primitive)
+void Scene::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primitive, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, Primitive* primitive)
 {
 	::Mesh::Desc desc = {};
 
@@ -249,7 +249,7 @@ void Gltf::LoadPrimitive(tinygltf::Model* gltf, tinygltf::Primitive* gltf_primit
 	}
 }
 
-void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target)
+void Scene::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* target, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer, int num_of_vertices, MorphTarget* morph_target)
 {
 	ProfileZoneScoped();
 
@@ -301,7 +301,7 @@ void Gltf::CreateMorphTarget(tinygltf::Model* gltf, std::map<std::string, int>* 
 	}
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_index, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+Scene::Material::Texture Scene::GetTexture(tinygltf::Model* gltf, int texture_index, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	Material::Texture material_texture;
 	if (texture_index != -1) {
@@ -314,7 +314,7 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 			}
 			material_texture = {
 				.texture = this->textures[texture_source].Srv(),
-				.sampler = texture->sampler == -1 ? 0 : this->gpu_resources->gltf_sampler_allocator.GetAbsoluteIndex(texture->sampler),
+				.sampler = texture->sampler == -1 ? 0 : this->gpu_resources->scene_sampler_allocator.GetAbsoluteIndex(texture->sampler),
 			};
 		} else {
 			// TODO: Create a default magenta texture.
@@ -323,23 +323,23 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, int texture_inde
 	return material_texture;
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+Scene::Material::Texture Scene::GetTexture(tinygltf::Model* gltf, tinygltf::TextureInfo* texture_info, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	return GetTexture(gltf, texture_info->index, srgb, gpu_resources, upload_buffer);
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+Scene::Material::Texture Scene::GetTexture(tinygltf::Model* gltf, tinygltf::NormalTextureInfo* texture_info, float* scale, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	*scale = texture_info->scale;
 	return GetTexture(gltf, texture_info->index, false, gpu_resources, upload_buffer);
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+Scene::Material::Texture Scene::GetTexture(tinygltf::Model* gltf, tinygltf::OcclusionTextureInfo* texture_info, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	return GetTexture(gltf, texture_info->index, false, gpu_resources, upload_buffer);
 }
 
-Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+Scene::Material::Texture Scene::GetTexture(tinygltf::Model* gltf, const tinygltf::Value* texture_info, float* scale, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	Material::Texture desc;
 
@@ -359,7 +359,7 @@ Gltf::Material::Texture Gltf::GetTexture(tinygltf::Model* gltf, const tinygltf::
 	return GetTexture(gltf, index, srgb, gpu_resources, upload_buffer);
 }
 
-void Gltf::LoadMaterials(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+void Scene::LoadMaterials(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	materials.resize(gltf->materials.size() + 1);
@@ -524,7 +524,7 @@ void Gltf::LoadMaterials(tinygltf::Model* gltf, Gpu::Resources* gpu_resources, U
 	}
 }
 
-void Gltf::LoadCameras(tinygltf::Model* gltf)
+void Scene::LoadCameras(tinygltf::Model* gltf)
 {
 	ProfileZoneScoped();
 	this->cameras.resize(gltf->cameras.size());
@@ -538,7 +538,7 @@ void Gltf::LoadCameras(tinygltf::Model* gltf)
 	}
 }
 
-void Gltf::LoadNodes(tinygltf::Model* gltf)
+void Scene::LoadNodes(tinygltf::Model* gltf)
 {
 	ProfileZoneScoped();
 	this->root_nodes.resize(gltf->scenes[0].nodes.size());
@@ -593,7 +593,7 @@ void Gltf::LoadNodes(tinygltf::Model* gltf)
 	}
 }
 
-void Gltf::LoadAnimations(tinygltf::Model* gltf)
+void Scene::LoadAnimations(tinygltf::Model* gltf)
 {
 	ProfileZoneScoped();
 	for (int i = 0; i < gltf->animations.size(); i++) {
@@ -608,7 +608,7 @@ void Gltf::LoadAnimations(tinygltf::Model* gltf)
 	}
 }
 
-void Gltf::LoadAnimationChannel(tinygltf::Model* gltf, tinygltf::AnimationChannel* gltf_channel, tinygltf::AnimationSampler* sampler, Animation* animation)
+void Scene::LoadAnimationChannel(tinygltf::Model* gltf, tinygltf::AnimationChannel* gltf_channel, tinygltf::AnimationSampler* sampler, Animation* animation)
 {	
 	ProfileZoneScoped();
 	// Get path.
@@ -696,7 +696,7 @@ void Gltf::LoadAnimationChannel(tinygltf::Model* gltf, tinygltf::AnimationChanne
 	animation->length = std::max(animation->length, end_time);
 }
 
-void Gltf::LoadSkins(tinygltf::Model* gltf)
+void Scene::LoadSkins(tinygltf::Model* gltf)
 {
 	ProfileZoneScoped();
 	for (int i = 0; i < gltf->skins.size(); i++) {
@@ -725,7 +725,7 @@ void Gltf::LoadSkins(tinygltf::Model* gltf)
 	}
 }
 
-void Gltf::LoadSamplers(tinygltf::Model* gltf)
+void Scene::LoadSamplers(tinygltf::Model* gltf)
 {
 	ProfileZoneScoped();
 	for (int i = 0; i < gltf->samplers.size(); i++) {
@@ -738,11 +738,11 @@ void Gltf::LoadSamplers(tinygltf::Model* gltf)
 			.MinLOD = 0.0f,
 			.MaxLOD = (gltf_sampler.minFilter == TINYGLTF_TEXTURE_FILTER_NEAREST) || (gltf_sampler.minFilter == TINYGLTF_TEXTURE_FILTER_LINEAR) ? 0.0f : std::numeric_limits<float>::max(),
 		};
-		this->gpu_resources->gltf_sampler_allocator.CreateSampler(this->gpu_resources->gltf_sampler_allocator.GetAbsoluteIndex(i), &sampler_desc);
+		this->gpu_resources->scene_sampler_allocator.CreateSampler(this->gpu_resources->scene_sampler_allocator.GetAbsoluteIndex(i), &sampler_desc);
 	}
 }
 
-void Gltf::LoadLights(tinygltf::Model* gltf)
+void Scene::LoadLights(tinygltf::Model* gltf)
 {
 	ProfileZoneScoped();
 	lights.resize(gltf->lights.size());
@@ -770,12 +770,12 @@ void Gltf::LoadLights(tinygltf::Model* gltf)
 	}
 }
 
-void Gltf::Init(Gpu::Resources* gpu_resources)
+void Scene::Init(Gpu::Resources* gpu_resources)
 {
 	this->gpu_resources = gpu_resources;
 }
 
-bool Gltf::LoadFromGltf(const char* filepath, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+bool Scene::LoadFromGltf(const char* filepath, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	tinygltf::TinyGLTF gltf;
@@ -839,7 +839,7 @@ bool Gltf::LoadFromGltf(const char* filepath, Gpu::Resources* gpu_resources, Upl
 	return true;
 }
 
-void Gltf::CreateDynamicMesh(Gpu::Resources* gpu_resources)
+void Scene::CreateDynamicMesh(Gpu::Resources* gpu_resources)
 {
 	ProfileZoneScoped();
 	// Create dynamic mesh instances for any meshes that are skinned or have morph weights.
@@ -871,7 +871,7 @@ void Gltf::CreateDynamicMesh(Gpu::Resources* gpu_resources)
     }
 }
 
-void Gltf::ApplyRestTransforms()
+void Scene::ApplyRestTransforms()
 {
 	ProfileZoneScoped();
     for (Node& node: nodes) {
@@ -886,7 +886,7 @@ void Gltf::ApplyRestTransforms()
     }
 }
 
-void Gltf::Animate(Animation* animation, float time)
+void Scene::Animate(Animation* animation, float time)
 {
 	ProfileZoneScoped();
     ApplyRestTransforms();
@@ -909,7 +909,7 @@ void Gltf::Animate(Animation* animation, float time)
     }
 }
 
-void Gltf::CalculateGlobalTransforms()
+void Scene::CalculateGlobalTransforms()
 {
 	glm::mat4x4 coordinate_system_transform = glm::mat4x4(
 		1., 0., 0., 0.,
@@ -922,7 +922,7 @@ void Gltf::CalculateGlobalTransforms()
 	}
 }
 
-void Gltf::CalculateGlobalTransforms(Gltf::Node* node, glm::mat4x4 parent_global_transform)
+void Scene::CalculateGlobalTransforms(Scene::Node* node, glm::mat4x4 parent_global_transform)
 {
     // Calculate the global transform for this node.
     node->previous_global_transform = node->global_transform;
@@ -937,12 +937,12 @@ void Gltf::CalculateGlobalTransforms(Gltf::Node* node, glm::mat4x4 parent_global
     }
 }
 
-void Gltf::ReserveTextures(tinygltf::Model* gltf)
+void Scene::ReserveTextures(tinygltf::Model* gltf)
 {;
 	this->textures.resize(gltf->images.size());
 }
 
-void Gltf::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
+void Scene::LoadTexture(tinygltf::Model* gltf, int slot, bool srgb, Gpu::Resources* gpu_resources, UploadBuffer* upload_buffer)
 {
 	ProfileZoneScoped();
 	this->textures.reserve(slot + 1);

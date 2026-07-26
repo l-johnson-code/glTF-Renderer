@@ -296,21 +296,21 @@ void Pathtracer::CreateVBufferPipelines()
 	assert(result == S_OK);
 }
 
-void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
+void Pathtracer::BuildAllBlas(CommandContext* context, Scene* scene, RaytracingAccelerationStructure* acceleration_structure)
 {
-    for (int i = 0; i < gltf->nodes.size(); i++) {
-		Gltf::Node& node = gltf->nodes[i];
+    for (int i = 0; i < scene->nodes.size(); i++) {
+		Scene::Node& node = scene->nodes[i];
 		int mesh_id = node.mesh_id;
         if (mesh_id != -1) {
-            Gltf::Mesh& mesh = gltf->meshes[mesh_id];
+            Scene::Mesh& mesh = scene->meshes[mesh_id];
 			for (int j = 0; j < mesh.primitives.size(); j++) {
-				Gltf::Primitive& primitive = mesh.primitives[j];
+				Scene::Primitive& primitive = mesh.primitives[j];
 				int dynamic_meshes_id = node.dynamic_mesh;
 				if (dynamic_meshes_id != -1) {
 					// Dynamic.
-					DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes[j];
-					gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases.resize(gltf->dynamic_primitives[dynamic_meshes_id].dynamic_meshes.size());
-					RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[dynamic_meshes_id].dynamic_blases[j];
+					DynamicMesh& dynamic_mesh = scene->dynamic_primitives[dynamic_meshes_id].dynamic_meshes[j];
+					scene->dynamic_primitives[dynamic_meshes_id].dynamic_blases.resize(scene->dynamic_primitives[dynamic_meshes_id].dynamic_meshes.size());
+					RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = scene->dynamic_primitives[dynamic_meshes_id].dynamic_blases[j];
 					if (!dynamic_blas.buffer.Resource()) {
 						acceleration_structure->BuildDynamicBlas(context, primitive.mesh.position_and_tangent_space.view.BufferLocation, primitive.mesh.num_of_vertices, primitive.mesh.index.view, primitive.mesh.num_of_indices, &dynamic_blas);
 					}
@@ -326,15 +326,15 @@ void Pathtracer::BuildAllBlas(CommandContext* context, Gltf* gltf, RaytracingAcc
     acceleration_structure->EndBlasBuilds(context);
 }
 
-void Pathtracer::UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
+void Pathtracer::UpdateAllBlas(CommandContext* context, Scene* scene, RaytracingAccelerationStructure* acceleration_structure)
 {
-    for (int i = 0; i < gltf->nodes.size(); i++) {
-		Gltf::Node& node = gltf->nodes[i];
+    for (int i = 0; i < scene->nodes.size(); i++) {
+		Scene::Node& node = scene->nodes[i];
 		int mesh_id = node.mesh_id;
 		int skin_id = node.dynamic_mesh;
         if (mesh_id != -1 && skin_id != -1) {
-			std::vector<Gltf::Primitive>& primitives = gltf->meshes[mesh_id].primitives; 
-			Gltf::DynamicPrimitives& dynamic_primitives = gltf->dynamic_primitives[skin_id];
+			std::vector<Scene::Primitive>& primitives = scene->meshes[mesh_id].primitives; 
+			Scene::DynamicPrimitives& dynamic_primitives = scene->dynamic_primitives[skin_id];
 			for (int j = 0; j < dynamic_primitives.dynamic_blases.size(); j++) {
 				acceleration_structure->UpdateDynamicBlas(context, &dynamic_primitives.dynamic_blases[j], dynamic_primitives.dynamic_meshes[j].GetCurrentPositionAndTangentSpaceBuffer()->view.BufferLocation, primitives[j].mesh.num_of_vertices, primitives[j].mesh.index.view, primitives[j].mesh.num_of_indices);
 			}
@@ -343,7 +343,7 @@ void Pathtracer::UpdateAllBlas(CommandContext* context, Gltf* gltf, RaytracingAc
     acceleration_structure->EndBlasBuilds(context);
 }
 
-void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, RaytracingAccelerationStructure* acceleration_structure)
+void Pathtracer::BuildTlas(CommandContext* context, Scene* scene, RaytracingAccelerationStructure* acceleration_structure)
 {
     mesh_instances.clear();
     vertex_buffers.clear();
@@ -356,14 +356,14 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, RaytracingAccele
 		MASK_NONE = 1 << 0,
 		MASK_ALPHA_BLEND = 1 << 1,
 	};
-	gltf->TraverseScene([&](Gltf* gltf, int node_id) {
-		const Gltf::Node& node = gltf->nodes[node_id];
+	scene->TraverseScene([&](Scene* scene, int node_id) {
+		const Scene::Node& node = scene->nodes[node_id];
 		int mesh_id = node.mesh_id;
 		if (mesh_id != -1) {
-			std::vector<Gltf::Primitive>& primitives = gltf->meshes[mesh_id].primitives; 
+			std::vector<Scene::Primitive>& primitives = scene->meshes[mesh_id].primitives; 
 			for (int i = 0; i < primitives.size(); i++) {
 				const Mesh& mesh = primitives[i].mesh;
-				const Gltf::Material& material = gltf->materials[primitives[i].material_id];
+				const Scene::Material& material = scene->materials[primitives[i].material_id];
 				GpuMeshInstance gpu_mesh_instance = {
 					.transform = node.global_transform,
 					.normal_transform = glm::inverseTranspose(node.global_transform),
@@ -374,31 +374,31 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, RaytracingAccele
 					.material_id = primitives[i].material_id,
 				};
 				unsigned int flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-				if (material.flags & Gltf::Material::FLAG_DOUBLE_SIDED) {
+				if (material.flags & Scene::Material::FLAG_DOUBLE_SIDED) {
 					flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
 				}
-				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
+				if (material.alpha_mode == Scene::Material::ALPHA_MODE_MASK) {
 					flags |= D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
 				}
 				unsigned int instance_mask = 0;
-				if (material.alpha_mode == Gltf::Material::ALPHA_MODE_BLEND) {
+				if (material.alpha_mode == Scene::Material::ALPHA_MODE_BLEND) {
 					instance_mask = MASK_ALPHA_BLEND;
 				} else {
 					instance_mask = MASK_NONE;
 				}
 				bool tlas_added = false;
                 if (mesh_instances.size() <= MAX_INSTANCES) {
-                    if (gltf->nodes[node_id].dynamic_mesh != -1) {
-                        if (gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases.size() > i) {
+                    if (scene->nodes[node_id].dynamic_mesh != -1) {
+                        if (scene->dynamic_primitives[node.dynamic_mesh].dynamic_blases.size() > i) {
                             // Dynamic.
-                            DynamicMesh& dynamic_mesh = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_meshes[i];
-                            RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = gltf->dynamic_primitives[node.dynamic_mesh].dynamic_blases[i];
+                            DynamicMesh& dynamic_mesh = scene->dynamic_primitives[node.dynamic_mesh].dynamic_meshes[i];
+                            RaytracingAccelerationStructure::DynamicBlas& dynamic_blas = scene->dynamic_primitives[node.dynamic_mesh].dynamic_blases[i];
                             tlas_added = acceleration_structure->AddTlasInstance(&dynamic_blas, node.global_transform, instance_mask, flags);
                             if (dynamic_mesh.flags & DynamicMesh::Flags::FLAG_POSITION) {
                                 gpu_mesh_instance.position_and_tangent_space_descriptor = dynamic_mesh.GetCurrentPositionAndTangentSpaceBuffer()->descriptor;
                             }
                             if (tlas_added) {
-                                if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
+                                if (material.alpha_mode == Scene::Material::ALPHA_MODE_MASK) {
                                     alpha_vertex_buffers.push_back({
                                         .instance_id = (uint32_t)mesh_instances.size(),
                                         .index_count = mesh.num_of_indices,
@@ -425,7 +425,7 @@ void Pathtracer::BuildTlas(CommandContext* context, Gltf* gltf, RaytracingAccele
                         RaytracingAccelerationStructure::Blas& blas = primitives[i].blas;
                         tlas_added = acceleration_structure->AddTlasInstance(&blas, node.global_transform, instance_mask, flags);
                         if (tlas_added) {
-                            if (material.alpha_mode == Gltf::Material::ALPHA_MODE_MASK) {
+                            if (material.alpha_mode == Scene::Material::ALPHA_MODE_MASK) {
                                 alpha_vertex_buffers.push_back({
                                     .instance_id = (uint32_t)mesh_instances.size(),
                                     .index_count = mesh.num_of_indices,
@@ -500,11 +500,11 @@ void Pathtracer::PathtraceScene(CommandContext* context, const Settings* setting
         // Update the acceleration structure.
         context->BeginEvent("Acceleration Structure");
         context->BeginEvent("BLAS");
-		BuildAllBlas(context, execute_params->gltf, &this->acceleration_structure);
-		UpdateAllBlas(context, execute_params->gltf, &this->acceleration_structure);
+		BuildAllBlas(context, execute_params->scene, &this->acceleration_structure);
+		UpdateAllBlas(context, execute_params->scene, &this->acceleration_structure);
         context->EndEvent();
         context->BeginEvent("TLAS");
-		BuildTlas(context, execute_params->gltf, &this->acceleration_structure);
+		BuildTlas(context, execute_params->scene, &this->acceleration_structure);
         context->EndEvent();
         context->EndEvent();
 

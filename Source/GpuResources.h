@@ -191,7 +191,7 @@ class Resources {
 
 	// Descriptor heaps that are dynamic.
 	DescriptorAllocator cbv_uav_srv_dynamic_allocator;
-	SamplerStack gltf_sampler_allocator;
+	SamplerStack scene_sampler_allocator;
 
 	// Render target and depth stencil views.
 	DepthStencilViewPool dsv_allocator;
