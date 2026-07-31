@@ -180,6 +180,7 @@ void GpuAllocator::Free(GpuAllocation* allocation)
         } else if (allocation->handle){
             TlsfHeap& heap = heaps[allocation->heap];
             heap.Free(allocation->handle);
+            allocation->handle = TlsfHeap::null_block_index;
             if (allocation->resource) {
                 allocation->resource->Release();
                 allocation->resource = nullptr;
