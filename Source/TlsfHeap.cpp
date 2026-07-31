@@ -278,6 +278,9 @@ void TlsfHeap::InsertFreeBlock(NodeIndex block_index)
 
         // Add block to top of the free list.
         block.next_free = free_lists[first_level_index][second_level_index];
+        if (block.next_free != null_block_index) {
+            blocks[block.next_free].previous_free = block_index;
+        }
         free_lists[first_level_index][second_level_index] = block_index;
         block.previous_free = null_block_index;
 
@@ -314,4 +317,6 @@ void TlsfHeap::RemoveFreeBlock(NodeIndex block_index)
             }
         }
     }
+    block.next_free = null_block_index; // TODO: Is this really necessary?
+    block.previous_free = null_block_index;
 }
