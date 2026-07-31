@@ -224,18 +224,28 @@ TlsfHeap::NodeIndex TlsfHeap::GetGoodFitBlock(uint32_t size)
     return null_block_index;
 }
 
-void TlsfHeap::InsertAfter(NodeIndex block, NodeIndex new_block)
+void TlsfHeap::InsertAfter(NodeIndex before_index, NodeIndex after_index)
 {
-    blocks[new_block].next = blocks[block].next;
-    blocks[new_block].previous = block;
-    blocks[block].next = new_block;
+    Block& before = blocks[before_index];
+    Block& after = blocks[after_index];
+    after.next = before.next;
+    if (after.next != null_block_index) {
+        blocks[after.next].previous = after_index;
+    }
+    after.previous = before_index;
+    before.next = after_index;
 }
 
-void TlsfHeap::InsertBefore(NodeIndex block, NodeIndex new_block)
+void TlsfHeap::InsertBefore(NodeIndex after_index, NodeIndex before_index)
 {
-    blocks[new_block].previous = blocks[block].previous;
-    blocks[new_block].next = block;
-    blocks[block].previous = new_block;
+    Block& before = blocks[before_index];
+    Block& after = blocks[after_index];
+    before.previous = after.previous;
+    if (before.previous != null_block_index) {
+        blocks[before.previous].next = before_index; 
+    }
+    after.previous = before_index;
+    before.next = after_index;
 }
 
 void TlsfHeap::RemoveBlock(NodeIndex block_index)
