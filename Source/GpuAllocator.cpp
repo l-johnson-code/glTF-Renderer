@@ -155,7 +155,7 @@ HRESULT GpuAllocator::Allocate(uint64_t size, uint64_t alignment, int* heap_inde
 
     // Create a new heap if we cant.
     TlsfHeap& heap = heaps.emplace_back();
-    heap.Init(this->device.Get(), this->heap_size, 65536);
+    heap.Init(this->device.Get(), this->heap_size);
     *allocation = heap.Allocate(size, alignment);
     if (allocation->handle != TlsfHeap::null_block_index) {
         *heap_index = heaps.size() - 1;

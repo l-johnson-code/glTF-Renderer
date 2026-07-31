@@ -52,7 +52,7 @@ static void DestroyHeap(ID3D12Heap* heap)
     }
 }
 
-void TlsfHeap::Init(ID3D12Device* device, uint32_t heap_size, uint32_t max_allocations)
+void TlsfHeap::Init(ID3D12Device* device, uint32_t heap_size)
 {
     this->size = 0;
 
@@ -60,10 +60,6 @@ void TlsfHeap::Init(ID3D12Device* device, uint32_t heap_size, uint32_t max_alloc
     CD3DX12_HEAP_DESC heap_desc(heap_size, D3D12_HEAP_TYPE_DEFAULT);
     HRESULT result = CreateHeap(device, &heap_desc, &heap);
     this->capacity = heap_size;
-
-    // Allocate pool for blocks.
-    uint32_t max_blocks = (2 * max_allocations) + 1;
-    this->blocks.Init(max_allocations);
 
     // Clear the free lists and bitmaps.
     first_level_bitmap = 0;
@@ -77,7 +73,7 @@ void TlsfHeap::Init(ID3D12Device* device, uint32_t heap_size, uint32_t max_alloc
     }
 
     // Create an initial free block.
-    NodeIndex initial_block_index = blocks.Construct();
+    NodeIndex initial_block_index = blocks.Emplace();
     blocks[initial_block_index] = {
         .offset = 0,
         .size = capacity,
@@ -113,11 +109,11 @@ TlsfHeap::Allocation TlsfHeap::Allocate(uint32_t size, uint32_t alignment)
     // Try to get a block from a free list.
     NodeIndex block_index = GetGoodFitBlock(required_size);
     if (block_index != null_block_index) {
-        Block& block = blocks[block_index];
+        // We take a copy of the block rather than a reference because we may allocate a new block later in the function, possibly invalidating any block references.
+        Block block = blocks[block_index];
 
-        // Remove this block from the free list and mark as occupied.
+        // Remove this block from the free list.
         RemoveFreeBlock(block_index);
-        block.is_occupied = true;
 
         allocation.handle = block_index;
         allocation.offset = AlignPowerOfTwo(block.offset, alignment);
@@ -129,7 +125,7 @@ TlsfHeap::Allocation TlsfHeap::Allocate(uint32_t size, uint32_t alignment)
                 blocks[block.previous].size = allocation.offset - blocks[block.previous].offset;
             } else {
                 // Create a free block.
-                NodeIndex free_block_index = blocks.Construct();
+                NodeIndex free_block_index = blocks.Emplace();
                 Block& free_block = blocks[free_block_index];
                 free_block.size = allocation.offset - block.offset;
                 free_block.offset = block.offset;
@@ -139,22 +135,25 @@ TlsfHeap::Allocation TlsfHeap::Allocate(uint32_t size, uint32_t alignment)
             }
             // Trim space off the beginning of the block.
             block.size -= (allocation.offset - block.offset);
-            block.offset = allocation.offset;
         }
 
         // Create free block to the right.
         if (block.size > required_size) {
             // Split the block into two.
-            NodeIndex free_block_index = blocks.Construct();
+            NodeIndex free_block_index = blocks.Emplace();
             Block& free_block = blocks[free_block_index];
-            free_block.offset = block.offset + size;
+            free_block.offset = allocation.offset + size;
             free_block.size = block.size - size;
             free_block.is_occupied = false;
             InsertAfter(block_index, free_block_index);
             InsertFreeBlock(free_block_index);
-            // Trim space off the end of the block.
-            block.size = size;
         }
+
+        blocks[block_index].offset = allocation.offset;
+        blocks[block_index].size = size;
+        blocks[block_index].is_occupied = true;
+
+        this->size += size;
     }
 
     return allocation;
@@ -164,6 +163,9 @@ void TlsfHeap::Free(NodeIndex handle)
 {
     if (handle != null_block_index) {
         Block& block = blocks[handle];
+
+        this->size -= block.size;
+
         assert(block.is_occupied);
         block.is_occupied = false;
 
@@ -174,7 +176,7 @@ void TlsfHeap::Free(NodeIndex handle)
             block.size += blocks[previous_index].size;
             RemoveBlock(previous_index);
             RemoveFreeBlock(previous_index);
-            blocks.Destroy(previous_index);
+            blocks.Erase(previous_index);
         }
 
         // Merge right.
@@ -183,7 +185,7 @@ void TlsfHeap::Free(NodeIndex handle)
             block.size += blocks[next_index].size;
             RemoveBlock(next_index);
             RemoveFreeBlock(next_index);
-            blocks.Destroy(next_index);
+            blocks.Erase(next_index);
         }
 
         InsertFreeBlock(handle);

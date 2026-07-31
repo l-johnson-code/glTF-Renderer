@@ -21,7 +21,7 @@ class TlsfHeap {
 
     ID3D12Heap* heap = nullptr;
 
-    void Init(ID3D12Device* device, uint32_t heap_size, uint32_t max_allocations);
+    void Init(ID3D12Device* device, uint32_t heap_size);
     void DeInit();
     Allocation Allocate(uint32_t size, uint32_t alignment);
     void Free(NodeIndex handle);
