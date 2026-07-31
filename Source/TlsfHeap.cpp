@@ -86,6 +86,7 @@ void TlsfHeap::Init(ID3D12Device* device, uint32_t heap_size, uint32_t max_alloc
         .is_occupied = false,
     };
     InsertFreeBlock(initial_block_index);
+    first_block = initial_block_index;
 }
 
 void TlsfHeap::DeInit()
@@ -243,6 +244,8 @@ void TlsfHeap::InsertBefore(NodeIndex after_index, NodeIndex before_index)
     before.previous = after.previous;
     if (before.previous != null_block_index) {
         blocks[before.previous].next = before_index; 
+    } else {
+        first_block = before_index;
     }
     after.previous = before_index;
     before.next = after_index;
@@ -253,6 +256,8 @@ void TlsfHeap::RemoveBlock(NodeIndex block_index)
     const Block& block = blocks[block_index];
     if (block.previous != null_block_index) {
         blocks[block.previous].next = block.next;
+    } else {
+        first_block = block.next;
     }
     if (block.next != null_block_index) {
         blocks[block.next].previous = block.previous;

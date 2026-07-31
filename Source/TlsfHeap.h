@@ -53,6 +53,8 @@ class TlsfHeap {
     uint16_t second_level_bitmaps[first_level_bins] = {};
 
     NodeIndex free_lists[first_level_bins][second_level_bins] = {};
+    
+    NodeIndex first_block = null_block_index;
 
     Pool<Block> blocks;
 
