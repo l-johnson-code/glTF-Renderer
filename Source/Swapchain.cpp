@@ -108,6 +108,7 @@ void Swapchain::CreateRenderTargetViews(ID3D12Device* device)
 		}
 	};
 	for (int i = 0; i < Config::FRAME_COUNT; i++) {
+		rtv_allocator->FreeDescriptor(render_target_views[i]);
 		render_target_views[i] = rtv_allocator->CreateRenderTargetView(render_targets[i].Get(), &view_desc);
 		assert(render_target_views[i].ptr != 0);
 	}
