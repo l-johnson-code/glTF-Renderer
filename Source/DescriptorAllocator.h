@@ -264,8 +264,8 @@ class DescriptorAllocator : public DescriptorRange<D3D12_DESCRIPTOR_HEAP_TYPE_CB
     
     struct Block {
         uint8_t size_class = 6;
-        uint16_t next_free = 0xffff;
-        uint16_t previous_free = 0xffff;
+        uint16_t next_free = std::numeric_limits<uint16_t>::max();
+        uint16_t previous_free = std::numeric_limits<uint16_t>::max();
         uint64_t free_slots = 1;
     };
 

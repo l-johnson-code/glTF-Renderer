@@ -6,12 +6,12 @@ HRESULT DescriptorAllocator::Create(int capacity)
 {
     // TODO: Handle capacity of 0.
     for (int i = 0; i < std::size(free_lists); i++) {
-        free_lists[i] = 0xffff;
+        free_lists[i] = std::numeric_limits<uint16_t>::max();
     }
     // Round up size to next multiple of 64.
     blocks = std::vector<Block>((capacity + 63) / 64);
     free_lists[6] = 0;
-    blocks[0].previous_free = 0xffff;
+    blocks[0].previous_free = std::numeric_limits<uint16_t>::max();
     for (int i = 1; i < blocks.size(); i++) {
         blocks[i].previous_free = i - 1;
         blocks[i - 1].next_free = i;
@@ -29,11 +29,11 @@ int DescriptorAllocator::Allocate(int count)
 {
     assert((count > 0) && (count <= 64));
     int size_class = std::bit_width((uint32_t)count - 1);
-    if (free_lists[size_class] != 0xffff) {
+    if (free_lists[size_class] != std::numeric_limits<uint16_t>::max()) {
         size += 1 << size_class;
         return AllocateInBlock(free_lists[size_class]) + descriptor_start;
     }
-    if (free_lists[6] != 0xffff) {
+    if (free_lists[6] != std::numeric_limits<uint16_t>::max()) {
         int block_index = free_lists[6];
         RemoveFreeBlock(block_index);
         ResetBlock(block_index, size_class);
@@ -87,26 +87,26 @@ uint64_t DescriptorAllocator::FreeMask(uint8_t size_class)
 void DescriptorAllocator::RemoveFreeBlock(int block_index)
 {
     Block& block = blocks[block_index];
-    if (block.next_free != 0xffff) {
+    if (block.next_free != std::numeric_limits<uint16_t>::max()) {
         blocks[block.next_free].previous_free = block.previous_free;
     }
-    if (block.previous_free != 0xffff) {
+    if (block.previous_free != std::numeric_limits<uint16_t>::max()) {
         blocks[block.previous_free].next_free = block.next_free;
     }
     if (free_lists[block.size_class] == block_index) {
         free_lists[block.size_class] = block.next_free;
     }
-    block.next_free = block.previous_free = 0xffff;
+    block.next_free = block.previous_free = std::numeric_limits<uint16_t>::max();
 }
 
 void DescriptorAllocator::AddFreeBlock(int block_index)
 {
     Block& block = blocks[block_index];
     block.next_free = free_lists[block.size_class];
-    if (block.next_free != 0xffff) {
+    if (block.next_free != std::numeric_limits<uint16_t>::max()) {
         blocks[block.next_free].previous_free = block_index;
     }
-    block.previous_free = 0xffff;
+    block.previous_free = std::numeric_limits<uint16_t>::max();
     free_lists[block.size_class] = block_index;
 }
 
@@ -114,8 +114,8 @@ void DescriptorAllocator::ResetBlock(int block_index, uint8_t size_class)
 {
     blocks[block_index] = {
         .size_class = size_class,
-        .next_free = 0xffff,
-        .previous_free = 0xffff,
+        .next_free = std::numeric_limits<uint16_t>::max(),
+        .previous_free = std::numeric_limits<uint16_t>::max(),
         .free_slots = FreeMask(size_class),
     };
 }
@@ -125,8 +125,10 @@ void DescriptorAllocator::FreeInBlock(int block_index, int descriptor)
     Block& block = blocks[block_index];
     descriptor %= 64;
     descriptor /= (1 << block.size_class); // TODO: Consider replacing division with bit shift.
-    assert(!(block.free_slots & ((uint64_t)1 << (uint64_t)descriptor)) && "Possible double free.");
-    block.free_slots |= (uint64_t)1 << (uint64_t)descriptor;
+
+    uint64_t descriptor_bits = (uint64_t)1 << (uint64_t)descriptor;
+    assert(!(block.free_slots & descriptor_bits) && "Possible double free.");
+    block.free_slots |= descriptor_bits;
     size -= 1 << block.size_class;
 
     // Add block to free lists.
