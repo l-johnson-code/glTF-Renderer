@@ -103,6 +103,9 @@ void DescriptorAllocator::AddFreeBlock(int block_index)
 {
     Block& block = blocks[block_index];
     block.next_free = free_lists[block.size_class];
+    if (block.next_free != 0xffff) {
+        blocks[block.next_free].previous_free = block_index;
+    }
     block.previous_free = 0xffff;
     free_lists[block.size_class] = block_index;
 }
