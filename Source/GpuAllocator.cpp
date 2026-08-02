@@ -114,7 +114,12 @@ HRESULT GpuAllocator::CreateResource(D3D12_HEAP_TYPE heap_type, const D3D12_RESO
         Profiling::MemoryPool pool = GetPoolFromHeapProperties(this->device.Get(), &heap_properties);
         ProfileAllocP(*resource, allocation_info.SizeInBytes, pool);
 
-        *allocation = GpuAllocation(this, (ID3D12Resource*)*resource);
+        *allocation = GpuAllocation(this, (ID3D12Resource*)*resource, allocation_info.SizeInBytes, pool == Profiling::MEMORY_POOL_GPU);
+        if (pool == Profiling::MEMORY_POOL_GPU) {
+            this->committed_local_size += allocation_info.SizeInBytes;
+        } else {
+            this->committed_non_local_size += allocation_info.SizeInBytes;
+        }
 
         return S_OK;
     }
@@ -127,6 +132,7 @@ HRESULT GpuAllocator::CreateResource(D3D12_HEAP_TYPE heap_type, const D3D12_RESO
     }
 
     result = this->device->CreatePlacedResource(heaps[heap_index].heap, heap_allocation.offset, desc, initial_state, optimized_clear_value, iid, resource);
+    assert(SUCCEEDED(result));
     if (FAILED(result)) {
         heaps[heap_index].Free(heap_allocation.handle);
         return result;
@@ -177,10 +183,16 @@ void GpuAllocator::Free(GpuAllocation* allocation)
             ProfileFreeP(allocation->resource, pool);
             allocation->resource->Release();
             allocation->resource = nullptr;
-        } else if (allocation->handle){
-            TlsfHeap& heap = heaps[allocation->heap];
-            heap.Free(allocation->handle);
-            allocation->handle = TlsfHeap::null_block_index;
+            if (allocation->committed.local) {
+                this->committed_local_size -= allocation->committed.size;
+            } else {
+                this->committed_non_local_size -= allocation->committed.size;
+            }
+            allocation->committed.size = 0;
+        } else if (allocation->placed.handle){
+            TlsfHeap& heap = heaps[allocation->placed.heap];
+            heap.Free(allocation->placed.handle);
+            allocation->placed.handle = TlsfHeap::null_block_index;
             if (allocation->resource) {
                 allocation->resource->Release();
                 allocation->resource = nullptr;
