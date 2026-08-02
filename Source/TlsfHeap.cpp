@@ -205,18 +205,22 @@ uint8_t TlsfHeap::SecondLevelIndex(uint32_t size, uint32_t first_level_index)
 TlsfHeap::NodeIndex TlsfHeap::GetGoodFitBlock(uint32_t size)
 {
     // Get the indexes corresponding to the smallest bin that can contain our allocation.
-    size = size < (1 << significand_bits) ? (1 << significand_bits) : size; // Round up size to smallest possible bin size.
-    size += (1 << MostSignificantBitIndex(size >> significand_bits)) - 1; // Round up to next bin size.
-
+    size = std::max(size, 1u << significand_bits);
+    size += std::numeric_limits<uint32_t>::max() >> significand_bits >> 1 >> std::countl_zero(size);
     uint8_t first_level_index = FirstLevelIndex(size);
     uint8_t second_level_index = SecondLevelIndex(size, first_level_index);
 
-    if ((first_level_bitmap & (1 << first_level_index)) && (second_level_bitmaps[first_level_index] & (-1 << second_level_index))) {
-        second_level_index = LeastSignificantBitIndex(second_level_bitmaps[first_level_index]);
+    // Look for a free block from the bins with the same exponent.
+    uint32_t first_level_bitmask = 1 << first_level_index;
+    uint16_t second_level_bitmask = std::numeric_limits<uint16_t>::max() << second_level_index;
+    if ((first_level_bitmap & first_level_bitmask) && (second_level_bitmaps[first_level_index] & second_level_bitmask)) {
+        second_level_index = LeastSignificantBitIndex(second_level_bitmaps[first_level_index] & second_level_bitmask);
         return free_lists[first_level_index][second_level_index];
     }
 
-    first_level_index = LeastSignificantBitIndex(first_level_bitmap & (-1 << (first_level_index + 1)));
+    // Look for a free block from the larger bins.
+    first_level_bitmask = std::numeric_limits<uint32_t>::max() << first_level_index << 1;
+    first_level_index = LeastSignificantBitIndex(first_level_bitmap & first_level_bitmask);
     if (first_level_index != 64) {
         second_level_index = LeastSignificantBitIndex(second_level_bitmaps[first_level_index]);
         if (second_level_index != 64) {
@@ -303,7 +307,7 @@ void TlsfHeap::RemoveFreeBlock(NodeIndex block_index)
     }
     if (block.previous_free != null_block_index) {
         blocks[block.previous_free].next_free = block.next_free;
-    } else {
+    } else if (block.size >= (1 << significand_bits)) {
         // The block is at the top of the free list.
         uint8_t first_level_index = FirstLevelIndex(block.size);
         uint8_t second_level_index = SecondLevelIndex(block.size, first_level_index);
