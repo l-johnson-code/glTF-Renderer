@@ -17,17 +17,6 @@ class TlsfHeap {
         uint32_t offset;
     };
     
-    static constexpr NodeIndex null_block_index = std::numeric_limits<NodeIndex>::max();
-
-    ID3D12Heap* heap = nullptr;
-
-    void Init(ID3D12Device* device, uint32_t heap_size);
-    void DeInit();
-    Allocation Allocate(uint32_t size, uint32_t alignment);
-    void Free(NodeIndex handle);
-
-    private:
-
     struct Block {
         uint32_t offset;
         uint32_t size;
@@ -37,6 +26,77 @@ class TlsfHeap {
         NodeIndex previous_free;
         bool is_occupied;
     };
+
+    class ConstIterator {
+        public:
+
+        ConstIterator& operator++()
+        {
+            assert(block != null_block_index);
+            block = heap->blocks[block].next;
+            return *this;
+        }
+
+        const Block& operator*()
+        {
+            assert(block != null_block_index);
+            return heap->blocks[block];
+        }
+
+        bool operator==(const ConstIterator& iterator)
+        {
+            return (this->heap == iterator.heap) && (this->block == iterator.block);
+        }
+
+        bool operator!=(const ConstIterator& iterator)
+        {
+            return (this->heap != iterator.heap) || (this->block != iterator.block);
+        }
+        
+        private:
+
+        friend class TlsfHeap;
+
+        const TlsfHeap* heap = nullptr;
+        uint32_t block = null_block_index;
+
+        ConstIterator(const TlsfHeap* heap, uint32_t block) 
+        {
+            this->heap = heap;
+            this->block = block;
+        }
+    };
+
+    static constexpr NodeIndex null_block_index = std::numeric_limits<NodeIndex>::max();
+
+    ID3D12Heap* heap = nullptr;
+
+    void Init(ID3D12Device* device, uint32_t heap_size);
+    void DeInit();
+    Allocation Allocate(uint32_t size, uint32_t alignment);
+    void Free(NodeIndex handle);
+
+    uint32_t Size() const 
+    {
+        return size;
+    }
+
+    uint32_t Capacity() const
+    {
+        return capacity;
+    }
+
+    ConstIterator begin() const
+    {
+        return ConstIterator(this, first_block);
+    }
+
+    ConstIterator end() const
+    {
+        return ConstIterator(this, null_block_index);
+    }
+
+    private:
 
     static constexpr uint8_t significand_bits = 4;
     static constexpr uint8_t exponent_bits = 5;
