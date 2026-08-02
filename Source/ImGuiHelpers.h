@@ -4,6 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 
 namespace ImGui {
 
@@ -116,6 +117,56 @@ bool ColorEdit(const char* label, glm::vec3* col, ImGuiColorEditFlags flags = Im
 bool ColorPicker(const char* label, glm::vec3* col)
 {
 	return ImGui::ColorPicker3(label, &col->x);
+}
+
+ImRect BeginMemoryBar(const char* label)
+{
+	ImRect bb;
+
+    ImGuiWindow* window = GetCurrentWindow();
+    if (window->SkipItems) {
+        return bb;
+	}
+
+    ImGuiContext& g = *GImGui;
+    const ImGuiStyle& style = g.Style;
+
+    ImVec2 pos = window->DC.CursorPos;
+    ImVec2 size = CalcItemSize(ImVec2(0.0f, 0.0f), CalcItemWidth(), g.FontSize + style.FramePadding.y * 2.0f);
+	bb = ImRect(pos, ImVec2(pos.x + size.x, pos.y + size.y));
+    ItemSize(size, style.FramePadding.y);
+    if (!ItemAdd(bb, 0)) {
+		return bb;
+	}
+
+    // Render the frame.
+    RenderFrame(bb.Min, bb.Max, GetColorU32(ImGuiCol_FrameBg), true, style.FrameRounding);
+    bb.Expand(ImVec2(-style.FrameBorderSize, -style.FrameBorderSize));
+
+	// Draw the label.
+	ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+	ImGui::TextUnformatted(label);
+
+	return bb;
+}
+
+void MemoryBarAllocation(ImRect bb, uint64_t total, uint64_t offset, uint64_t size)
+{
+	ImGuiWindow* window = GetCurrentWindow();
+    if (window->SkipItems) {
+        return;
+	}
+
+	ImGuiContext& g = *GImGui;
+    const ImGuiStyle& style = g.Style;
+
+	float fill_n0 = (float)offset / (float)total;
+	float fill_n1 = (float)(offset + size) / (float)total;
+	float fill_x0 = ImLerp(bb.Min.x, bb.Max.x, fill_n0);
+    float fill_x1 = ImLerp(bb.Min.x, bb.Max.x, fill_n1);
+    if (fill_x0 < fill_x1) {
+        RenderRectFilledInRangeH(window->DrawList, bb, GetColorU32(ImGuiCol_PlotHistogram), fill_x0, fill_x1, style.FrameRounding);
+	}
 }
 
 }

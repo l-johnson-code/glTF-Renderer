@@ -251,6 +251,31 @@ void DrawPropertiesPanel(Scene* scene, Context* context)
 	}
 }
 
+void DrawMemoryPanel(Renderer* renderer)
+{
+	const GpuAllocator& allocator = renderer->resources.allocator;
+	ImGui::LabelText("GPU Local Capacity", "%llumb", allocator.LocalCapacity() >> 20);
+	ImGui::LabelText("GPU Non Local Capacity", "%llumb", allocator.NonLocalCapacity() >> 20);
+	ImGui::LabelText("GPU Local Budget", "%llumb", allocator.LocalBudget() >> 20);
+	ImGui::LabelText("GPU Non Local Budget", "%llumb", allocator.NonLocalBudget() >> 20);
+	ImGui::LabelText("GPU Local Allocated", "%llumb", allocator.LocalAllocated() >> 20);
+	ImGui::LabelText("GPU Non Local Allocated", "%llumb", allocator.NonLocalAllocated() >> 20);
+	ImGui::LabelText("GPU Local Used", "%llumb", allocator.LocalUsed() >> 20);
+	ImGui::LabelText("GPU Non Local Used", "%llumb", allocator.NonLocalUsed() >> 20);
+	if (ImGui::BeginSection("Heaps")) {
+		for (const TlsfHeap& heap: renderer->resources.allocator.Heaps()) {
+			std::string usage = std::format("{}mb/{}mb", heap.Size() >> 20, heap.Capacity() >> 20);
+			ImRect memory_bar_rect = ImGui::BeginMemoryBar(usage.c_str());
+			for (const TlsfHeap::Block& block: heap) {
+				if (block.is_occupied) {
+					ImGui::MemoryBarAllocation(memory_bar_rect, heap.Capacity(), block.offset, block.size);
+				}
+			}
+		}
+		ImGui::EndSection();
+	}
+}
+
 void DrawNodesPanel(Scene* scene, Context* context)
 {
 	for (int node_id : scene->root_nodes) {
@@ -415,6 +440,7 @@ void DrawUi()
 		ImGui::DockBuilderDockWindow("Nodes", dock_id_right_up);
 		ImGui::DockBuilderDockWindow("Scene", dock_id_left);
 		ImGui::DockBuilderDockWindow("Graphics", dock_id_left);
+		ImGui::DockBuilderDockWindow("Memory", dock_id_left);
 		ImGui::DockBuilderDockWindow("Properties", dock_id_right_bottom);
 		ImGui::DockBuilderFinish(dockspace_id);
 	}
@@ -436,6 +462,12 @@ void DrawUi()
 	if (ImGui::Begin("Graphics"))
 	{
 		DrawGraphicsPanel();
+	}
+	ImGui::End();
+
+	if (ImGui::Begin("Memory"))
+	{
+		DrawMemoryPanel(&renderer);
 	}
 	ImGui::End();
 
