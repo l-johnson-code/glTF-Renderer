@@ -13,28 +13,26 @@ class Pool {
     template<typename... Args>
     uint32_t Emplace(Args&&... args)
     {
+        uint32_t index = std::numeric_limits<uint32_t>::max();
         if (free != std::numeric_limits<uint32_t>::max()) {
-            uint32_t index = free;
-            Node& node = nodes[index];
-            free = node.next;
-            node.element = T(std::forward<Args>(args)...);
-            size++;
-
+            index = free;
             #ifdef DEBUG
             occupied_bitmap[index] = true;
             #endif
-
-            return index;
         } else {
-            nodes.emplace_back(std::forward<Args>(args)...);
-            size++;
-
+            nodes.emplace_back();
+            index = nodes.size() - 1;
             #ifdef DEBUG
             occupied_bitmap.emplace_back(true);
             #endif
-
-            return nodes.size() - 1;
         }
+
+        Node& node = nodes[index];
+        free = node.next;
+        node.element = T(std::forward<Args>(args)...);
+        size++;
+
+        return index;
     }
 
     void Erase(uint32_t index)
