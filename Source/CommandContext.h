@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <span>
 
 #include <wrl.h>
 #include <directx/d3d12.h>

@@ -6,7 +6,6 @@
 #include <directx/d3dx12_root_signature.h>
 #include <glm/glm.hpp>
 
-#include "DirectXHelpers.h"
 #include "GpuResources.h"
 
 void ToneMapper::Create(Gpu::Resources* resources)

@@ -15,7 +15,6 @@
 
 #include "Animation.h"
 #include "DescriptorAllocator.h"
-#include "DirectXHelpers.h"
 #include "Profiling.h"
 #include "UploadBuffer.h"
 #include "TinyGltfTools.h"

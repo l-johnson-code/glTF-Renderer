@@ -9,7 +9,6 @@
 #include "Animation.h"
 #include "Camera.h"
 #include "Culling.h"
-#include "DescriptorAllocator.h"
 #include "Mesh.h"
 #include "RayTracingAccelerationStructure.h"
 #include "UploadBuffer.h"
