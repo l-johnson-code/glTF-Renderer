@@ -1,7 +1,6 @@
 #pragma once
 
 #include <directx/d3d12.h>
-#include <glm/glm.hpp>
 #include <wrl/client.h>
 
 #include "BufferAllocator.h"

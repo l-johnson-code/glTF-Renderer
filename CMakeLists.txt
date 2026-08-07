@@ -154,6 +154,7 @@ target_sources(glTF PRIVATE
     "Source/MultiBuffer.h"
     "Source/Pathtracer.cpp"
     "Source/Pathtracer.h"
+    "Source/Pch.h"
     "Source/Pool.h"
     "Source/Profiling.cpp"
     "Source/Profiling.h"
@@ -179,6 +180,9 @@ target_sources(glTF PRIVATE
     "Source/UploadBuffer.cpp"
     "Source/UploadBuffer.h"
 )
+
+# Precompiled headers.
+target_precompile_headers(glTF PRIVATE "Source/Pch.h")
 
 # Shaders
 set(SHADER_SOURCE_FILES

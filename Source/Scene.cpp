@@ -8,8 +8,6 @@
 #include <directx/d3d12.h>
 #include <directx/d3dx12_core.h>
 #include <directx/dxgiformat.h>
-#include <glm/gtc/packing.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
 #include <SDL3/SDL.h>
 #include <spdlog/spdlog.h>
 

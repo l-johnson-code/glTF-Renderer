@@ -5,7 +5,6 @@
 #include <algorithm>
 
 #include <directx/d3d12.h>
-#include <glm/gtc/packing.hpp>
 #include <tinygltf/tiny_gltf.h>
 
 #include "Profiling.h"

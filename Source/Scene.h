@@ -2,8 +2,6 @@
 
 #include <vector>
 
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 #include <tinygltf/tiny_gltf.h>
 
 #include "Animation.h"

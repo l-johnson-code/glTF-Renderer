@@ -1,8 +1,5 @@
 #pragma once
 
-#include <glm/gtc/matrix_inverse.hpp>
-#include <glm/ext/matrix_clip_space.hpp>
-
 class Camera {
     public:
 

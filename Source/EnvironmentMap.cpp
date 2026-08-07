@@ -7,9 +7,6 @@
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
 #include <directx/d3dx12_root_signature.h>
-#include <glm/ext/scalar_constants.hpp>
-#include <glm/gtc/constants.hpp>
-#include <glm/gtc/packing.hpp>
 #include <spdlog/spdlog.h>
 #include <stb/stb_image.h>
 #include <tinyexr/tinyexr.h>

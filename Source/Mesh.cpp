@@ -2,7 +2,6 @@
 
 #include <directx/d3dx12_core.h>
 #include <directx/d3dx12_property_format_table.h>
-#include <glm/gtc/constants.hpp>
 
 #include "Memory.h"
 #include "Profiling.h"

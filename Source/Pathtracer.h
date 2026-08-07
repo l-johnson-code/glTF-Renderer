@@ -3,7 +3,6 @@
 #include <cassert>
 
 #include <directx/d3d12.h>
-#include <glm/glm.hpp>
 #include <wrl.h>
 
 #include "CommandContext.h"

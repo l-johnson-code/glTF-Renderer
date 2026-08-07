@@ -3,9 +3,6 @@
 #include <cmath>
 #include <cassert>
 
-#include <glm/gtc/packing.hpp>
-#include <glm/gtc/quaternion.hpp>
-
 static float GetInterpolationFactor(float time, float lower_time, float upper_time)
 {
     float diff = upper_time - lower_time;

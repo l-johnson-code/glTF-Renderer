@@ -8,7 +8,6 @@
 #include <directx/d3dx12_property_format_table.h>
 #include <directx/d3dx12_root_signature.h>
 #include <directx/dxgiformat.h>
-#include <glm/gtx/texture.hpp>
 #include <stb/stb_image.h>
 #include <SDL3/SDL.h>
 
